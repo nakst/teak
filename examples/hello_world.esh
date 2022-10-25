@@ -1,0 +1,3 @@
+void Start() {
+	LogInfo("Hello, world!");
+}

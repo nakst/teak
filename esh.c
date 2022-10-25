@@ -3,6 +3,7 @@
 // 	> Control flow: break, continue.
 // 	> Other operators: integer modulo.
 // 	> Using declared types from imported modules.
+// 	> Implement :delete_last()
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 
