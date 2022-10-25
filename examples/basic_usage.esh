@@ -4,6 +4,8 @@
 void Start() {
 	// The script starts executing in the Start function.
 
+//////////////////////////////// VARIABLES ////////////////////////////////
+
 	// Variables are declared by putting the type name then the variable name.
 	// All variables are initialized to 0 or an empty value, depending on the type.
 	int x;
@@ -12,12 +14,16 @@ void Start() {
 	// You can also set the value of a variable when it is declared.
 	int y = 3;
 
+//////////////////////////////// ARITHMETIC ////////////////////////////////
+
 	// Standard integer arithmetic and bitwise operators are available.
 	int z = ((3 * x + y / (1 + 1)) << 1) | 1;
 	// The only unconventional syntax is for bitwise XOR.
 	z = z ~| 10;
 	// Some arithmetic operators can be merged with assignment.
 	x += 10;
+
+//////////////////////////////// STRING LITERALS ////////////////////////////////
 
 	// Strings are delimited by speech marks.
 	Log("Hello!");
@@ -28,6 +34,8 @@ void Start() {
 	// You can insert an expression into a string delimiting it with percentage signs.
 	Log("The value of y is %y%.");
 
+//////////////////////////////// BASIC TYPES ////////////////////////////////
+
 	// The basic types are bool (true or false), float (double precision), 
 	// int (64-bit, signed) and str (immutable byte array).
 	bool b0 = true;
@@ -35,6 +43,8 @@ void Start() {
 	int i0 = -100;
 	str s0 = "String";
 	
+//////////////////////////////// STRINGS ////////////////////////////////
+
 	// You can index specific byte from a string.
 	str s1 = s0[5];
 	Log("%s1%"); // Prints g.
@@ -45,8 +55,12 @@ void Start() {
 	// No Unicode normalization or validating is done to either string.
 	assert "Hello" == "Hel" + "lo";
 
+//////////////////////////////// LOGIC ////////////////////////////////
+
 	// Standard logic operators (with short circuiting) are available.
 	bool b1 = !b0 && (z > y || z > x);
+
+//////////////////////////////// FLOATING POINT ////////////////////////////////
 
 	// Standard floating point operators are available. 
 	f0 *= 2.5;
@@ -57,6 +71,8 @@ void Start() {
 	float f1 = i1:float();
 	Log("f0 is %f0%");
 	Log("f1 is %f1%");
+
+//////////////////////////////// FOR, WHILE, IF ////////////////////////////////
 
 	// There are while loops.
 	int count = 0;
@@ -87,9 +103,13 @@ void Start() {
 		Log("count is small");
 	}
 
+//////////////////////////////// ASSERTIONS ////////////////////////////////
+
 	// You can assert a boolean expression is true.
 	// If it is false, the script stops and prints a back trace.
 	assert count == 100;
+
+//////////////////////////////// FUNCTIONS ////////////////////////////////
 
 	// Functions are called by putting the name of the function,
 	// and then the arguments in round brackets.
@@ -106,6 +126,8 @@ int MyFunction(int a, int b, int c) {
 }
 
 void Part2() {
+//////////////////////////////// LISTS ////////////////////////////////
+
 	// List types are made by putting [] after the element type.
 	int[] list;
 
@@ -189,6 +211,8 @@ void Part2() {
 	Part3();
 }
 
+//////////////////////////////// STRUCTURES ////////////////////////////////
+
 // Structures are declared with the struct keyword,
 // followed by the name of the structure,
 // then a list of the fields delimited by curly brackets.
@@ -215,6 +239,8 @@ void Part3() {
 	v.y = v.x + 5.0;
 	Log("(%v.x%, %v.y%)");
 
+//////////////////////////////// TUPLES ////////////////////////////////
+
 	// Functions can return multiple values via tuples.
 	// See the function definition below.
 	int x, str y = MultipleReturnValues(false);
@@ -232,13 +258,16 @@ void Part3() {
 // they're not allowed anywhere else in the language.
 tuple[int, str] MultipleReturnValues(bool which) {
 	if which {
-		return 5, "World";
+		return 5, "World"; // Separate the return values with a comma.
 	} else {
 		return 3, "Hello";
 	}
 }
 
+//////////////////////////////// INTTYPES ////////////////////////////////
+
 // You can declare custom integer types using the keyword inttype.
+// They're useful for enums, bitsets and the like.
 inttype Flags {
 	FLAG1 = 1 << 0;
 	FLAG2 = 1 << 1;
@@ -264,16 +293,185 @@ void Part4() {
 	FlagsExtended extended = f | FLAG4;
 	// But not the other way around.
 	// f = extended; (won't compile)
+
+	// Continuing...
+	Part5();
 }
 
-// TODO:
-//	Error types
-//	Function types
-//	Handle types
-// 	Coroutines
-//	Any type
-// 	Initialise function
-// 	Extension libraries
-// 	#option
-// 	#persist
-// 	Importing other modules, #inline
+//////////////////////////////// FUNCTION POINTERS ////////////////////////////////
+
+// To use function pointers, you first need to define a name for the function signature.
+// This is called a function type. The syntax is very similar to defining a function.
+functype int IntegerFunction(int input);
+functype void InputOnlyFunction(int input);
+functype int OutputOnlyFunction();
+functype void BooleanInputFunction(bool input);
+
+// Pointers to this function will be storable in variables of type IntegerFunction.
+int Square(int x) { return x * x; }
+
+bool LogicalNegate(bool b) { return !b; }
+
+void Part5() {
+	IntegerFunction f = Square;
+
+	// You can call function pointers just like normal functions.
+	int y = f(10);
+	Log("10 * 10 = %y%");
+
+	// You can modify the function so that it can be used in different situations.
+	// You can discard the return value with :discard().
+	InputOnlyFunction inputOnly = f:discard();
+	inputOnly(5);
+
+	// You can "bake in" arguments from left-to-right using :curry().
+	OutputOnlyFunction outputOnly = f:curry(5);
+	y = outputOnly();
+	Log("5 * 5 = %y%");
+
+	// You can remove a boolean return value of a function,
+	// and have it automatically asserted when called.
+	BooleanInputFunction g = LogicalNegate:assert();
+	g(false);
+	// g(true); (assertion fails)
+
+//////////////////////////////// ERROR TYPES ////////////////////////////////
+
+	// If you want to ensure that a value is checked for errors before it is used, you can wrap it into an error type.
+	// Error types contain either an error message string or an actual value.
+	// The type name between the [] indicates the value's type. The error message is always stored as a string.
+	err[int] e1;
+	err[int] e2;
+	err[int] e3;
+
+	// You can store an error message like this:
+	e1 = new err[int] "Something bad happened.";
+	// You can store a value directly.
+	e2 = 15;
+
+	// The error message can be accessed with :error().
+	// If a value is stored (that is, there was no error), the empty string is returned.
+	Log("e1:error() = '%e1:error()%', e2:error() = '%e2:error()%', e3:error() = '%e3:error()%'");
+	// The default value of an error type variable contains the error message "UNKNOWN".
+
+	// You can determine whether an error value indicates an error or success with :success().
+	assert e1:success() == false;
+	assert e2:success() == true;
+	assert e3:success() == false;
+
+	// You can access the value inside an error variable using :default(),
+	// providing a default value to use if there was an error.
+	assert e1:default(-1) == -1;
+	assert e2:default(-1) == 15; // An actual value is stored here, so that is returned.
+	assert e3:default(-1) == -1;
+
+	// Alternatively, you can assert that an error did not occur to obtain the value.
+	Log("%e2:assert()%"); // Prints 15.
+	// Log("%e1:assert()%"); (assertion fails)
+
+	// If you don't have a value to store, you can create a err[void] variable.
+	// You can't use the :default() or :assert() ops on them.
+	err[void] e4 = new err[void] "Operation failed.";
+	Log("%e4:error()%");
+	assert !e4:success();
+
+	// You can store a success in err[void] variables with the #success constant.
+	e4 = #success;
+	assert e4:success();
+
+	// You can use an if statement to switch on whether an error variable contains an error.
+	if int x in e2 {
+		Log("e2 contained the integer %x%.");
+	} else {
+		Log("e2 contained the error %e2:error()%.");
+	}
+
+	// See below for the definition of RetErrExample and an explanation of the reterr statement.
+	Log("%RetErrExample():error()%"); // Prints "Oh no!".
+
+	// Continuing...
+	Part6();
+}
+
+err[int] RetErrExample() {
+	err[int] x = 5;
+	err[int] y = new err[int] "Oh no!";
+
+	// reterr <value> is equivalent to if <value>:error() { return <value>; }
+	reterr  x; // This will do nothing, because x is not an error.
+	reterr  y; // This will return y, because y is an error.
+	return 10; // This is not reached.
+}
+
+void MyCoroutine1() {
+	for int i = 0; i < 5; i += 1 {
+		Log("%i + 1%");
+		SystemSleepMs(1000);
+	}
+}
+
+void MyCoroutine2() {
+	Log("start sleeping");
+	SystemShellExecute("sleep 3");
+	Log("finish sleeping");
+}
+
+void Part6() {
+//////////////////////////////// COROUTINES ////////////////////////////////
+
+	// Create a coroutine using the :async() op.
+	// The function must have no arguments and no return values.
+	// Use :discard(), :assert() and :curry() to get it into this form, as necessary.
+	int id1 = MyCoroutine1:async();
+	int id2 = MyCoroutine2:async();
+	// An integer is returned, uniquely identifying the coroutine.
+
+	// You can wait for coroutines to make progress using the await statement.
+	// This takes a list of coroutines IDs and returns the ID of the first one that finishes.
+	int finished = await [id1, id2];
+	Log("finished coroutine %finished%");
+	finished = await [id1, id2]; // Tasks previously returned from await will be ignored.
+	Log("finished coroutine %finished%");
+
+	// The coroutine that is currently executing can only change at an await statement.
+	// All coroutines must complete before the Start() function returns!
+
+//////////////////////////////// GLOBAL VARIABLES ////////////////////////////////
+
+	// See the global variables declared below.
+	// These can be used like local variables.
+	globalInt = 5;
+	Log("globalInt = %globalInt%");
+
+	// Marking a global variable with #option means its initial value can be specified when the script is launched.
+	// Try launching this script with the command line "./esh examples/basic_usage.esh globalOption=10"
+	Log("globalOption = %globalOption%");
+
+	// Global variables can be saved between executions of the script by marking them with #persist.
+	// You need to specify the file they're saved to first, though.
+	PersistRead("temp.dat");
+	globalPersist += 1;
+	Log("globalPersist = %globalPersist%"); // The printed value will increment every time the script is run.
+
+	Part7();
+}
+
+int globalInt;
+int globalOption #option;
+int globalPersist #persist;
+
+void Part7() {
+//////////////////////////////// ANY TYPE ////////////////////////////////
+
+	// anytype variables can store any type of data.
+	anytype x;
+	x = 5;
+	x = "test";
+
+	// You can cast it back to its original type with the :cast() op.
+	str string = x:cast(str);
+	Log("%string%");
+
+	// If you try to cast it to the wrong type, the script crashes.
+	// int integer = x:cast(int); (script crashes)
+}
