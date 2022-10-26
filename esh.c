@@ -7756,7 +7756,11 @@ CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
 
 void PrintREPLResult(ExecutionContext *context, Node *type, Value value) {
 	if (type->type == T_INT) {
+#if defined(__APPLE__)
+		printf("%lld", value.i);
+#else
 		printf("%ld", value.i);
+#endif
 	} else if (type->type == T_BOOL) {
 		printf("%s", value.i ? "true" : "false");
 	} else if (type->type == T_NULL) {
@@ -7896,6 +7900,11 @@ void MemoryCopy(void *a, const void *b, size_t bytes) {
 
 size_t PrintIntegerToBuffer(char *buffer, size_t bufferBytes, int64_t i) {
 	snprintf(buffer, bufferBytes, "%ld", i);
+#if defined(__APPLE__)
+	snprintf(buffer, bufferBytes, "%lld", i);
+#else
+	snprintf(buffer, bufferBytes, "%ld", i);
+#endif
 	return strlen(buffer);
 }
 
