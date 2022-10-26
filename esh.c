@@ -7899,7 +7899,6 @@ void MemoryCopy(void *a, const void *b, size_t bytes) {
 }
 
 size_t PrintIntegerToBuffer(char *buffer, size_t bufferBytes, int64_t i) {
-	snprintf(buffer, bufferBytes, "%ld", i);
 #if defined(__APPLE__)
 	snprintf(buffer, bufferBytes, "%lld", i);
 #else
