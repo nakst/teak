@@ -4,8 +4,13 @@
 // 	> Other operators: integer modulo.
 // 	> Using declared types from imported modules.
 // 	> Implement :delete_last()
+// 	> reterr should work with errors of different internal types.
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
+
+// TODO Bugs:
+// 	- void Start() { Log("%5 %"); }
+//	- functype void Test(); void Start() { Test t; assert t == null; }
 
 // TODO Standard library:
 // 	- Integers: 
@@ -520,6 +525,7 @@ void PrintError(Tokenizer *tokenizer, const char *format, ...);
 void PrintError2(Tokenizer *tokenizer, Node *node, const char *format, ...);
 void PrintError3(const char *format, ...);
 void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const char *format, ...);
+void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, const char *format, ...);
 void PrintBackTrace(ExecutionContext *context, uint32_t instructionPointer, CoroutineState *c, const char *prefix);
 void *FileLoad(const char *path, size_t *length);
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context);
@@ -694,6 +700,21 @@ char baseModuleSource[] = {
 	"	err[void] e = _DirectoryInternalEnumerateChildren(PathTrimTrailingSlash(path), \"\", result, true);"
 	"	reterr e; return result;"
 	"}"
+	"err[str[]] DirectoryEnumerateFiltered(str sourceDirectory, str[] filter, int filterWildcard) {"
+	"	assert filter:len() > 0;"
+	"	err[str[]] e;"
+	"	if filterWildcard != -1 || filter:len() > 1 { e = DirectoryEnumerateRecursively(sourceDirectory); }"
+	"	else { e = DirectoryEnumerate(sourceDirectory); }"
+	"	reterr e;"
+	"	str[] allItems = e:assert();"
+	"	str[] filteredItems = new str[];"
+	"	for str item in allItems {"
+	"		if PathMatchesFilter(item, filter, filterWildcard) {"
+	"			filteredItems:add(item);"
+	"		}"
+	"	}"
+	"	return filteredItems;"
+	"}"
 
 	"str PathTrimTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == \"/\" { return StringSlice(x, 0, x:len() - 1); } return x; }"
 
@@ -717,6 +738,7 @@ char baseModuleSource[] = {
 	"		return new err[void] e:error();"
 	"	}"
 	"}"
+	"void PathDeleteAll(str[] files) { for str file in files { PathDelete(file); } }"
 	"err[void] PathCopyRecursively(str source, str destination) {"
 	"	err[str[]] e = DirectoryEnumerateRecursively(source);"
 	"	if str[] all in e {"
@@ -752,15 +774,10 @@ char baseModuleSource[] = {
 	"	return #success;"
 	"}"
 	"err[void] PathCopyFilteredInto(str sourceDirectory, str[] filter, int filterWildcard, str destinationDirectory) {"
-	"	assert filter:len() > 0;"
-	"	err[str[]] e;"
-	"	if filterWildcard != -1 || filter:len() > 1 { e = DirectoryEnumerateRecursively(sourceDirectory); }"
-	"	else { e = DirectoryEnumerate(sourceDirectory); }"
+	"	err[str[]] e = DirectoryEnumerateFiltered(sourceDirectory, filter, filterWildcard);"
 	"	if str[] items in e {"
-	"		for int i = 0; i < items:len(); i += 1 {"
-	"			if PathMatchesFilter(items[i], filter, filterWildcard) {"
-	"				reterr PathCopyInto(sourceDirectory, items[i], destinationDirectory);"
-	"			}"
+	"		for str item in items {"
+	"			reterr PathCopyInto(sourceDirectory, item, destinationDirectory);"
 	"		}"
 	"		return #success;"
 	"	} else {"
@@ -3150,7 +3167,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 				// Nothing needs to be done to cast between inttypes.
 				useRightType = ASTImplicitCastIsPossible(rightType, leftType);
 			} else {
-				PrintError2(tokenizer, node, "The expression on the left and right side of a binary operator must have the same type.\n");
+				PrintError5(tokenizer, node, leftType, rightType, "The expression on the left and right side of a binary operator must have the same type.\n");
 				return false;
 			}
 		}
@@ -3160,12 +3177,12 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					&& !ASTIsIntType(leftType)
 					&& !ASTMatching(leftType, &globalExpressionTypeFloat)
 					&& !ASTMatching(leftType, &globalExpressionTypeStr)) {
-				PrintError2(tokenizer, node, "The add operator expects integers, floats or strings.\n");
+				PrintError5(tokenizer, node, leftType, NULL, "The add operator expects integers, floats or strings.\n");
 				return false;
 			}
 		} else if (node->type == T_LOGICAL_AND || node->type == T_LOGICAL_OR) {
 			if (!ASTMatching(leftType, &globalExpressionTypeBool)) {
-				PrintError2(tokenizer, node, "This operator expects boolean expressions.\n");
+				PrintError5(tokenizer, node, leftType, NULL, "This operator expects boolean expressions.\n");
 				return false;
 			}
 		} else if (node->type == T_DOUBLE_EQUALS || node->type == T_NOT_EQUALS) {
@@ -3176,14 +3193,14 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					&& !ASTIsIntType(leftType)
 					&& (!leftType || leftType->type != T_LIST)
 					&& (!leftType || leftType->type != T_STRUCT)) {
-				PrintError2(tokenizer, node, "These types cannot be compared.\n");
+				PrintError5(tokenizer, node, leftType, NULL, "These types cannot be compared.\n");
 				return false;
 			}
 		} else {
 			if (!ASTMatching(leftType, &globalExpressionTypeInt)
 					&& !ASTIsIntType(leftType)
 					&& !ASTMatching(leftType, &globalExpressionTypeFloat)) {
-				PrintError2(tokenizer, node, "This operator expects either integers or floats.\n");
+				PrintError5(tokenizer, node, leftType, NULL, "This operator expects either integers or floats.\n");
 				return false;
 			}
 		}
@@ -3200,7 +3217,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			if (!cast) return false;
 			node->firstChild->sibling = cast;
 		} else if (node->firstChild->sibling && !ASTMatching(node->firstChild, node->firstChild->sibling->expressionType)) {
-			PrintError2(tokenizer, node, "The type of the variable being assigned does not match the expression.\n");
+			PrintError5(tokenizer, node, node->firstChild, node->firstChild->sibling->expressionType,
+					"The type of the variable being assigned does not match the expression.\n");
 			return false;
 		}
 	} else if (node->type == T_DECL_GROUP_AND_SET) {
@@ -3219,7 +3237,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 		while (child->sibling && item) {
 			if (!ASTMatching(child->expressionType, item)) {
-				PrintError2(tokenizer, node, "The type of value %d in the tuple does not match the declaration type.\n", index);
+				PrintError5(tokenizer, node, child->expressionType, item, "The type of value %d in the tuple does not match the declaration type.\n", index);
 				return false;
 			}
 
@@ -3266,7 +3284,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			if (!cast) return false;
 			node->firstChild->sibling = cast;
 		} else if (!ASTMatching(node->firstChild->expressionType, node->firstChild->sibling->expressionType)) {
-			PrintError2(tokenizer, node, "The type of the variable being assigned does not match the expression.\n");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, node->firstChild->sibling->expressionType,
+					"The type of the variable being assigned does not match the expression.\n");
 			return false;
 		}
 	} else if (node->type == T_CALL) {
@@ -3274,7 +3293,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		Node *expressionType = functionPointer->expressionType;
 
 		if (!expressionType || expressionType->type != T_FUNCPTR) {
-			PrintError2(tokenizer, functionPointer, "The expression being called is not a function.\n");
+			PrintError5(tokenizer, functionPointer, expressionType, NULL, "The expression being called is not a function.\n");
 			return false;
 		}
 
@@ -3296,7 +3315,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					if (!cast) return false;
 					*argumentLink = cast;
 				} else if (!ASTMatching(argument->expressionType, match->firstChild)) {
-					PrintError2(tokenizer, node, "The types for argument %d do not match.\n", index);
+					PrintError5(tokenizer, node, argument->expressionType, match->firstChild, 
+							"The types for argument %d do not match.\n", index);
 					return false;
 				}
 
@@ -3309,7 +3329,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	} else if (node->type == T_ASSERT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)
 				&& !(node->firstChild->expressionType && node->firstChild->expressionType->type == T_ERR)) {
-			PrintError2(tokenizer, node, "The asserted expression must evaluate to a boolean or error value.\n");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, 
+					"The asserted expression must evaluate to a boolean or error value.\n");
 			return false;
 		}
 	} else if (node->type == T_RETURN || node->type == T_RETERR) {
@@ -3335,7 +3356,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					if (!cast) return false;
 					node->firstChild = cast;
 				} else {
-					PrintError2(tokenizer, node, "The type of the expression does not match the return type of the function.\n");
+					PrintError5(tokenizer, node, expressionType, returnType, 
+							"The type of the expression does not match the return type of the function.\n");
 					return false;
 				}
 			}
@@ -3346,7 +3368,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			}
 
 			if (!expressionType || expressionType->type != T_ERR) {
-				PrintError2(tokenizer, node, "The expression must be an error value.\n");
+				PrintError5(tokenizer, node, expressionType, NULL, "The expression must be an error value.\n");
 				return false;
 			}
 		}
@@ -3381,33 +3403,35 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		}
 
 		if (!ASTMatching(expressionType, returnType)) {
-			PrintError2(tokenizer, node, "The type of the expression does not match the declared return type of the function.\n");
+			PrintError5(tokenizer, node, expressionType, returnType, "The type of the expression does not match the declared return type of the function.\n");
 			return false;
 		}
 	} else if (node->type == T_IF) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)
 				&& !(node->firstChild->expressionType && node->firstChild->expressionType->type == T_ERR)) {
-			PrintError2(tokenizer, node, "The expression used for the condition must evaluate to a boolean or error value.\n");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, "The expression used for the condition must evaluate to a boolean or error value.\n");
 			return false;
 		}
 	} else if (node->type == T_WHILE) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)) {
-			PrintError2(tokenizer, node, "The expression used for the condition must evaluate to a boolean.\n");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, "The expression used for the condition must evaluate to a boolean.\n");
 			return false;
 		}
 	} else if (node->type == T_IF_ERR) {
 		if (!node->firstChild->sibling->expressionType || node->firstChild->sibling->expressionType->type != T_ERR) {
-			PrintError2(tokenizer, node, "The expression used for the condition must evaluate to a error type.\n");
+			PrintError5(tokenizer, node, node->firstChild->sibling->expressionType, NULL, "The expression used for the condition must evaluate to a error type.\n");
 			return false;
 		}
 
 		if (!ASTMatching(node->firstChild->firstChild, node->firstChild->sibling->expressionType->firstChild)) {
-			PrintError2(tokenizer, node, "The variable declaration type must match the error value.\n");
+			PrintError5(tokenizer, node, node->firstChild->firstChild, node->firstChild->sibling->expressionType->firstChild,
+					"The variable declaration type must match the error value.\n");
 			return false;
 		}
 	} else if (node->type == T_FOR) {
 		if (!ASTMatching(node->firstChild->sibling->expressionType, &globalExpressionTypeBool)) {
-			PrintError2(tokenizer, node, "The expression used for the condition must evaluate to a boolean.\n");
+			PrintError5(tokenizer, node, node->firstChild->sibling->expressionType, NULL, 
+					"The expression used for the condition must evaluate to a boolean.\n");
 			return false;
 		}
 	} else if (node->type == T_FOR_EACH) {
@@ -3415,18 +3439,20 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		bool isStr = listType && ASTMatching(listType, &globalExpressionTypeStr);
 
 		if (!listType || (listType->type != T_LIST && !isStr)) {
-			PrintError2(tokenizer, node, "The expression on the right of 'in' must be a list or string.\n");
+			PrintError5(tokenizer, node, listType, NULL, "The expression on the right of 'in' must be a list or string.\n");
 			return false;
 		}
 
 		if (isStr) {
 			if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeStr)) {
-				PrintError2(tokenizer, node, "The variable on the left of 'in' must be a 'str' when iterating over a string.\n");
+				PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, 
+						"The variable on the left of 'in' must be a 'str' when iterating over a string.\n");
 				return false;
 			}
 		} else {
 			if (!ASTMatching(node->firstChild->expressionType, listType->firstChild)) {
-				PrintError2(tokenizer, node, "The variable on the left of 'in' must match the type of the items in the list on the right.\n");
+				PrintError5(tokenizer, node, node->firstChild->expressionType, listType->firstChild, 
+						"The variable on the left of 'in' must match the type of the items in the list on the right.\n");
 				return false;
 			}
 		}
@@ -7923,6 +7949,69 @@ void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const c
 	PrintLine(lineNumber.importData, lineNumber.lineNumber);
 	fprintf(stderr, "Back trace:\n");
 	PrintBackTrace(context, instructionPointer, context->c, "");
+}
+
+void PrintType(Node *type) {
+	if (type->type == T_INT) {
+		fprintf(stderr, "int");
+	} else if (type->type == T_STR) {
+		fprintf(stderr, "str");
+	} else if (type->type == T_NULL) {
+		fprintf(stderr, "null");
+	} else if (type->type == T_ZERO) {
+		fprintf(stderr, "0");
+	} else if (type->type == T_BOOL) {
+		fprintf(stderr, "bool");
+	} else if (type->type == T_FLOAT) {
+		fprintf(stderr, "float");
+	} else if (type->type == T_VOID) {
+		fprintf(stderr, "void");
+	} else if (type->type == T_LIST) {
+		PrintType(type->firstChild);
+		fprintf(stderr, "[]");
+	} else if (type->type == T_ERR) {
+		fprintf(stderr, "err[");
+		PrintType(type->firstChild);
+		fprintf(stderr, "]");
+	} else if (type->type == T_STRUCT || type->type == T_INTTYPE || type->type == T_HANDLETYPE) {
+		fprintf(stderr, "%.*s", (int) type->token.textBytes, type->token.text);
+	} else if (type->type == T_FUNCPTR) {
+		PrintType(type->firstChild->sibling);
+		fprintf(stderr, " --(");
+		Node *node = type->firstChild->firstChild;
+
+		while (node) {
+			PrintType(node->firstChild);
+			node = node->sibling;
+			if (node) fprintf(stderr, ", ");
+		}
+
+		fprintf(stderr, ")");
+	} else {
+		fprintf(stderr, "unknown-type-%d", type->type);
+	}
+}
+
+void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, const char *format, ...) {
+	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->path);
+	va_list arguments;
+	va_start(arguments, format);
+	vfprintf(stderr, format, arguments);
+	va_end(arguments);
+
+	if (type2) {
+		fprintf(stderr, "'");
+		PrintType(type1);
+		fprintf(stderr, "' vs '");
+		PrintType(type2);
+		fprintf(stderr, "'\n");
+	} else {
+		fprintf(stderr, "Given type '");
+		PrintType(type1);
+		fprintf(stderr, "'\n");
+	}
+
+	PrintLine(tokenizer->module, node->token.line);
 }
 
 void *LibraryLoad(const char *name) {
