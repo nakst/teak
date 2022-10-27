@@ -8,10 +8,6 @@
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 
-// TODO Bugs:
-// 	- void Start() { Log("%5 %"); }
-//	- functype void Test(); void Start() { Test t; assert t == null; }
-
 // TODO Standard library:
 // 	- Integers: 
 // 		- IntegerAbsolute, IntegerMaximum, IntegerMinimum, IntegerClamp
@@ -1440,9 +1436,20 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 				stringInterpolate->firstChild = node;
 				Tokenizer t = *tokenizer;
 				t.position = raw - t.input + i + 1;
+
 				stringInterpolate->firstChild->sibling = ParseExpression(&t, false, 0);
 				if (!stringInterpolate->firstChild->sibling) return NULL;
 				i = t.position - (raw - t.input);
+
+				while (i < rawBytes && (raw[i] == ' ' || raw[i] == '\t' || raw[i] == '\r')) {
+					i++;
+				}
+
+				if (i == rawBytes || raw[i] != '%') {
+					PrintError(&t, "String interpolation contains multiple expressions.\n");
+					return NULL;
+				}
+
 				string = (Node *) AllocateFixed(sizeof(Node));
 				string->type = T_STRING_LITERAL;
 				string->token.text = output + outputPosition;
@@ -2783,9 +2790,9 @@ bool ASTMatching(Node *left, Node *right) {
 		return true;
 	} else if (!left || !right) {
 		return false;
-	} else if (left->type == T_NULL && (right->type == T_STRUCT || right->type == T_LIST || right->type == T_FUNCTYPE)) {
+	} else if (left->type == T_NULL && (right->type == T_STRUCT || right->type == T_LIST || right->type == T_FUNCPTR)) {
 		return true;
-	} else if (right->type == T_NULL && (left->type == T_STRUCT || left->type == T_LIST || left->type == T_FUNCTYPE)) {
+	} else if (right->type == T_NULL && (left->type == T_STRUCT || left->type == T_LIST || left->type == T_FUNCPTR)) {
 		return true;
 	} else if (left->type == T_ZERO && (right->type == T_INT || right->type == T_INTTYPE || right->type == T_HANDLETYPE)) {
 		return true;
@@ -3197,7 +3204,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					&& !ASTMatching(leftType, &globalExpressionTypeBool)
 					&& !ASTIsIntType(leftType)
 					&& (!leftType || leftType->type != T_LIST)
-					&& (!leftType || leftType->type != T_STRUCT)) {
+					&& (!leftType || leftType->type != T_STRUCT)
+					&& (!leftType || leftType->type != T_FUNCPTR)) {
 				PrintError5(tokenizer, node, leftType, NULL, "These types cannot be compared.\n");
 				return false;
 			}

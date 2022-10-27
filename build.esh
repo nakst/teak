@@ -1,1 +1,7 @@
-void Start() { assert SystemShellExecute("gcc -o esh esh.c -g -Wall -Wextra -O2 -pthread -ldl -rdynamic"); }
+bool debug #option;
+
+void Start() { 
+	str optimizeFlags = "-O2";
+	if debug { optimizeFlags = ""; }
+	assert SystemShellExecute("gcc -o esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
+}

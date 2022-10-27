@@ -303,6 +303,7 @@ void Part4() {
 // To use function pointers, you first need to define a name for the function signature.
 // This is called a function type. The syntax is very similar to defining a function.
 functype int IntegerFunction(int input);
+functype int IntegerFunctionAlternate(int input);
 functype void InputOnlyFunction(int input);
 functype int OutputOnlyFunction();
 functype void BooleanInputFunction(bool input);
@@ -334,6 +335,10 @@ void Part5() {
 	BooleanInputFunction g = LogicalNegate:assert();
 	g(false);
 	// g(true); (assertion fails)
+
+	// Function types with identical signatures can be used interchangably.
+	// (Unlike inttypes!)
+	IntegerFunctionAlternate h = f;
 
 //////////////////////////////// ERROR TYPES ////////////////////////////////
 
@@ -403,6 +408,8 @@ err[int] RetErrExample() {
 	return 10; // This is not reached.
 }
 
+//////////////////////////////// COROUTINES ////////////////////////////////
+
 void MyCoroutine1() {
 	for int i = 0; i < 5; i += 1 {
 		Log("%i + 1%");
@@ -417,8 +424,6 @@ void MyCoroutine2() {
 }
 
 void Part6() {
-//////////////////////////////// COROUTINES ////////////////////////////////
-
 	// Create a coroutine using the :async() op.
 	// The function must have no arguments and no return values.
 	// Use :discard(), :assert() and :curry() to get it into this form, as necessary.

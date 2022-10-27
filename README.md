@@ -4,7 +4,9 @@ A small scripting language to replace Unix shell scripts.
 
 ## Building
 
-Run `./build.sh`, or `./esh build.esh` if you've already built it.
+For the first build, run `./build.sh`.
+
+For subsequent builds, run `./esh build.esh`. For a debug build, run `./esh build.esh debug=true`.
 
 ## Running examples
 
