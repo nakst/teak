@@ -1,7 +1,6 @@
 // TODO Basic missing features:
 // 	> Maps: T[int], T[str].
 // 	> Control flow: break, continue.
-// 	> Other operators: integer modulo.
 // 	> Using declared types from imported modules.
 // 	> Implement :delete_last()
 // 	> reterr should work with errors of different internal types.
@@ -10,8 +9,6 @@
 
 // TODO Standard library:
 // 	- Integers: 
-// 		- IntegerAbsolute, IntegerMaximum, IntegerMinimum, IntegerClamp
-// 		- IntegerCountSetBits, IntegerFindMSB, IntegerFindLSB
 // 		- MathLCM, MathGCD
 // 	- Floats: 
 // 		- FloatAbsolute, FloatMaximum, FloatMinimum, FloatClamp
@@ -73,6 +70,7 @@
 // 	- More escape sequences in string literals.
 // 	- Better handling of memory allocation failures.
 // 	- Shrink lists during garbage collection.
+// 	- Storage hints for lists/maps. E.g. settings a list to double-linked-list mode.
 
 #include <stdint.h>
 #include <stddef.h>
@@ -854,6 +852,46 @@ char baseModuleSource[] = {
 	"bool SystemShellExecuteWithWorkingDirectory(str wd, str x) #extcall;\n" // Returns true on success.
 	"str SystemShellEvaluate(str x) #extcall;\n" // Captures stdout.
 	"void SystemShellEnableLogging(bool x) #extcall;\n"
+
+	// Integer mathematics:
+	
+	"int IntegerModulo(int x, int y) { assert y >= 1; int d = x / y; int r = x - d * y; if r >= 0 { return r; } else { return r + y; } }\n"
+	"int IntegerAbsolute(int x) { if x < 0 { return -x; } else { return x; } }\n"
+	"int IntegerMaximum(int a, int b) { if a < b { return b; } else { return a; } }\n"
+	"int IntegerMinimum(int a, int b) { if a > b { return b; } else { return a; } }\n"
+	"int IntegerClamp(int x, int min, int max) { assert min <= max; if x > max { return max; } else if x < min { return min; } else { return x; } }\n"
+
+	"int IntegerCountLeastSignificantZeroBits(int x) {\n"
+	"	int count = 0;\n"
+	"	while count != 64 && ((x & (1 << count)) == 0) { count += 1; }\n"
+	"	return count;\n"
+	"}\n"
+
+	"int IntegerCountLeastSignificantOneBits(int x) {\n"
+	"	int count = 0;\n"
+	"	while count != 64 && ((x & (1 << count)) != 0) { count += 1; }\n"
+	"	return count;\n"
+	"}\n"
+
+	"int IntegerCountMostSignificantZeroBits(int x) {\n"
+	"	int count = 0;\n"
+	"	while count != 64 && ((x & (1 << (63 - count))) == 0) { count += 1; }\n"
+	"	return count;\n"
+	"}\n"
+
+	"int IntegerCountMostSignificantOneBits(int x) {\n"
+	"	int count = 0;\n"
+	"	while count != 64 && ((x & (1 << (63 - count))) != 0) { count += 1; }\n"
+	"	return count;\n"
+	"}\n"
+	
+	"int IntegerCountOneBits(int x) {\n"
+	"	int count = 0;\n"
+	"	for int i = 0; i < 64; i += 1 {\n"
+	"		if (x & (1 << i)) != 0 { count += 1; }\n"
+	"	}\n"
+	"	return count;\n"
+	"}\n"
 };
 
 // --------------------------------- External function calls.
@@ -5389,7 +5427,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				return 0;
 			}
 
-			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].f / context->c->stack[context->c->stackPointer - 1].f;
+			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].i / context->c->stack[context->c->stackPointer - 1].i;
 			context->c->stackPointer--;
 		} else if (command == T_NEGATE) {
 			if (context->c->stackPointer < 1) return -1;

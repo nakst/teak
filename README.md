@@ -322,14 +322,50 @@ int SystemGetProcessorCount();
 bool SystemRunningAsAdministrator();
 ```
 
+### Integer mathematics
+
+```
+// Return the absolute value of x.
+int IntegerAbsolute(int x);
+
+// Return the larger (closer to plus infinity) value of a and b.
+int IntegerMaximum(int a, int b);
+
+// Return the smaller (closer to minus infinity) value of a and b.
+int IntegerMinimum(int a, int b);
+
+// Clamp x between min and max.
+// min must be less than or equal to max.
+int IntegerClamp(int x, int min, int max);
+
+// Returns r such that 0 <= r < y, and (x - r) is a multiple of y.
+// y >= 1. Works with negative x.
+int IntegerModulo(int x, int y);
+
+// Count the number of set bits in the integer.
+int IntegerCountOneBits(int x);
+
+// Count the number of consecutive clear bits in the integer, starting from the least significant bit.
+int IntegerCountLeastSignificantZeroBits(int x);
+
+// Count the number of consecutive set bits in the integer, starting from the least significant bit.
+int IntegerCountLeastSignificantOneBits(int x);
+
+// Count the number of consecutive clear bits in the integer, starting from the most significant bit.
+int IntegerCountMostSignificantZeroBits(int x);
+
+// Count the number of consecutive set bits in the integer, starting from the most significant bit.
+int IntegerCountMostSignificantOneBits(int x);
+
+// Get a randomized integer between min and max (inclusive).
+int RandomInt(int min, int max);
+```
+
 ### Other
 
 ```
 // Set the path to use for storing and loding #persist variables.
 bool PersistRead(str path);
-
-// Get a randomized integer between min and max (inclusive).
-int RandomInt(int min, int max);
 
 // Pause execution of the active coroutine for the specified number of milliseconds.
 void SystemSleepMs(int ms);
