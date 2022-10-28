@@ -38,6 +38,7 @@
 // TODO Syntax sugar: (ideas)
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
 // 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
+// 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
 
 // TODO Larger missing features:
 // 	- Serialization.

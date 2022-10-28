@@ -1,0 +1,112 @@
+void Start() {
+	assert IntegerAbsolute(-5) == 5;
+	assert IntegerAbsolute(5) == 5;
+	assert IntegerMaximum(3, 5) == 5;
+	assert IntegerMaximum(5, 3) == 5;
+	assert IntegerMinimum(3, 5) == 3;
+	assert IntegerMinimum(5, 3) == 3;
+	assert IntegerClamp(3, 1, 5) == 3;
+	assert IntegerClamp(0, 1, 5) == 1;
+	assert IntegerClamp(6, 1, 5) == 5;
+
+	int k = -500;
+	int m = 0;
+
+	for int i = 0; i < 1000; i += 1 {
+		assert IntegerModulo(k, 4) == m;
+		m += 1;
+		if m == 4 { m = 0; }
+		k += 1;
+	}
+
+	assert IntegerCountLeastSignificantZeroBits(0) == 64;
+	assert IntegerCountLeastSignificantZeroBits(1) == 0;
+	assert IntegerCountLeastSignificantZeroBits(4) == 2;
+	assert IntegerCountLeastSignificantZeroBits(5) == 0;
+	assert IntegerCountLeastSignificantZeroBits(6) == 1;
+	assert IntegerCountLeastSignificantZeroBits(10) == 1;
+
+	assert IntegerCountLeastSignificantOneBits(0) == 0;
+	assert IntegerCountLeastSignificantOneBits(1) == 1;
+	assert IntegerCountLeastSignificantOneBits(4) == 0;
+	assert IntegerCountLeastSignificantOneBits(5) == 1;
+	assert IntegerCountLeastSignificantOneBits(6) == 0;
+	assert IntegerCountLeastSignificantOneBits(7) == 3;
+	assert IntegerCountLeastSignificantOneBits(7 | (1 << 5)) == 3;
+	assert IntegerCountLeastSignificantOneBits(10) == 0;
+
+	assert IntegerCountMostSignificantZeroBits(0) == 64;
+	assert IntegerCountMostSignificantZeroBits(1 << 63) == 0;
+	assert IntegerCountMostSignificantZeroBits(1 << 62) == 1;
+	assert IntegerCountMostSignificantOneBits(0) == 0;
+	assert IntegerCountMostSignificantOneBits(1 << 63) == 1;
+	assert IntegerCountMostSignificantOneBits(1 << 62) == 0;
+	assert IntegerCountMostSignificantOneBits(1 << 63 | 1 << 62) == 2;
+
+	assert IntegerCountOneBits(0) == 0;
+	assert IntegerCountOneBits(1 << 8) == 1;
+	assert IntegerCountOneBits(1 << 8 | 1 << 9) == 2;
+
+	assert CharacterIsSpace(" ");
+	assert CharacterIsSpace("\r");
+	assert CharacterIsSpace("\n");
+	assert CharacterIsSpace("\t");
+	assert !CharacterIsSpace("a");
+	assert !CharacterIsSpace("b");
+	assert !CharacterIsSpace("0");
+	assert !CharacterIsDigit(" ");
+	assert !CharacterIsDigit("\r");
+	assert !CharacterIsDigit("\n");
+	assert !CharacterIsDigit("\t");
+	assert !CharacterIsDigit("a");
+	assert !CharacterIsDigit("b");
+	assert CharacterIsDigit("0");
+	assert CharacterIsDigit("5");
+	assert CharacterIsDigit("9");
+	assert !CharacterIsAlnum(" ");
+	assert !CharacterIsAlnum("\r");
+	assert !CharacterIsAlnum("\n");
+	assert !CharacterIsAlnum("\t");
+	assert  CharacterIsAlnum("a");
+	assert  CharacterIsAlnum("b");
+	assert  CharacterIsAlnum("0");
+	assert  CharacterIsAlnum("5");
+	assert  CharacterIsAlnum("9");
+
+	int[] p = PermutationFirst(4);
+	int count = 1;
+	while PermutationIterate(p) { count += 1; }
+	assert count == 24;
+
+	assert StringRemoveOptionalPrefix("test", "te") == "st";
+	assert StringRemoveOptionalPrefix("test", "test") == "";
+	assert StringRemoveOptionalPrefix("test", "") == "test";
+	assert StringRemoveOptionalPrefix("test", "t") == "est";
+	assert StringRemoveOptionalPrefix("test", "aest") == "test";
+	assert StringRemoveOptionalPrefix("test", "a") == "test";
+	assert StringRemoveOptionalSuffix("test", "st") == "te";
+	assert StringRemoveOptionalSuffix("test", "ast") == "test";
+	assert StringRemoveOptionalSuffix("test", "test") == "";
+	assert StringRemoveOptionalSuffix("test", "") == "test";
+	assert StringRemoveOptionalSuffix("test", "tt") == "test";
+	assert StringRemoveOptionalSuffix("test", "t") == "tes";
+
+	assert StringFind("hello", "el", 0, false) == 1;
+	assert StringFind("hello", "el", 0, true) == -1;
+	assert StringFind("hello", "l", 0, false) == 2;
+	assert StringFind("hello", "l", 4, true) == 3;
+	assert StringFind("hello", "l", 2, true) == 2;
+	assert StringFind("hello", "el", 2, true) == 1;
+	assert StringFind("hello", "ell", 2, true) == 1;
+	assert StringFind("hello", "ela", 2, true) == -1;
+	assert StringFindLast("hello", "l") == 3;
+	assert StringFindLast("", "a") == -1;
+	assert StringFindLast("hello", "a") == -1;
+
+	assert StringReplaceFirst("hello hello", "ll", "a") == "heao hello";
+	assert StringReplaceLast("hello hello", "ll", "a") == "hello heao";
+	assert StringReplaceAll("hello hello", "ll", "a") == "heao heao";
+	str replaceResult, int replaceCount = StringReplaceAllWithCount("hello hello", "ll", "a");
+	assert replaceResult == "heao heao";
+	assert replaceCount == 2;
+}

@@ -8,6 +8,8 @@ For the first build, run `./build.sh`.
 
 For subsequent builds, run `./esh build.esh`. For a debug build, run `./esh build.esh debug=true`.
 
+Run `./esh build.esh runTests=true` to run all the tests.
+
 ## Running examples
 
 For example, run `./esh examples/hello_world.esh`.

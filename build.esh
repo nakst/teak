@@ -1,4 +1,17 @@
 bool debug #option;
+bool runTests #option;
+
+void RunTests() {
+	for str file in DirectoryEnumerate("tests"):assert() {
+		if StringEndsWith(file, ".err.esh") {
+			assert !SystemShellExecute("./esh tests/%file%");
+		} else if StringEndsWith(file, ".esh") {
+			assert SystemShellExecute("./esh tests/%file%");
+		}
+	}
+
+	LogInfo("All tests succeeded!");
+}
 
 void Start() { 
 	str optimizeFlags = "-O2";
@@ -11,5 +24,9 @@ void Start() {
 	} else {
 		LogError("New build looks bad.");
 		assert false;
+	}
+
+	if runTests {
+		RunTests();
 	}
 }
