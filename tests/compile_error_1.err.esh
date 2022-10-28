@@ -1,0 +1,5 @@
+void Start() {
+	int x = 3;
+	float y = 4.0;
+	float z = x + y;
+}

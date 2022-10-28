@@ -1,0 +1,116 @@
+void WhileContinue() {
+	str x = "";
+	int i = 0;
+
+	while i < 5 {
+		i += 1;
+
+		if i == 3 {
+			int z0;
+			str z1;
+
+			continue;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "1245";
+}
+
+void WhileBreak() {
+	str x = "";
+	int i = 0;
+
+	while i < 5 {
+		i += 1;
+
+		if i == 3 {
+			int z0;
+			str z1;
+
+			break;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "12";
+}
+
+void ForContinue() {
+	str x = "";
+
+	for int i = 0; i < 5; i += 1 {
+		if i == 3 {
+			int z0;
+			str z1;
+
+			continue;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "0124";
+}
+
+void ForBreak() {
+	str x = "";
+
+	for int i = 0; i < 5; i += 1 {
+		if i == 3 {
+			int z0;
+			str z1;
+
+			break;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "012";
+}
+
+void ForInContinue() {
+	str x = "";
+
+	for int i in [0, 1, 2, 3, 4] {
+		if i == 3 {
+			int z0;
+			str z1;
+
+			continue;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "0124";
+}
+
+void ForInBreak() {
+	str x = "";
+
+	for int i in [0, 1, 2, 3, 4] {
+		if i == 3 {
+			int z0;
+			str z1;
+
+			break;
+		}
+
+		x += "%i%";
+	}
+
+	assert x == "012";
+}
+
+void Start() {
+	WhileContinue();
+	WhileBreak();
+	ForContinue();
+	ForBreak();
+	ForInContinue();
+	ForInBreak();
+}

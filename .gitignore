@@ -2,5 +2,4 @@ esh
 .DS_Store
 .*.swp
 .swp
-bugs
-temp.dat
+tests_log.txt

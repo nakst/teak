@@ -2,15 +2,35 @@ bool debug #option;
 bool runTests #option;
 
 void RunTests() {
+	// TODO Timeout.
+		
+	FileWriteAll("tests_log.txt", "!! running tests...\n");
+	int success = 0;
+	int total = 0;
+
 	for str file in DirectoryEnumerate("tests"):assert() {
+		bool expected;
+
 		if StringEndsWith(file, ".err.esh") {
-			assert !SystemShellExecute("./esh tests/%file%");
+			FileAppend("tests_log.txt", "!! expecting error from '%file%'...\n");
+			expected = false;
 		} else if StringEndsWith(file, ".esh") {
-			assert SystemShellExecute("./esh tests/%file%");
+			FileAppend("tests_log.txt", "!! expecting success from '%file%'...\n");
+			expected = true;
+		} else {
+			continue;
 		}
+
+		if SystemShellExecute("./esh tests/%file% 2>> tests_log.txt") == expected { 
+			success += 1; 
+		} else { 
+			FileAppend("tests_log.txt", "!! test failed\n");
+		}
+
+		total += 1;
 	}
 
-	LogInfo("All tests succeeded!");
+	LogInfo("%success%/%total% tests succeeded.");
 }
 
 void Start() { 

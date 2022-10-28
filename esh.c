@@ -57,6 +57,7 @@
 // 	- Loading untrusted bytecode files?
 
 // TODO Miscellaneous:
+// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
 // 	- Inlining small strings; fixed objects for single byte strings.
 // 	- Exponent notation in numeric literals.
 // 	- Block comments.
