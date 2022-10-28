@@ -71,14 +71,56 @@ bool CharacterIsSpace(str c);
 // That is, whether it is in the range [0-9].
 bool CharacterIsDigit(str c);
 
-// Returns whether the haystack strings contains the needle somewhere in it.
-bool StringContains(str haystack, str needle);
-
 // Returns whether the string s starts with the string x.
 bool StringStartsWith(str s, str x);
 
 // Returns whether the string s ends with the string x.
 bool StringEndsWith(str s, str x);
+```
+
+### Strings and characters — searching
+
+```
+// Returns whether the haystack string contains the needle somewhere in it.
+bool StringContains(str haystack, str needle);
+
+// Returns the first index of the needle string in the haystack string.
+// If it is not found, -1 is returned.
+// The needle must be non-empty.
+// startAt gives the first index to check.
+// If reverse is false, each iteration moves the checked index one byte forwards.
+// If reverse is true, each iteration moves the checked index one byte backwards.
+// If the index goes (or starts) outside the bounds [0, haystack:len()-1], -1 is returned.
+int StringFind(str haystack, str needle, int startAt, bool reverse);
+
+// Finds the starting index in the haystack string of the first occurence of the needle string.
+// If it is not found, -1 is returned. The needle must be non-empty.
+// Equivalent to StringFind(haystack, needle, 0, false).
+int StringFindFirst(str haystack, str needle);
+
+// Finds the starting index in the haystack string of the last occurence of the needle string.
+// If it is not found, -1 is returned. The needle must be non-empty.
+// Equivalent to StringFind(haystack, needle, haystack:len() - 1, true).
+int StringFindLast(str haystack, str needle);
+```
+
+### Strings and characters -- replacing
+
+```
+// Replace the first instance of the needle string in the haystack string with the with string.
+// Or, if it is not found, return the haystack string unchanged.
+str StringReplaceFirst(str haystack, str needle, str with);
+
+// Replace the last instance of the needle string in the haystack string with the with string.
+// Or, if it is not found, return the haystack string unchanged.
+str StringReplaceLast(str haystack, str needle, str with);
+
+// Replace all instances of the needle string in the haystack string with the with string.
+str StringReplaceAll(str haystack, str needle, str with);
+
+// Replace all instances of the needle string in the haystack string with the with string.
+// This also returns the number of replacements made.
+tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with);
 ```
 
 ### Strings and characters — joining and splitting
@@ -96,6 +138,12 @@ str StringJoin(str[] strings, str k, bool trailing);
 // The character string should be a single byte, giving the delimeter character.
 // If includeEmptyString is false, then empty strings are not included in the output list.
 str[] StringSplitByCharacter(str string, str character, bool includeEmptyString);
+
+// If the string starts with the given prefix, it is removed. Otherwise, the original string is returned.
+str StringRemoveOptionalPrefix(str s, str prefix);
+
+// If the string ends with the given suffix, it is removed. Otherwise, the original string is returned.
+str StringRemoveOptionalSuffix(str s, str suffix);
 ```
 
 ### Strings and characters — file system paths

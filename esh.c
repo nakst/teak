@@ -9,7 +9,7 @@
 
 // TODO Standard library:
 // 	- Integers: 
-// 		- MathLCM, MathGCD
+// 		- MathLCM, MathGCD, MathCRT, MathPrimeFactorization
 // 	- Floats: 
 // 		- FloatAbsolute, FloatMaximum, FloatMinimum, FloatClamp
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
@@ -23,14 +23,11 @@
 // 	- Lists:
 // 		- ListSort, :clone, :clone_all
 // 	- Strings:
-// 		- StringFindCharacter, StringFind, StringFindReverseCharacter, StringFindReverse
-// 		- StringReplaceAll, StringReplaceFirst, StringReplaceLast
 // 		- StringParseAsFloat, StringParseAsInteger
 // 		- StringHashCRC32, StringHashCRC64, StringHashFNV1a
-// 		- StringCompareRaw, StringCompareLocale, StringToLowerRaw, StringToLowerLocale, StringToUpperRaw, StringToUpperLocale
+// 		- StringCompareRaw, StringCompareLocale, StringToLowerLocale, StringToUpperLocale
 // 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode
 // 		- StringUTF8IsValid, StringUTF8Encode, StringUTF8Decode, StringUTF8Advance, StringUTF8Retreat
-// 		- StringRemoveOptionalPrefix, StringRemoveOptionalSuffix
 // 	- Time and date.
 // 	- Data compression.
 // 	- Cryptography.
@@ -619,6 +616,55 @@ char baseModuleSource[] = {
 	"	}\n"
 	"}\n"
 	"str StringToLowerRaw(str s) { str t = \"\"; for str c in s { t += CharacterToLowerRaw(c); } return t; }\n"
+	"str StringRemoveOptionalPrefix(str s, str prefix) { if StringStartsWith(s, prefix) { return StringSlice(s, prefix:len(), s:len()); } else { return s; } }\n"
+	"str StringRemoveOptionalSuffix(str s, str suffix) { if StringEndsWith(s, suffix) { return StringSlice(s, 0, s:len() - suffix:len()); } else { return s; } }\n"
+	"int StringFind(str haystack, str needle, int startAt, bool reverse) {\n"
+	"	assert needle:len() != 0;\n"
+	"	int index = startAt;\n"
+	"	while index >= 0 && index < haystack:len() {\n"
+	"		if index + needle:len() <= haystack:len() {\n"
+	"			bool match = true;\n"
+	"			for int j = 0; j < needle:len(); j += 1 { if haystack[index + j] != needle[j] match = false; }\n"
+	"			if match { return index; }\n"
+	"		}\n"
+	"		if reverse index -= 1;\n"
+	"		else index += 1;\n"
+	"	}\n"
+	"	return -1;\n"
+	"}\n"
+	"int StringFindFirst(str haystack, str needle) { return StringFind(haystack, needle, 0, false); }\n"
+	"int StringFindLast(str haystack, str needle) { return StringFind(haystack, needle, haystack:len() - 1, true); }\n"
+	"str StringReplaceFirst(str haystack, str needle, str with) {\n"
+	"	int index = StringFindFirst(haystack, needle);\n"
+	"	if index == -1 { return haystack; }\n"
+	"	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());\n"
+	"}\n"
+	"str StringReplaceLast(str haystack, str needle, str with) {\n"
+	"	int index = StringFindLast(haystack, needle);\n"
+	"	if index == -1 { return haystack; }\n"
+	"	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());\n"
+	"}\n"
+	"tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with) {\n"
+	"	str result = \"\";\n"
+	"	int position = 0;\n"
+	"	int count = 0;\n"
+	"	while true {\n"
+	"		int index = StringFind(haystack, needle, position, false);\n"
+	"		if index == -1 {\n"
+	"			result += StringSlice(haystack, position, haystack:len());\n"
+	"			return result, count;\n"
+	"		}\n"
+	"		result += StringSlice(haystack, position, index) + with;\n"
+	"		position = index + needle:len();\n"
+	"		count += 1;\n"
+	"	}\n"
+	"	assert false;\n"
+	"	return \"\", 0;\n"
+	"}\n"
+	"str StringReplaceAll(str haystack, str needle, str with) {\n"
+	"	str result, int count = StringReplaceAllWithCount(haystack, needle, with);\n"
+	"	return result;\n"
+	"}\n"
 
 	// Miscellaneous:
 
@@ -8098,6 +8144,17 @@ void PrintType(Node *type) {
 		}
 
 		fprintf(stderr, ")");
+	} else if (type->type == T_TUPLE) {
+		fprintf(stderr, "tuple[");
+		Node *node = type->firstChild;
+
+		while (node) {
+			PrintType(node);
+			node = node->sibling;
+			if (node) fprintf(stderr, ", ");
+		}
+
+		fprintf(stderr, "]");
 	} else {
 		fprintf(stderr, "unknown-type-%d", type->type);
 	}

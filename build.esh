@@ -2,6 +2,14 @@ bool debug #option;
 
 void Start() { 
 	str optimizeFlags = "-O2";
-	if debug { optimizeFlags = ""; }
-	assert SystemShellExecute("gcc -o esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
+	if debug optimizeFlags = "";
+	assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
+
+	if SystemShellExecute("./new_esh examples/hello_world.esh") {
+		LogInfo("New build looks okay, replacing existing executable...");
+		PathMove("new_esh", "esh");
+	} else {
+		LogError("New build looks bad.");
+		assert false;
+	}
 }
