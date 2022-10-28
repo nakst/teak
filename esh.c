@@ -20,8 +20,8 @@
 // 		- MathNorm, MathArcTan2, MathLinearRemap, MathSign
 // 		- MathIsInfinite, MathIsNaN
 // 		- RandomFloat
-// 	- Arrays:
-// 		- ArraySort, ArraySearch, ArrayCloneAll, ArrayCloneRange, ArrayPermutationIterate
+// 	- Lists:
+// 		- ListSort, :clone, :clone_all
 // 	- Strings:
 // 		- StringFindCharacter, StringFind, StringFindReverseCharacter, StringFindReverse
 // 		- StringReplaceAll, StringReplaceFirst, StringReplaceLast
@@ -31,8 +31,6 @@
 // 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode
 // 		- StringUTF8IsValid, StringUTF8Encode, StringUTF8Decode, StringUTF8Advance, StringUTF8Retreat
 // 		- StringRemoveOptionalPrefix, StringRemoveOptionalSuffix
-// 	- Characters:
-// 		- CharacterIsSpace, CharacterIsDigit
 // 	- Time and date.
 // 	- Data compression.
 // 	- Cryptography.
@@ -599,6 +597,8 @@ char baseModuleSource[] = {
 	"	return (b >= CharacterToByte(\"A\") && b <= CharacterToByte(\"Z\")) || (b >= CharacterToByte(\"a\") && b <= CharacterToByte(\"z\"))\n"
 	"		|| (b >= CharacterToByte(\"0\") && b <= CharacterToByte(\"9\"));\n"
 	"}\n"
+	"bool CharacterIsSpace(str c) { return c == \" \" || c == \"\\t\" || c == \"\\r\" || c == \"\\n\"; }"
+	"bool CharacterIsDigit(str c) { int b = CharacterToByte(c); return b >= CharacterToByte(\"0\") && b <= CharacterToByte(\"9\"); }"
 	"str CharacterToUpperRaw(str c) {\n"
 	"	int b = CharacterToByte(c);\n"
 	"	if b >= CharacterToByte(\"a\") && b <= CharacterToByte(\"z\") {\n"
@@ -891,6 +891,42 @@ char baseModuleSource[] = {
 	"		if (x & (1 << i)) != 0 { count += 1; }\n"
 	"	}\n"
 	"	return count;\n"
+	"}\n"
+
+	// Permutations.
+	
+	"int[] PermutationFirst(int n) { int[] p = new int[]; for int i = 0; i < n; i += 1 { p:add(i); } return p; }\n"
+	"bool PermutationIterate(int[] p) {\n"
+	"	int lvi = -1;\n"
+	"	int xiForLvi;\n"
+	"	int yiForLvi;\n"
+	"	for int xi = 0; xi < p:len(); xi += 1 {\n"
+	"		int i = p[xi];\n"
+	"		bool odd = false;\n"
+	"		for int j = 0; j < p:len(); j += 1 {\n"
+	"			for int k = 0; k < j; k += 1 {\n"
+	"				if p[j] < i && p[k] < i && p[j] < p[k] {\n"
+	"					odd = !odd;\n"
+	"				}\n"
+	"			}\n"
+	"		}\n"
+	"		int yi = xi - 1;\n"
+	"		if odd yi += 2;\n"
+	"		bool valid = yi >= 0 && yi < p:len() && p[yi] < i;\n"
+	"		if valid && i > lvi {\n"
+	"			lvi = i;\n"
+	"			xiForLvi = xi;\n"
+	"			yiForLvi = yi;\n"
+	"		}\n"
+	"	}\n"
+	"	if lvi == -1 {\n"
+	"		return false;\n"
+	"	} else {\n"
+	"		int swap = p[xiForLvi];\n"
+	"		p[xiForLvi] = p[yiForLvi];\n"
+	"		p[yiForLvi] = swap;\n"
+	"		return true;\n"
+	"	}\n"
 	"}\n"
 };
 

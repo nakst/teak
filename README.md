@@ -41,7 +41,7 @@ Why did I make another programming language? Because I felt like there wasn't a 
 ### Strings and characters — conversions
 
 ```
-// Extract the byte value (0-255) of the unit length string.
+// Extract the byte value (0-255) of the one byte string.
 int CharacterToByte(str x);
 
 // Convert string to uppercase or lowercase.
@@ -56,10 +56,20 @@ str StringTrim(str string);
 
 ### Strings and characters — testing
 
+Important: A string is an immutable, ordered collection of bytes. A "character" refers to a one byte string. Various character functions will assume that this byte represents an ASCII character; this is usually the behaviour you want because UTF-8 strings encode the codepoint range 0-127 as a single byte with that value.
+
 ```
-// Returns whether the first byte in the string is a alphanumeric ASCII character.
+// Returns whether the one byte string is a alphanumeric ASCII character.
 // That is, whether it is in one of the ranges [a-z], [A-Z], [0-9].
 bool CharacterIsAlnum(str c);
+
+// Returns whether the one byte string is a whitespace ASCII character.
+// That is, whether it is one of ' ', '\r', '\n' or '\t'.
+bool CharacterIsSpace(str c);
+
+// Returns whether the one byte string is a digit ASCII character.
+// That is, whether it is in the range [0-9].
+bool CharacterIsDigit(str c);
 
 // Returns whether the haystack strings contains the needle somewhere in it.
 bool StringContains(str haystack, str needle);
@@ -359,6 +369,17 @@ int IntegerCountMostSignificantOneBits(int x);
 
 // Get a randomized integer between min and max (inclusive).
 int RandomInt(int min, int max);
+```
+
+### Permutations
+
+
+```
+// Create an list of length n with values [0, 1, 2, 3, ..., n - 1].
+int[] PermutationFirst(int n);
+
+// Get the next permutation of length n. After the n!th call, this will return false.
+bool PermutationIterate(int[] p);
 ```
 
 ### Other
