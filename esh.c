@@ -1,7 +1,8 @@
 // TODO Basic missing features:
 // 	> Maps: T[int], T[str].
-// 	> Control flow: break, continue.
 // 	> Using declared types from imported modules.
+// 	> Setting the initial values of global variables (including options).
+// 	> Operation arguments are evaluated in the opposite order to functions?
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 
@@ -55,9 +56,7 @@
 // 	- Loading untrusted bytecode files?
 
 // TODO Miscellaneous:
-// 	> Setting the initial values of global variables.
-// 	> Operation arguments are evaluated in the opposite order to functions?
-// 	- Inlining small strings.
+// 	- Inlining small strings; fixed objects for single byte strings.
 // 	- Exponent notation in numeric literals.
 // 	- Block comments.
 // 	- More escape sequences in string literals.
@@ -242,6 +241,8 @@
 #define T_HANDLETYPE          (199)
 #define T_ANYTYPE             (200)
 #define T_LIBRARY             (201)
+#define T_BREAK               (202)
+#define T_CONTINUE            (203)
 
 #define STACK_READ_STRING(textVariable, bytesVariable, stackIndex) \
 	if (context->c->stackPointer < stackIndex) return -1; \
@@ -308,7 +309,11 @@ typedef struct Node {
 	struct Node *parent; // Set in ASTSetScopes.
 	Scope *scope; // Set in ASTSetScopes.
 	struct Node *expressionType; // Set in ASTSetTypes.
-	struct ImportData *importData; // The module being imported by this node.
+				     
+	union {
+		struct ImportData *importData; // The module being imported by this node.
+		uintptr_t breakContinueTarget;
+	};
 } Node;
 
 typedef struct Value {
@@ -1199,6 +1204,8 @@ Token TokenNext(Tokenizer *tokenizer) {
 			else if KEYWORD("assert") token.type = T_ASSERT;
 			else if KEYWORD("await") token.type = T_AWAIT;
 			else if KEYWORD("bool") token.type = T_BOOL;
+			else if KEYWORD("break") token.type = T_BREAK;
+			else if KEYWORD("continue") token.type = T_CONTINUE;
 			else if KEYWORD("else") token.type = T_ELSE;
 			else if KEYWORD("err") token.type = T_ERR;
 			else if KEYWORD("false") token.type = T_FALSE;
@@ -2096,6 +2103,20 @@ Node *ParseBlock(Tokenizer *tokenizer, bool replMode) {
 
 			*link = wrapper;
 			link = &wrapper->sibling;
+		} else if (token.type == T_BREAK || token.type == T_CONTINUE) {
+			Node *node = (Node *) AllocateFixed(sizeof(Node));
+			node->type = token.type;
+			node->token = TokenNext(tokenizer);
+
+			*link = node;
+			link = &node->sibling;
+
+			Token semicolon = TokenNext(tokenizer);
+
+			if (semicolon.type != T_SEMICOLON) {
+				PrintError2(tokenizer, node, "Expected a semicolon at the end of the statement.\n");
+				return NULL;
+			}
 		} else if (token.type == T_RETURN || token.type == T_ASSERT || token.type == T_RETERR) {
 			if (replMode) {
 				PrintError2(tokenizer, node, "%s statements cannot be used in the console.\n", 
@@ -3227,7 +3248,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			|| node->type == T_STRUCT || node->type == T_FUNCTYPE || node->type == T_IMPORT 
 			|| node->type == T_IMPORT_PATH || node->type == T_INTTYPE || node->type == T_HANDLETYPE
 			|| node->type == T_FUNCPTR || node->type == T_FUNCBODY || node->type == T_FUNCTION
-			|| node->type == T_REPL_RESULT || node->type == T_DECLARE_GROUP || node->type == T_CAST_TYPE_WRAPPER) {
+			|| node->type == T_REPL_RESULT || node->type == T_DECLARE_GROUP || node->type == T_CAST_TYPE_WRAPPER
+			|| node->type == T_BREAK || node->type == T_CONTINUE) {
 	} else if (node->type == T_NUMERIC_LITERAL) {
 		size_t dotCount = 0;
 
@@ -4083,6 +4105,21 @@ bool FunctionBuilderVariable(Tokenizer *tokenizer, FunctionBuilder *builder, Nod
 	return true;
 }
 
+void FunctionBuilderSetBreakContinueTargets(Tokenizer *tokenizer, Node *node, FunctionBuilder *builder, uintptr_t breakTarget, uintptr_t continueTarget) {
+	Node *child = node->firstChild;
+
+	while (child) {
+		FunctionBuilderSetBreakContinueTargets(tokenizer, child, builder, breakTarget, continueTarget);
+		child = child->sibling;
+	}
+
+	if (node->type != T_BREAK && node->type != T_CONTINUE) return;
+	uintptr_t target = node->type == T_BREAK ? breakTarget : continueTarget;
+	uintptr_t writeOffset = node->breakContinueTarget;
+	int32_t delta = target - writeOffset;
+	MemoryCopy(builder->data + writeOffset, &delta, sizeof(delta));
+}
+
 bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *builder, bool forAssignment) {
 	if (forAssignment) {
 		if (node->type == T_VARIABLE || node->type == T_DOT || node->type == T_INDEX) {
@@ -4179,22 +4216,71 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		FunctionBuilderAddLineNumber(builder, node);
 		FunctionBuilderAppend(builder, &node->type, sizeof(node->type));
 		return true;
+	} else if (node->type == T_BREAK || node->type == T_CONTINUE) {
+		uint16_t entryCount = 0;
+		Node *ancestor = node;
+		Scope *lastScope = NULL;
+
+		while (ancestor) {
+			if (ancestor->type == T_FUNCBODY) {
+				PrintError2(tokenizer, node, "The \"%s\" statement must be contained within a loop.\n",
+						node->type == T_BREAK ? "break" : "continue");
+				return false;
+			} else if (ancestor->type == T_WHILE || ancestor->type == T_FOR || ancestor->type == T_FOR_EACH) {
+				break;
+			} else if (ancestor->scope != lastScope) {
+				lastScope = ancestor->scope;
+				Assert(entryCount + lastScope->variableEntryCount < 65000);
+				entryCount += lastScope->variableEntryCount;
+			}
+
+			ancestor = ancestor->parent;
+		}
+
+		uint8_t b = T_EXIT_SCOPE;
+		FunctionBuilderAddLineNumber(builder, node);
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		FunctionBuilderAppend(builder, &entryCount, sizeof(entryCount));
+		b = T_BRANCH;
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		node->breakContinueTarget = builder->dataBytes;
+		uint32_t zero = 0;
+		FunctionBuilderAppend(builder, &zero, sizeof(zero));
+
+		return true;
 	} else if (node->type == T_WHILE) {
+		// Save the position where the while loop begins.
 		int32_t start = builder->dataBytes;
+
+		// Push the loop condition.
 		if (!FunctionBuilderRecurse(tokenizer, node->firstChild, builder, false)) return false;
 		FunctionBuilderAddLineNumber(builder, node);
+
+		// Branch if the condition was false.
 		uint8_t b = T_IF;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
+
+		// Save the position where the branch target will be placed.
 		uintptr_t writeOffset = builder->dataBytes;
 		uint32_t zero = 0;
 		FunctionBuilderAppend(builder, &zero, sizeof(zero));
+
+		// Output the loop body.
 		if (!FunctionBuilderRecurse(tokenizer, node->firstChild->sibling, builder, false)) return false;
+
+		// Branch back to the start of the loop.
 		b = T_BRANCH;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
 		int32_t delta = start - builder->dataBytes;
 		FunctionBuilderAppend(builder, &delta, sizeof(delta));
+
+		// Set the first branch target.
 		delta = builder->dataBytes - writeOffset;
 		MemoryCopy(builder->data + writeOffset, &delta, sizeof(delta));
+
+		// Set break/continue targets.
+		FunctionBuilderSetBreakContinueTargets(tokenizer, node->firstChild->sibling, builder, builder->dataBytes, start);
+
 		return true;
 	} else if (node->type == T_FOR) {
 		Node *declare = node->firstChild;
@@ -4207,18 +4293,35 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 			return false;
 		}
 
+		// Declare the iteration variable.
 		if (!FunctionBuilderRecurse(tokenizer, declare, builder, false)) return false;
+
+		// Save the position where the for loop begins.
 		int32_t start = builder->dataBytes;
+
+		// Push the loop condition.
 		if (!FunctionBuilderRecurse(tokenizer, condition, builder, false)) return false;
 		FunctionBuilderAddLineNumber(builder, node);
+
+		// Branch if the condition was false.
 		uint8_t b = T_IF;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
+
+		// Save the position where the branch target will be placed.
 		uintptr_t writeOffset = builder->dataBytes;
 		uint32_t zero = 0;
 		FunctionBuilderAppend(builder, &zero, sizeof(zero));
+
+		// Output the loop body.
 		if (!FunctionBuilderRecurse(tokenizer, body, builder, false)) return false;
+
+		// Save the position before the increment operation.
+		int32_t preIncrement = builder->dataBytes;
+
+		// Output the increment operation.
 		if (!FunctionBuilderRecurse(tokenizer, increment, builder, false)) return false;
 
+		// Pop unused expressions.
 		if (increment->expressionType && increment->expressionType->type != T_VOID) {
 			if (increment->type == T_CALL) {
 				uint8_t b = T_POP;
@@ -4232,12 +4335,19 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 			}
 		}
 
+		// Branch back to the start of the loop.
 		b = T_BRANCH;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
 		int32_t delta = start - builder->dataBytes;
 		FunctionBuilderAppend(builder, &delta, sizeof(delta));
+
+		// Set the first branch target.
 		delta = builder->dataBytes - writeOffset;
 		MemoryCopy(builder->data + writeOffset, &delta, sizeof(delta));
+
+		// Set break/continue targets.
+		FunctionBuilderSetBreakContinueTargets(tokenizer, body, builder, builder->dataBytes, preIncrement);
+
 		return true;
 	} else if (node->type == T_FOR_EACH) {
 		Node *declare = node->firstChild;
@@ -4331,6 +4441,8 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		FunctionBuilderAppend(builder, &scopeIndexBase, sizeof(scopeIndexBase));
 
 		// Save the list and index.
+		// These are not kept on the stack while the loop body is executed, 
+		// because it's only meant for storing expression intermediates.
 		int32_t scopeIndexList = scopeIndexBase - 1;
 		int32_t scopeIndexIndex = scopeIndexBase - 2;
 		b = T_EQUALS;
@@ -4342,17 +4454,17 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		// Output the body.
 		if (!FunctionBuilderRecurse(tokenizer, body, builder, false)) return false;
 
+		// Save the position before the increment operation.
+		int32_t preIncrement = builder->dataBytes;
+
 		// Load the list and index.
 		b = T_VARIABLE;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
-		FunctionBuilderAppend(builder, &scopeIndexIndex, sizeof(scopeIndexIndex));
-		FunctionBuilderAppend(builder, &b, sizeof(b));
 		FunctionBuilderAppend(builder, &scopeIndexList, sizeof(scopeIndexList));
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		FunctionBuilderAppend(builder, &scopeIndexIndex, sizeof(scopeIndexIndex));
 
 		// Increment the index.
-		// Stack: list, index, ...
-		b = T_SWAP;
-		FunctionBuilderAppend(builder, &b, sizeof(b));
 		// Stack: index, list, ...
 		b = T_NUMERIC_LITERAL;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
@@ -4378,6 +4490,9 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		b = T_POP;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
 		FunctionBuilderAppend(builder, &b, sizeof(b));
+
+		// Set break/continue targets.
+		FunctionBuilderSetBreakContinueTargets(tokenizer, body, builder, builder->dataBytes, preIncrement);
 
 		return true;
 	} else if (node->type == T_IF) {
