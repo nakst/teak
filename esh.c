@@ -2,8 +2,6 @@
 // 	> Maps: T[int], T[str].
 // 	> Control flow: break, continue.
 // 	> Using declared types from imported modules.
-// 	> Implement :delete_last()
-// 	> reterr should work with errors of different internal types.
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 
@@ -823,11 +821,8 @@ char baseModuleSource[] = {
 	"}\n"
 	"err[void] PathCopyFilteredInto(str sourceDirectory, str[] filter, int filterWildcard, str destinationDirectory) {\n"
 	"	err[str[]] e = DirectoryEnumerateFiltered(sourceDirectory, filter, filterWildcard, false);\n"
-	"	if str[] items in e {\n"
-	"		return PathCopyAllInto(sourceDirectory, items, destinationDirectory);"
-	"	} else {\n"
-	"		return new err[void] e:error();\n"
-	"	}\n"
+	"	reterr e;\n"
+	"	return PathCopyAllInto(sourceDirectory, e:assert(), destinationDirectory);\n"
 	"}\n"
 
 	"bool PathMatchesFilter(str path, str[] filterComponents, int _filterWildcard) {\n"
@@ -6180,6 +6175,23 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 
 			context->heap[index].length = context->heap[index].allocated = 0;
 			context->heap[index].list = (Value *) AllocateResize(context->heap[index].list, 0);
+			context->c->stackPointer--;
+		} else if (command == T_OP_DELETE_LAST) {
+			if (context->c->stackPointer < 1) return -1;
+			if (!context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+
+			uint64_t index = context->c->stack[context->c->stackPointer - 1].i;
+
+			if (!index) {
+				PrintError4(context, instructionPointer - 1, "The list is null.\n");
+				return 0;
+			}
+
+			if (context->heapEntriesAllocated <= index) return -1;
+			HeapEntry *entry = &context->heap[index];
+			if (entry->type != T_LIST) return -1;
+
+			context->heap[index].length--;
 			context->c->stackPointer--;
 		} else if (command == T_OP_FIND_AND_DELETE || command == T_OP_FIND
 				|| command == T_OP_FIND_AND_DEL_STR || command == T_OP_FIND_STR) {
