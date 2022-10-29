@@ -1,0 +1,6 @@
+int Test() {
+	return 3.0;
+}
+
+void Start() {
+}

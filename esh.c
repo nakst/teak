@@ -5,6 +5,24 @@
 // 	> Operation arguments are evaluated in the opposite order to functions?
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
+// 	- Exponent notation in numeric literals.
+// 	- Block comments.
+// 	- Multiline string literals.
+// 	- More escape sequences in string literals.
+
+// TODO Syntax sugar: (ideas)
+// 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
+// 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
+// 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
+// 	- Easier way to fill/initialise structs.
+
+// TODO Larger missing features:
+// 	- Serialization.
+// 	- Debugging.
+// 	- Verbose mode, where every external call is logged, every variable modification is logged, every line is logged, etc? Saving output to file.
+// 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
+// 	- Set expectedType for T_DECL_GROUP_AND_SET, T_SET_GROUP, T_RETURN_TUPLE.
+// 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 
 // TODO Standard library:
 // 	- Integers: 
@@ -35,17 +53,11 @@
 // 	- Imaging.
 // 	- Audio.
 
-// TODO Syntax sugar: (ideas)
-// 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
-// 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
-// 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
-// 	- Easier way to fill/initialise structs.
-
-// TODO Larger missing features:
-// 	- Serialization.
-// 	- Debugging.
-// 	- Verbose mode, where every external call is logged, every variable modification is logged, every line is logged, etc? Saving output to file.
-// 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
+// TODO Miscellaneous:
+// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
+// 	- Inlining small strings; fixed objects for single byte strings.
+// 	- Better handling of memory allocation failures.
+// 	- Shrink lists during garbage collection.
 
 // TODO Cleanup:
 // 	- Cleanup the code in External- functions and ScriptExecuteFunction using macros for common stack and heap operations.
@@ -56,17 +68,6 @@
 // TODO Safety:
 // 	- Safety against extremely large scripts?
 // 	- Loading untrusted bytecode files?
-
-// TODO Miscellaneous:
-// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
-// 	- Inlining small strings; fixed objects for single byte strings.
-// 	- Exponent notation in numeric literals.
-// 	- Block comments.
-// 	- Multiline string literals.
-// 	- More escape sequences in string literals.
-// 	- Better handling of memory allocation failures.
-// 	- Shrink lists during garbage collection.
-// 	- Storage hints for lists/maps. E.g. settings a list to double-linked-list mode.
 
 #include <stdint.h>
 #include <stddef.h>
@@ -3293,6 +3294,14 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		while (child) {
 			if (!ASTSetTypes(tokenizer, child)) return false;
 			child = child->sibling;
+		}
+	} else if (node->type == T_RETURN) {
+		if (node->firstChild) {
+			Node *function = node->parent;
+			while (function->type != T_FUNCTION) function = function->parent;
+			node->firstChild->expectedType = function->firstChild->firstChild->sibling;
+			if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
+			Assert(!node->firstChild->sibling);
 		}
 	} else {
 		Node *child = node->firstChild;

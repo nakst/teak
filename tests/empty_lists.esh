@@ -1,6 +1,7 @@
-void Test(int[] x) {
+str[] Test(int[] x) {
 	assert x != null;
 	assert x:len() == 0;
+	return [];
 }
 
 void Start() {
