@@ -1,0 +1,29 @@
+name: CI
+on:
+  push
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2          
+    - name: build
+      run: ./build.sh && ./esh build.esh runTests=true
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2          
+    - name: build
+      run: ./build.sh && ./esh build.esh runTests=true
+  build-win32:
+    runs-on: windows-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2          
+    - name: build
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
+        cl.exe esh.c /Wall
+        esh.exe build.esh runTests=true
