@@ -39,7 +39,7 @@ void Start() {
 
 	if SystemGetHostName() == "Windows" {
 		if !debug optimizeFlags = "/O2";
-		assert SystemShellExecute("cl.exe /OUT:new_esh.exe esh.c /Wall %optimizeFlags%"); 
+		assert SystemShellExecute("cl.exe esh.c /Wall %optimizeFlags% /link /OUT:new_esh.exe"); 
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 	} else {
 		if !debug optimizeFlags = "-O2";
