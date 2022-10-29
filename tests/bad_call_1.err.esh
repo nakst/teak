@@ -1,0 +1,6 @@
+void Test(str x) {
+}
+
+void Start() {
+	Test(5);
+}

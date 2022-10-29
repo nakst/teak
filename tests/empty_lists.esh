@@ -1,7 +1,14 @@
+void Test(int[] x) {
+	assert x != null;
+	assert x:len() == 0;
+}
+
 void Start() {
 	int[] x;
 	x = [];
 	int[] y = [];
+	Test(y);
+	Test([]);
 	Log("%x%");
 	Log("%y%");
 }

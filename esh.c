@@ -3238,28 +3238,67 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	if (node->type == T_EQUALS) {
 		Assert(!node->firstChild->sibling->sibling);
 		if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
-		node->firstChild->parent = node;
 		node->firstChild->sibling->expectedType = node->firstChild->expressionType;
 		if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) return false;
-		node->firstChild->sibling->parent = node;
 	} else if (node->type == T_DECLARE) {
 		if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
-		node->firstChild->parent = node;
 
 		if (node->firstChild->sibling) {
 			Assert(!node->firstChild->sibling->sibling);
 			node->firstChild->sibling->expectedType = node->firstChild;
 			if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) return false;
-			node->firstChild->sibling->parent = node;
 		}
 	} else if (node->type == T_STRUCT) {
+	} else if (node->type == T_CALL) {
+		Node *functionPointer = node->firstChild;
+		if (!ASTSetTypes(tokenizer, functionPointer)) return false;
+		Node *expressionType = functionPointer->expressionType;
+
+		if (!expressionType || expressionType->type != T_FUNCPTR) {
+			PrintError5(tokenizer, functionPointer, expressionType, NULL, "The expression being called is not a function.\n");
+			return false;
+		}
+
+		node->expressionType = expressionType->firstChild->sibling;
+		Node *match = expressionType->firstChild->firstChild;
+		Node *argument = node->firstChild->sibling->firstChild;
+
+		size_t countMatch = 0, countArgument = 0;
+
+		while (match || argument) { 
+			if (match && argument) { argument->expectedType = match->firstChild; }
+			if (match) { countMatch++; match = match->sibling; }
+			if (argument) { countArgument++; argument = argument->sibling; }
+		}
+
+		if (countMatch != countArgument) {
+			if (functionPointer->referencesRootScope && functionPointer->token.type == T_IDENTIFIER) {
+				PrintError2(tokenizer, node, "The function '%.*s' takes %d argument%s, but %s%d %s passed.\n",
+						functionPointer->token.textBytes, functionPointer->token.text,
+						countMatch, countMatch == 1 ? "" : "s", 
+						countArgument < countMatch ? "only " : "",
+						countArgument, countArgument == 1 ? "was" : "were");
+			} else {
+				PrintError2(tokenizer, node, "The function pointer takes %d argument%s, but %s%d %s passed.\n",
+						countMatch, countMatch == 1 ? "" : "s", 
+						countArgument < countMatch ? "only " : "",
+						countArgument, countArgument == 1 ? "was" : "were");
+			}
+
+			return false;
+		}
+
+		Node *child = node->firstChild->sibling;
+
+		while (child) {
+			if (!ASTSetTypes(tokenizer, child)) return false;
+			child = child->sibling;
+		}
 	} else {
 		Node *child = node->firstChild;
 
 		while (child) {
-			if (child == node) Assert(false);
 			if (!ASTSetTypes(tokenizer, child)) return false;
-			child->parent = node;
 			child = child->sibling;
 		}
 	}
@@ -3466,55 +3505,26 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		Node *functionPointer = node->firstChild;
 		Node *expressionType = functionPointer->expressionType;
 
-		if (!expressionType || expressionType->type != T_FUNCPTR) {
-			PrintError5(tokenizer, functionPointer, expressionType, NULL, "The expression being called is not a function.\n");
-			return false;
-		}
-
-		node->expressionType = expressionType->firstChild->sibling;
 		Node *match = expressionType->firstChild->firstChild;
 		Node **argumentLink = &node->firstChild->sibling->firstChild;
 		Node *argument = *argumentLink;
 		size_t index = 1;
 
-		size_t countMatch = 0, countArgument = 0;
-		{ Node *n = match; while (n) { countMatch++; n = n->sibling; } }
-		{ Node *n = argument; while (n) { countArgument++; n = n->sibling; } }
-
-		while (true) {
-			if (!argument && !match) {
-				break;
-			} else if (!argument || !match) {
-				if (functionPointer->referencesRootScope && functionPointer->token.type == T_IDENTIFIER) {
-					PrintError2(tokenizer, node, "The function '%.*s' takes %d argument%s, but %s%d %s passed.\n",
-							functionPointer->token.textBytes, functionPointer->token.text,
-							countMatch, countMatch == 1 ? "" : "s", 
-							countArgument < countMatch ? "only " : "",
-							countArgument, countArgument == 1 ? "was" : "were");
-				} else {
-					PrintError2(tokenizer, node, "The function pointer takes %d argument%s, but %s%d %s passed.\n",
-							countMatch, countMatch == 1 ? "" : "s", 
-							countArgument < countMatch ? "only " : "",
-							countArgument, countArgument == 1 ? "was" : "were");
-				}
-
+		while (argument) {
+			if (ASTImplicitCastIsPossible(match->firstChild, argument->expressionType)) {
+				Node *cast = ASTImplicitCastApply(tokenizer, node, match->firstChild, argument);
+				if (!cast) return false;
+				*argumentLink = cast;
+			} else if (!ASTMatching(argument->expressionType, match->firstChild)) {
+				PrintError5(tokenizer, node, argument->expressionType, match->firstChild, 
+						"The types for argument %d do not match.\n", index);
 				return false;
-			} else {
-				if (ASTImplicitCastIsPossible(match->firstChild, argument->expressionType)) {
-					Node *cast = ASTImplicitCastApply(tokenizer, node, match->firstChild, argument);
-					if (!cast) return false;
-					*argumentLink = cast;
-				} else if (!ASTMatching(argument->expressionType, match->firstChild)) {
-					PrintError5(tokenizer, node, argument->expressionType, match->firstChild, 
-							"The types for argument %d do not match.\n", index);
-					return false;
-				}
-
-				match = match->sibling;
-				argumentLink = &argument->sibling;
-				argument = *argumentLink;
-				index++;
 			}
+
+			match = match->sibling;
+			argumentLink = &argument->sibling;
+			argument = *argumentLink;
+			index++;
 		}
 	} else if (node->type == T_ASSERT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)
@@ -3967,7 +3977,6 @@ bool ASTCheckForReturnStatements(Tokenizer *tokenizer, Node *node) {
 
 		while (child) {
 			if (!ASTCheckForReturnStatements(tokenizer, child)) return false;
-			child->parent = node;
 			child = child->sibling;
 		}
 	} else if (node->type == T_FUNCTION) {
@@ -8575,6 +8584,7 @@ int main(int argc, char **argv) {
 	char *scriptPath = NULL;
 	char *evaluateString = NULL;
 	bool evaluateMode = false;
+	bool wantCompletionConfirmation = false;
 
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
@@ -8599,6 +8609,8 @@ int main(int argc, char **argv) {
 			noBaseModule = true;
 		} else if (0 == strcmp(argv[i], "--output-overview")) {
 			outputOverview = true;
+		} else if (0 == strcmp(argv[i], "--want-completion-confirmation")) {
+			wantCompletionConfirmation = true;
 		} else {
 			fprintf(stderr, "Unrecognised engine option: '%s'.\n", argv[i]);
 			return 1;
@@ -8642,6 +8654,10 @@ int main(int argc, char **argv) {
 
 	free(scriptSourceDirectory);
 	free(optionsMatched);
+
+	if (wantCompletionConfirmation) {
+		fclose(fopen("completion_confirmation.txt", "wb"));
+	}
 
 	return result;
 }

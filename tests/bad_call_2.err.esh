@@ -1,0 +1,6 @@
+void Test() {
+}
+
+void Start() {
+	Test(5);
+}

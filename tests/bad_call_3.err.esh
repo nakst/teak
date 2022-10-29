@@ -1,0 +1,6 @@
+void Test(int x) {
+}
+
+void Start() {
+	Test(5, 3);
+}
