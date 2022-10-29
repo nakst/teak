@@ -38,7 +38,10 @@ void Start() {
 	if debug optimizeFlags = "";
 	assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
 
-	if SystemShellExecute("./new_esh examples/hello_world.esh") {
+	str runCommand = "./new_esh examples/hello_world.esh";
+	if SystemGetHostName() == "Windows" runCommand = "new_esh examples\\hello_world.esh";
+
+	if SystemShellExecute(runCommand) {
 		LogInfo("New build looks okay, replacing existing executable...");
 		PathMove("new_esh", "esh");
 	} else {

@@ -7177,7 +7177,7 @@ int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue) {
 #define getcwd _getcwd
 #define popen _popen
 #define pclose _pclose
-#define S_ISREG _S_ISREG
+#define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
 #define setenv(x, y, z) !SetEnvironmentVariable(x, y)
 #else
 #include <dlfcn.h>
