@@ -34,14 +34,20 @@ void RunTests() {
 }
 
 void Start() { 
-	str optimizeFlags = "-O2";
-	if debug optimizeFlags = "";
-	assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
+	bool okay;
+	str optimizeFlags = "";
 
-	str runCommand = "./new_esh examples/hello_world.esh";
-	if SystemGetHostName() == "Windows" runCommand = "new_esh examples\\hello_world.esh";
+	if SystemGetHostName() == "Windows" {
+		if !debug optimizeFlags = "/O2";
+		assert SystemShellExecute("cl.exe /OUT:new_esh.exe esh.c /Wall %optimizeFlags%"); 
+		okay = SystemShellExecute(runCommand);
+	} else {
+		if !debug optimizeFlags = "-O2";
+		assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
+		okay = SystemShellExecute("./new_esh examples/hello_world.esh");
+	}
 
-	if SystemShellExecute(runCommand) {
+	if okay {
 		LogInfo("New build looks okay, replacing existing executable...");
 		PathMove("new_esh", "esh");
 	} else {
