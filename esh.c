@@ -7193,14 +7193,17 @@ int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue) {
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 void **fixedAllocationBlocks;
 uint8_t *fixedAllocationCurrentBlock;
 uintptr_t fixedAllocationCurrentPosition;
 size_t fixedAllocationCurrentSize;
 
+#ifdef __linux__
 sem_t externalCoroutineSemaphore;
 pthread_mutex_t externalCoroutineMutex;
+#endif
 CoroutineState *externalCoroutineUnblockedList;
 
 bool systemShellLoggingEnabled = true;
@@ -7208,7 +7211,9 @@ bool coloredOutput;
 
 char *scriptSourceDirectory;
 
+#ifndef _WIN32
 DIR *directoryIterator;
+#endif
 
 char *StringZeroTerminate(const char *text, size_t bytes) {
 	char *buffer = malloc(bytes + 1);
@@ -7226,7 +7231,7 @@ void MakeError(ExecutionContext *context, Value *returnValue, int error) {
 	if (error == EAGAIN || error == EBUSY) text = "OPERATION_BLOCKED";
 	if (error == ENOTEMPTY) text = "DIRECTORY_NOT_EMPTY";
 	if (error == EFBIG) text = "FILE_TOO_LARGE";
-	if (error == ENOSPC || error == EDQUOT) text = "DRIVE_FULL";
+	if (error == ENOSPC) text = "DRIVE_FULL";
 	if (error == EROFS) text = "FILE_ON_READ_ONLY_VOLUME";
 	if (error == ENOTDIR || error == EISDIR) text = "INCORRECT_NODE_TYPE";
 	if (error == ENOENT) text = "FILE_DOES_NOT_EXIST";
@@ -7235,6 +7240,10 @@ void MakeError(ExecutionContext *context, Value *returnValue, int error) {
 	if (error == EPERM || error == EACCES) text = "PERMISSION_NOT_GRANTED";
 	if (error == EXDEV) text = "VOLUME_MISMATCH";
 	if (error == EIO) text = "HARDWARE_FAILURE";
+
+#ifndef _WIN32
+	if (error == EDQUOT) text = "DRIVE_FULL";
+#endif
 
 	if (text) {
 		RETURN_STRING_COPY(text, strlen(text));
@@ -7292,6 +7301,7 @@ int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue) {
 	}
 }
 
+#ifdef __linux__
 void *SystemShellExecuteWithWorkingDirectoryThread(void *_coroutine) {
 	CoroutineState *coroutine = (CoroutineState *) _coroutine;
 	int status;
@@ -7308,6 +7318,7 @@ void *SystemShellExecuteWithWorkingDirectoryThread(void *_coroutine) {
 	ExternalCoroutineDone(coroutine);
 	return NULL;
 }
+#endif
 
 int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Value *returnValue) {
 	if (context->c->externalCoroutine) {
@@ -7495,6 +7506,12 @@ int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("ExternalPathDelete unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	(void) returnValue;
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
@@ -7506,6 +7523,7 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 	free(temporary);
 	if (!returnValue->i) RETURN_ERROR(errno);
 	return EXTCALL_RETURN_ERR_UNMANAGED;
+#endif
 }
 
 int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
@@ -7521,6 +7539,12 @@ int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("ExternalPathIsFile unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
@@ -7530,9 +7554,16 @@ int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISREG(s.st_mode);
 	free(temporary);
 	return EXTCALL_RETURN_UNMANAGED;
+#endif
 }
 
 int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("ExternalPathIsDirectory unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
@@ -7542,9 +7573,15 @@ int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISDIR(s.st_mode);
 	free(temporary);
 	return EXTCALL_RETURN_UNMANAGED;
+#endif
 }
 
 int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+	STACK_POP_STRING(entryText, entryBytes);
+	returnValue->i = 0;
+	return EXTCALL_RETURN_UNMANAGED;
+#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
@@ -7554,6 +7591,7 @@ int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISLNK(s.st_mode);
 	free(temporary);
 	return EXTCALL_RETURN_UNMANAGED;
+#endif
 }
 
 int ExternalPathMove(ExecutionContext *context, Value *returnValue) {
@@ -7667,6 +7705,12 @@ int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *retur
 }
 
 int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("External_DirectoryInternalStartIteration unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
@@ -7676,18 +7720,32 @@ int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *r
 	free(temporary);
 	if (!directoryIterator) RETURN_ERROR(errno);
 	return EXTCALL_RETURN_ERR_UNMANAGED;
+#endif
 }
 
 int External_DirectoryInternalEndIteration(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("External_DirectoryInternalEndIteration unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	(void) context;
 	(void) returnValue;
 	if (!directoryIterator) return 0;
 	closedir(directoryIterator);
 	directoryIterator = NULL;
 	return EXTCALL_NO_RETURN;
+#endif
 }
 
 int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *returnValue) {
+#ifdef _WIN32
+#pragma message ("External_DirectoryInternalNextIteration unimplemented")
+	(void) context;
+	(void) returnValue;
+	return -1;
+#else
 	(void) context;
 	if (!directoryIterator) return 0;
 	struct dirent *entry = readdir(directoryIterator);
@@ -7695,6 +7753,7 @@ int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *re
 	if (!entry) { returnValue->i = 0; return EXTCALL_RETURN_MANAGED; }
 	RETURN_STRING_COPY(entry->d_name, strlen(entry->d_name));
 	return EXTCALL_RETURN_MANAGED;
+#endif
 }
 
 int ExternalFileReadAll(ExecutionContext *context, Value *returnValue) {
@@ -7920,6 +7979,8 @@ int ExternalPersistWrite(ExecutionContext *context, Value *returnValue) {
 int ExternalConsoleGetLine(ExecutionContext *context, Value *returnValue) {
 #ifdef _WIN32
 #pragma message ("ExternalConsoleGetLine unimplemented")
+	(void) context;
+	(void) returnValue;
 	return -1;
 #else
 	char *line = NULL;
@@ -8022,6 +8083,7 @@ int ExternalOpenDocumentEnumerate(ExecutionContext *context, Value *returnValue)
 
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
 	(void) context;
+#ifdef __linux__
 	while (sem_wait(&externalCoroutineSemaphore) == -1);
 	pthread_mutex_lock(&externalCoroutineMutex);
 	CoroutineState *unblocked = externalCoroutineUnblockedList;
@@ -8030,11 +8092,14 @@ CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
 	unblocked->nextExternalCoroutine = NULL;
 	pthread_mutex_unlock(&externalCoroutineMutex);
 	return unblocked;
+#endif
+	Assert(false);
+	return NULL;
 }
 
 void PrintREPLResult(ExecutionContext *context, Node *type, Value value) {
 	if (type->type == T_INT) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_WIN32)
 		printf("%lld", value.i);
 #else
 		printf("%ld", value.i);
@@ -8177,7 +8242,7 @@ void MemoryCopy(void *a, const void *b, size_t bytes) {
 }
 
 size_t PrintIntegerToBuffer(char *buffer, size_t bufferBytes, int64_t i) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_WIN32)
 	snprintf(buffer, bufferBytes, "%lld", i);
 #else
 	snprintf(buffer, bufferBytes, "%ld", i);
@@ -8312,6 +8377,11 @@ void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, con
 }
 
 void *LibraryLoad(const char *name) {
+#ifdef _WIN32
+	// TODO.
+	PrintError3("The library \"%s\" could not be found or loaded.\n", name);
+	return NULL;
+#else
 	Assert(strlen(name) < 256);
 	char name2[256 + 20];
 	strcpy(name2, "l");
@@ -8325,9 +8395,15 @@ void *LibraryLoad(const char *name) {
 	}
 
 	return library;
+#endif
 }
 
 void *LibraryGetAddress(void *library, const char *name) {
+#ifdef _WIN32
+	(void) library;
+	PrintError3("The library symbol \"%s\" could not be found.\n", name);
+	return NULL;
+#else
 	Assert(strlen(name) < 256);
 	Assert(library);
 	char name2[256 + 20];
@@ -8341,6 +8417,7 @@ void *LibraryGetAddress(void *library, const char *name) {
 	}
 
 	return address;
+#endif
 }
 
 void *FileLoad(const char *path, size_t *length) {
@@ -8369,7 +8446,9 @@ int main(int argc, char **argv) {
 
 	coloredOutput = isatty(STDERR_FILENO);
 	srand(time(NULL));
+#ifdef __linux__
 	sem_init(&externalCoroutineSemaphore, 0, 0);
+#endif
 
 	char *scriptPath = NULL;
 	char *evaluateString = NULL;
