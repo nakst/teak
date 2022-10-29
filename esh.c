@@ -496,6 +496,7 @@ int debugBytecodeLevel;
 ImportData *importedModules;
 ImportData **importedModulesLink = &importedModules;
 bool noBaseModule; // Useful for debugging the parser.
+bool outputOverview;
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -519,6 +520,8 @@ void MemoryCopy(void *a, const void *b, size_t bytes);
 size_t PrintIntegerToBuffer(char *buffer, size_t bufferBytes, int64_t i); // TODO This shouldn't be in the platform layer.
 size_t PrintFloatToBuffer(char *buffer, size_t bufferBytes, double f); // TODO This shouldn't be in the platform layer.
 void PrintDebug(const char *format, ...);
+void PrintOutput(const char *format, ...);
+void PrintOutputType(Node *node);
 void PrintError(Tokenizer *tokenizer, const char *format, ...);
 void PrintError2(Tokenizer *tokenizer, Node *node, const char *format, ...);
 void PrintError3(const char *format, ...);
@@ -534,11 +537,6 @@ void *LibraryGetAddress(void *library, const char *name);
 // --------------------------------- Base module.
 
 char baseModuleSource[] = {
-	// TODO Temporary.
-	"struct DirectoryChild { str name; bool isDirectory; int size; };\n"
-	"DirectoryChild[] Dir() { str[] names = DirectoryEnumerate(\"0:\"):assert(); DirectoryChild[] result = new DirectoryChild[]; result:resize(names:len()); for int i = 0; i < names:len(); i += 1 { result[i] = new DirectoryChild; result[i].name = names[i]; result[i].isDirectory = PathIsDirectory(\"0:/\"+names[i]); result[i].size = FileGetSize(\"0:/\"+names[i]):default(-1); } return result;}\n"
-	"str[] OpenDocumentEnumerate() #extcall;\n"
-
 	// Logging:
 
 	"void Log(str x) #extcall;\n"
@@ -6913,6 +6911,72 @@ bool ScriptRunCallback(void *engine, intptr_t functionPointer, int64_t *paramete
 	return result > 0;
 }
 
+void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
+	Node *node = context->rootNode->firstChild;
+
+	if (mainModule->parentImport) {
+		return;
+	}
+
+	while (node) {
+		if (node->type == T_FUNCTION || node->type == T_FUNCTYPE) {
+			PrintOutput("[%.*s]\ntype=%s\nreturn=", (int) node->token.textBytes, node->token.text, 
+					node->type == T_FUNCTION ? "function" : "functype");
+			PrintOutputType(node->expressionType->firstChild->sibling);
+			PrintOutput("\n");
+
+			Node *argument = node->expressionType->firstChild->firstChild;
+			int index = 0;
+
+			while (argument) {
+				PrintOutput("arg%d=", index);
+				index++;
+				PrintOutputType(argument->firstChild);
+				PrintOutput("\n");
+				argument = argument->sibling;
+			}
+		} else if (node->type == T_STRUCT) {
+			PrintOutput("[%.*s]\ntype=struct\n", (int) node->token.textBytes, node->token.text);
+
+			Node *field = node->firstChild;
+			int index = 0;
+
+			while (field) {
+				Assert(field->type == T_DECLARE);
+				PrintOutput("field%d_type=", index);
+				PrintOutputType(field->firstChild);
+				PrintOutput("\nfield%d_name=%.*s\n", index, (int) field->token.textBytes, field->token.text);
+				index++;
+				field = field->sibling;
+			}
+		} else if (node->type == T_INTTYPE) {
+			PrintOutput("[%.*s]\ntype=inttype\n", (int) node->token.textBytes, node->token.text);
+
+			Node *define = node->firstChild;
+			int index = 0;
+
+			while (define) {
+				if (define->type == T_INTTYPE_CONSTANT) {
+					PrintOutput("const%d_name=%.*s\n", index, (int) define->token.textBytes, define->token.text);
+					bool error = false;
+					int64_t value = ASTEvaluateIntConstant(NULL, define->firstChild, &error);
+					Assert(!error);
+					char buffer[32];
+					size_t bytes = PrintIntegerToBuffer(buffer, sizeof(buffer), value);
+					PrintOutput("const%d_value=%.*s\n", index, (int) bytes, buffer);
+					index++;
+				} else if (define->type == T_INTTYPE) {
+					PrintOutput("parent=%.*s\n", (int) define->token.textBytes, define->token.text);
+				}
+
+				define = define->sibling;
+			}
+		}
+
+		node = node->sibling;
+	}
+}
+
 bool ScriptLoad(Tokenizer tokenizer, ExecutionContext *context, ImportData *importData, bool replMode) {
 	Node *previousRootNode = context->rootNode;
 	ImportData *previousImportData = context->functionData->importData;
@@ -6941,6 +7005,8 @@ bool ScriptLoad(Tokenizer tokenizer, ExecutionContext *context, ImportData *impo
 	importData->rootNode = context->rootNode;
 	*importedModulesLink = importData;
 	importedModulesLink = &importData->nextImport;
+
+	if (outputOverview && success) ScriptOutputOverview(context, importData);
 
 	context->rootNode = previousRootNode;
 	context->functionData->importData = previousImportData;
@@ -7161,7 +7227,16 @@ int ScriptExecuteFromFile(char *scriptPath, size_t scriptPathBytes, char *fileDa
 	context.c->previousCoroutineLink = &context.allCoroutines;
 	context.allCoroutines = context.c;
 
-	int result = ScriptLoad(tokenizer, &context, &importData, replMode) ? ScriptExecute(&context, &importData) : 1;
+	int result = 1;
+
+	if (ScriptLoad(tokenizer, &context, &importData, replMode)) {
+		if (outputOverview) {
+			result = 0;
+		} else {
+			result = ScriptExecute(&context, &importData);
+		}
+	}
+
 	ScriptFree(&context);
 
 	importedModules = NULL;
@@ -8289,11 +8364,74 @@ size_t PrintFloatToBuffer(char *buffer, size_t bufferBytes, double f) {
 	return strlen(buffer);
 }
 
+void PrintType(Node *type, FILE *file) {
+	if (type->type == T_INT) {
+		fprintf(file, "int");
+	} else if (type->type == T_STR) {
+		fprintf(file, "str");
+	} else if (type->type == T_NULL) {
+		fprintf(file, "null");
+	} else if (type->type == T_ZERO) {
+		fprintf(file, "0");
+	} else if (type->type == T_BOOL) {
+		fprintf(file, "bool");
+	} else if (type->type == T_FLOAT) {
+		fprintf(file, "float");
+	} else if (type->type == T_VOID) {
+		fprintf(file, "void");
+	} else if (type->type == T_LIST) {
+		PrintType(type->firstChild, file);
+		fprintf(file, "[]");
+	} else if (type->type == T_ERR) {
+		fprintf(file, "err[");
+		PrintType(type->firstChild, file);
+		fprintf(file, "]");
+	} else if (type->type == T_STRUCT || type->type == T_INTTYPE || type->type == T_HANDLETYPE) {
+		fprintf(file, "%.*s", (int) type->token.textBytes, type->token.text);
+	} else if (type->type == T_FUNCPTR) {
+		PrintType(type->firstChild->sibling, file);
+		fprintf(file, " --(");
+		Node *node = type->firstChild->firstChild;
+
+		while (node) {
+			PrintType(node->firstChild, file);
+			node = node->sibling;
+			if (node) fprintf(file, ", ");
+		}
+
+		fprintf(file, ")");
+	} else if (type->type == T_TUPLE) {
+		fprintf(file, "tuple[");
+		Node *node = type->firstChild;
+
+		while (node) {
+			PrintType(node, file);
+			node = node->sibling;
+			if (node) fprintf(file, ", ");
+		}
+
+		fprintf(file, "]");
+	} else {
+		fprintf(file, "unknown-type-%d", type->type);
+	}
+}
+
 void PrintDebug(const char *format, ...) {
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
 	va_end(arguments);
+}
+
+void PrintOutput(const char *format, ...) {
+	va_list arguments;
+	va_start(arguments, format);
+	vfprintf(stdout, format, arguments);
+	va_end(arguments);
+}
+
+void PrintOutputType(Node *node) {
+	PrintType(node, stdout);
 }
 
 void PrintError(Tokenizer *tokenizer, const char *format, ...) {
@@ -8336,58 +8474,6 @@ void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const c
 	PrintBackTrace(context, instructionPointer, context->c, "");
 }
 
-void PrintType(Node *type) {
-	if (type->type == T_INT) {
-		fprintf(stderr, "int");
-	} else if (type->type == T_STR) {
-		fprintf(stderr, "str");
-	} else if (type->type == T_NULL) {
-		fprintf(stderr, "null");
-	} else if (type->type == T_ZERO) {
-		fprintf(stderr, "0");
-	} else if (type->type == T_BOOL) {
-		fprintf(stderr, "bool");
-	} else if (type->type == T_FLOAT) {
-		fprintf(stderr, "float");
-	} else if (type->type == T_VOID) {
-		fprintf(stderr, "void");
-	} else if (type->type == T_LIST) {
-		PrintType(type->firstChild);
-		fprintf(stderr, "[]");
-	} else if (type->type == T_ERR) {
-		fprintf(stderr, "err[");
-		PrintType(type->firstChild);
-		fprintf(stderr, "]");
-	} else if (type->type == T_STRUCT || type->type == T_INTTYPE || type->type == T_HANDLETYPE) {
-		fprintf(stderr, "%.*s", (int) type->token.textBytes, type->token.text);
-	} else if (type->type == T_FUNCPTR) {
-		PrintType(type->firstChild->sibling);
-		fprintf(stderr, " --(");
-		Node *node = type->firstChild->firstChild;
-
-		while (node) {
-			PrintType(node->firstChild);
-			node = node->sibling;
-			if (node) fprintf(stderr, ", ");
-		}
-
-		fprintf(stderr, ")");
-	} else if (type->type == T_TUPLE) {
-		fprintf(stderr, "tuple[");
-		Node *node = type->firstChild;
-
-		while (node) {
-			PrintType(node);
-			node = node->sibling;
-			if (node) fprintf(stderr, ", ");
-		}
-
-		fprintf(stderr, "]");
-	} else {
-		fprintf(stderr, "unknown-type-%d", type->type);
-	}
-}
-
 void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, const char *format, ...) {
 	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->path);
 	va_list arguments;
@@ -8397,13 +8483,13 @@ void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, con
 
 	if (type2) {
 		fprintf(stderr, "'");
-		PrintType(type1);
+		PrintType(type1, stderr);
 		fprintf(stderr, "' vs '");
-		PrintType(type2);
+		PrintType(type2, stderr);
 		fprintf(stderr, "'\n");
 	} else {
 		fprintf(stderr, "Given type '");
-		PrintType(type1);
+		PrintType(type1, stderr);
 		fprintf(stderr, "'\n");
 	}
 
@@ -8511,6 +8597,8 @@ int main(int argc, char **argv) {
 			evaluateMode = true;
 		} else if (0 == strcmp(argv[i], "--no-base-module")) {
 			noBaseModule = true;
+		} else if (0 == strcmp(argv[i], "--output-overview")) {
+			outputOverview = true;
 		} else {
 			fprintf(stderr, "Unrecognised engine option: '%s'.\n", argv[i]);
 			return 1;

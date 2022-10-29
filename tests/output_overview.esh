@@ -1,0 +1,24 @@
+inttype Flags {
+	FLAG1 = 1;
+	FLAG2 = 2;
+	FLAG3 = 4;
+	COMBINATION = 1 | 2;
+};
+
+inttype ExtendedFlags : Flags {
+	EXT = 8;
+};
+
+struct Vector2 {
+	float x;
+	float y;
+};
+
+functype int Function(str a, str[] b);
+
+int Cool(str a, str b) {
+	return 0;
+}
+
+void Start() {
+}
