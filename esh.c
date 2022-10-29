@@ -4935,7 +4935,7 @@ bool ASTGenerate(Tokenizer *tokenizer, Node *root, ExecutionContext *context) {
 
 				if (child->token.textBytes > sizeof(name) - 1) {
 					PrintError2(tokenizer, child, "The function name is too long to be loaded from a library.\n");
-					return NULL;
+					return false;
 				}
 
 				MemoryCopy(name, child->token.text, child->token.textBytes);
@@ -7177,6 +7177,7 @@ int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue) {
 #define getcwd _getcwd
 #define popen _popen
 #define pclose _pclose
+#define S_ISREG _S_ISREG
 #define setenv(x, y, z) !SetEnvironmentVariable(x, y)
 #else
 #include <dlfcn.h>
@@ -8044,13 +8045,21 @@ int ExternalRandomInt(ExecutionContext *context, Value *returnValue) {
 	return EXTCALL_RETURN_UNMANAGED;
 }
 
-void *SystemSleepThread(void *_coroutine) {
-	CoroutineState *coroutine = (CoroutineState *) _coroutine;
+void SleepMs(int64_t count) {
+#ifdef _WIN32
+	Sleep(count);
+#else
 	struct timespec sleepTime;
-	uint64_t x = 1000000 * coroutine->externalCoroutineData.i;
+	uint64_t x = 1000000 * count;
 	sleepTime.tv_sec = x / 1000000000;
 	sleepTime.tv_nsec = x % 1000000000;
 	nanosleep(&sleepTime, NULL);
+#endif
+}
+
+void *SystemSleepThread(void *_coroutine) {
+	CoroutineState *coroutine = (CoroutineState *) _coroutine;
+	SleepMs(coroutine->externalCoroutineData.i);
 	ExternalCoroutineDone(coroutine);
 	return NULL;
 }
@@ -8066,11 +8075,7 @@ int ExternalSystemSleepMs(ExecutionContext *context, Value *returnValue) {
 	pthread_detach(thread);
 	return EXTCALL_START_COROUTINE;
 #else
-	struct timespec sleepTime;
-	uint64_t x = 1000000 * context->c->externalCoroutineData.i;
-	sleepTime.tv_sec = x / 1000000000;
-	sleepTime.tv_nsec = x % 1000000000;
-	nanosleep(&sleepTime, NULL);
+	SleepMs(context->c->externalCoroutineData.i);
 	return EXTCALL_NO_RETURN;
 #endif
 }
@@ -8444,8 +8449,10 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	coloredOutput = isatty(STDERR_FILENO);
 	srand(time(NULL));
+#ifndef _WIN32
+	coloredOutput = isatty(STDERR_FILENO);
+#endif
 #ifdef __linux__
 	sem_init(&externalCoroutineSemaphore, 0, 0);
 #endif
