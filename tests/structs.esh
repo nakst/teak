@@ -1,0 +1,15 @@
+struct foo {
+	bar b;
+};
+
+struct bar {
+	int c;
+	foo f;
+};
+
+void Start() {
+	foo f = new foo;
+	bar b = new bar;
+	f.b = b;
+	b.f = f;
+}

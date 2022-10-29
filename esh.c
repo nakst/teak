@@ -39,6 +39,7 @@
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
 // 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
 // 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
+// 	- Easier way to fill/initialise structs.
 
 // TODO Larger missing features:
 // 	- Serialization.
@@ -61,6 +62,7 @@
 // 	- Inlining small strings; fixed objects for single byte strings.
 // 	- Exponent notation in numeric literals.
 // 	- Block comments.
+// 	- Multiline string literals.
 // 	- More escape sequences in string literals.
 // 	- Better handling of memory allocation failures.
 // 	- Shrink lists during garbage collection.
@@ -311,6 +313,7 @@ typedef struct Node {
 	struct Node *parent; // Set in ASTSetScopes.
 	Scope *scope; // Set in ASTSetScopes.
 	struct Node *expressionType; // Set in ASTSetTypes.
+	struct Node *expectedType; // Set in ASTSetTypes. Some parent nodes set this for their children.
 				     
 	union {
 		struct ImportData *importData; // The module being imported by this node.
@@ -492,6 +495,7 @@ size_t optionCount;
 int debugBytecodeLevel;
 ImportData *importedModules;
 ImportData **importedModulesLink = &importedModules;
+bool noBaseModule; // Useful for debugging the parser.
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -2357,7 +2361,7 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 	root->type = T_ROOT;
 	Node **link = &root->firstChild;
 
-	if (!tokenizer->isBaseModule) {
+	if (!tokenizer->isBaseModule && !noBaseModule) {
 		Node *node = (Node *) AllocateFixed(sizeof(Node));
 		node->type = T_IMPORT;
 		node->token.type = T_INLINE;
@@ -2737,6 +2741,7 @@ bool ScopeAddEntry(Tokenizer *tokenizer, Scope *scope, Node *node) {
 void ASTFreeScopes(Node *node) {
 	if (node && node->scope) {
 		node->scope->entries = (Node **) AllocateResize(node->scope->entries, 0);
+		node->scope = NULL; // This will be freed as part of the deallocation of fixedAllocationBlocks.
 
 		Node *child = node->firstChild;
 
@@ -2938,10 +2943,9 @@ bool ASTMatching(Node *left, Node *right) {
 		return true;
 	} else if (left->type != right->type) {
 		return false;
-	} else if ((left->type == T_IDENTIFIER || left->type == T_STRUCT || left->type == T_HANDLETYPE || left->type == T_INTTYPE) 
-			&& (left->token.module != right->token.module || left->token.textBytes != right->token.textBytes 
-				|| MemoryCompare(left->token.text, right->token.text, right->token.textBytes))) {
-		return false;
+	} else if (left->type == T_IDENTIFIER || left->type == T_STRUCT || left->type == T_HANDLETYPE || left->type == T_INTTYPE) {
+		return left->token.module == right->token.module && left->token.textBytes == right->token.textBytes 
+				&& 0 == MemoryCompare(left->token.text, right->token.text, right->token.textBytes);
 	} else {
 		Node *childLeft = left->firstChild;
 		Node *childRight = right->firstChild;
@@ -3233,13 +3237,33 @@ bool ASTIsIntegerConstant(Node *node) {
 }
 
 bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
-	Node *child = node->firstChild;
+	if (node->type == T_EQUALS) {
+		Assert(!node->firstChild->sibling->sibling);
+		if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
+		node->firstChild->parent = node;
+		node->firstChild->sibling->expectedType = node->firstChild->expressionType;
+		if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) return false;
+		node->firstChild->sibling->parent = node;
+	} else if (node->type == T_DECLARE) {
+		if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
+		node->firstChild->parent = node;
 
-	while (child) {
-		if (child == node) Assert(false);
-		if (!ASTSetTypes(tokenizer, child)) return false;
-		child->parent = node;
-		child = child->sibling;
+		if (node->firstChild->sibling) {
+			Assert(!node->firstChild->sibling->sibling);
+			node->firstChild->sibling->expectedType = node->firstChild;
+			if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) return false;
+			node->firstChild->sibling->parent = node;
+		}
+	} else if (node->type == T_STRUCT) {
+	} else {
+		Node *child = node->firstChild;
+
+		while (child) {
+			if (child == node) Assert(false);
+			if (!ASTSetTypes(tokenizer, child)) return false;
+			child->parent = node;
+			child = child->sibling;
+		}
 	}
 
 	if (node->type == T_ROOT || node->type == T_BLOCK
@@ -3819,7 +3843,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		}
 
 		else {
-			PrintError2(tokenizer, node, "This type does not have an operation called '%.*s'.\n", token.textBytes, token.text);
+			PrintError5(tokenizer, node, expressionType, NULL, "This type does not have an operation called '%.*s'.\n", token.textBytes, token.text);
 			return false;
 		}
 
@@ -3891,26 +3915,31 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		node->expressionType = node->firstChild->expressionType;
 	} else if (node->type == T_LIST_LITERAL) {
 		if (!node->firstChild) {
-			// TODO Support empty list literals?
-			PrintError2(tokenizer, node, "Empty list literals are not allowed. Instead, put 'new T[]' where 'T' is the item type.\n");
-			return false;
-		}
-
-		Node *item = node->firstChild;
-		node->expressionType = (Node *) AllocateFixed(sizeof(Node));
-		node->expressionType->type = T_LIST;
-		Node *copy = (Node *) AllocateFixed(sizeof(Node));
-		*copy = *item->expressionType;
-		copy->sibling = NULL;
-		node->expressionType->firstChild = copy;
-
-		while (item) {
-			if (!ASTMatching(node->expressionType->firstChild, item->expressionType)) {
-				PrintError2(tokenizer, item, "The type of this item is different to the ones before it in the list.\n");
+			if (node->expectedType && node->expectedType->type == T_LIST) {
+				node->expressionType = node->expectedType;
+				return true;
+			} else {
+				PrintError2(tokenizer, node, "Empty list literals are not allowed in this context. "
+						"Instead, put 'new T[]' where 'T' is the item type.\n");
 				return false;
 			}
+		} else {
+			Node *item = node->firstChild;
+			node->expressionType = (Node *) AllocateFixed(sizeof(Node));
+			node->expressionType->type = T_LIST;
+			Node *copy = (Node *) AllocateFixed(sizeof(Node));
+			*copy = *item->expressionType;
+			copy->sibling = NULL;
+			node->expressionType->firstChild = copy;
 
-			item = item->sibling;
+			while (item) {
+				if (!ASTMatching(node->expressionType->firstChild, item->expressionType)) {
+					PrintError2(tokenizer, item, "The type of this item is different to the ones before it in the list.\n");
+					return false;
+				}
+
+				item = item->sibling;
+			}
 		}
 	} else if (node->type == T_AWAIT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeIntList)) {
@@ -8480,6 +8509,8 @@ int main(int argc, char **argv) {
 			debugBytecodeLevel = atoi(argv[i] + 17);
 		} else if (0 == strcmp(argv[i], "--evaluate") || 0 == strcmp(argv[i], "-e")) {
 			evaluateMode = true;
+		} else if (0 == strcmp(argv[i], "--no-base-module")) {
+			noBaseModule = true;
 		} else {
 			fprintf(stderr, "Unrecognised engine option: '%s'.\n", argv[i]);
 			return 1;

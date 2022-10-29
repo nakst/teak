@@ -1,0 +1,13 @@
+struct a {
+	int x;
+};
+
+struct b {
+	int x;
+};
+
+void Start() {
+	a i = new a;
+	b j = new b;
+	i = j;
+}

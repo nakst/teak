@@ -25,6 +25,7 @@ void RunTests() {
 			success += 1; 
 		} else { 
 			FileAppend("tests_log.txt", "!! test failed\n");
+			LogError("The test failed.");
 		}
 
 		total += 1;

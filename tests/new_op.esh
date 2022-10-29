@@ -1,0 +1,5 @@
+void Start() {
+	new int[]:add(5);
+	int x = (new err[int] "hello"):default(0);
+	err[int] y = new err[int] (["hello"]:first());
+}

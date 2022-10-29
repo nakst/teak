@@ -1,0 +1,5 @@
+functype void Test();
+
+void Start() {
+	Test test = new Test;
+}

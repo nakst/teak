@@ -1,0 +1,7 @@
+void Start() {
+	int[] x;
+	x = [];
+	int[] y = [];
+	Log("%x%");
+	Log("%y%");
+}
