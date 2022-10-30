@@ -7109,10 +7109,10 @@ void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 			int index = 0;
 
 			while (argument) {
-				PrintOutput("arg%d=", index);
+				PrintOutput("arg%d_type=", index);
 				index++;
 				PrintOutputType(argument->firstChild);
-				PrintOutput("\n");
+				PrintOutput("\narg%d_name=%.*s\n", index, (int) argument->token.textBytes, argument->token.text);
 				argument = argument->sibling;
 			}
 		} else if (node->type == T_STRUCT) {
