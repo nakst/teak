@@ -3619,6 +3619,9 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		if (node->firstChild && ASTMatching(returnType, &globalExpressionTypeVoid)) {
 			PrintError2(tokenizer, node, "The function does not return a value ('void'), but the return statement has a return value.\n");
 			return false;
+		} else if (!node->firstChild && !ASTMatching(returnType, &globalExpressionTypeVoid)) {
+			PrintError2(tokenizer, node, "The function returns a value, but the return statement does not specify a return value.\n");
+			return false;
 		}
 
 		if (node->type == T_RETURN) {
