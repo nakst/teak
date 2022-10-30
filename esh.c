@@ -1,6 +1,7 @@
 // TODO Basic missing features:
 // 	> Maps: T[int], T[str].
 // 	> Using declared types from imported modules.
+// 	> Paths to import modules should be relative to the file that imports them.
 // 	> Setting the initial values of global variables (including options).
 // 	- Ternary operator: x if y else z.
 // 	- Named optional arguments with default values.
@@ -24,7 +25,7 @@
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 
 // TODO Standard library:
-// 	- Integers: MathLCM, MathGCD, MathCRT, MathPrimeFactorization
+// 	- Integers: IntegerPrimeFactorization
 // 	- Floats: 
 // 		- FloatAbsolute, FloatMaximum, FloatMinimum, FloatClamp
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
@@ -42,12 +43,12 @@
 // 		- StringCompareRaw, StringCompareLocale, StringToLowerLocale, StringToUpperLocale
 // 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode
 // 		- StringUTF8IsValid, StringUTF8Encode, StringUTF8Decode, StringUTF8Advance, StringUTF8Retreat
+// 	- Imaging.
 // 	- Time and date.
 // 	- Data compression.
 // 	- Cryptography.
 // 	- INI file format.
 // 	- Networking.
-// 	- Imaging.
 // 	- Audio.
 
 // TODO Miscellaneous:
@@ -663,8 +664,6 @@ char baseModuleSource[] = {
 	"		position = index + needle:len();\n"
 	"		count += 1;\n"
 	"	}\n"
-	"	assert false;\n"
-	"	return \"\", 0;\n"
 	"}\n"
 	"str StringReplaceAll(str haystack, str needle, str with) {\n"
 	"	str result, int count = StringReplaceAllWithCount(haystack, needle, with);\n"
@@ -939,6 +938,48 @@ char baseModuleSource[] = {
 	"		if (x & (1 << i)) != 0 { count += 1; }\n"
 	"	}\n"
 	"	return count;\n"
+	"}\n"
+
+	"int IntegerGCD(int _a, int _b) {\n"
+	"	int a = _a;\n"
+	"	int b = _b;\n"
+	"	assert a != 0 || b != 0;\n"
+	"	if a < 0 a = -a;\n"
+	"	if b < 0 b = -b;\n"
+	"	while true {\n"
+	"		if a < b { int t = a; a = b; b = t; }\n"
+	"		if b == 0 { return a; }\n"
+	"		if b == 1 { return 1; }\n"
+	"		a = IntegerModulo(a, b);\n"
+	"	}\n"
+	"}\n"
+	"int IntegerLCM(int a, int b) { return IntegerAbsolute(a * b / IntegerGCD(a, b)); }\n"
+	"tuple[int, int, int] IntegerExtendedEuclidean(int _a, int _b) {\n"
+	"	assert _a != 0 || _b != 0;\n"
+	"	int ma = 1; int a = _a; int mb = 1; int b = _b;\n"
+	"	if a < 0 { a = -a; ma = -ma; }\n"
+	"	if b < 0 { b = -b; mb = -mb; }\n"
+	"	bool swap = false;\n"
+	"	if a < b { int t = a; a = b; b = t; t = ma; ma = mb; mb = t; swap = true; }\n"
+	"	int gcd; int ca; int cb;\n"
+	"	if b == 0 { gcd = a; ca = 1; cb = 0; } \n"
+	"	else if b == 1 { gcd = 1; ca = 0; cb = 1; } \n"
+	"	else { int q = a / b; int r = a - q * b; gcd, ca, cb = IntegerExtendedEuclidean(r, b); cb -= ca * q; }\n"
+	"	if swap { return gcd, cb * mb, ca * ma; } \n"
+	"	else { return gcd, ca * ma, cb * mb; }\n"
+	"}\n"
+	"tuple[int, int] IntegerCRT(int[] r, int[] m) {\n"
+	"	assert r:len() == m:len() && r:len() != 0;\n"
+	"	int M = 1;\n"
+	"	int x = 0;\n"
+	"	for int mi in m { assert mi >= 1; M *= mi; }\n"
+	"	for int i = 0; i < r:len(); i += 1 {\n"
+	"		int mi = m[i];\n"
+	"		int gcd, int ca, int cb = IntegerExtendedEuclidean(IntegerModulo(M / mi, mi), mi);\n"
+	"		assert gcd == 1;\n"
+	"		x += r[i] * ca * M / mi;\n"
+	"	}\n"
+	"	return x, M;\n"
 	"}\n"
 
 	// Permutations.
@@ -3314,6 +3355,17 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
 			Assert(!node->firstChild->sibling);
 		}
+	} else if (node->type == T_LIST_LITERAL) {
+		Node *child = node->firstChild;
+
+		while (child) {
+			if (node->expectedType && node->expectedType->type == T_LIST) {
+				child->expectedType = node->expectedType->firstChild;
+			}
+
+			if (!ASTSetTypes(tokenizer, child)) return false;
+			child = child->sibling;
+		}
 	} else {
 		Node *child = node->firstChild;
 
@@ -3962,7 +4014,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 			while (item) {
 				if (!ASTMatching(node->expressionType->firstChild, item->expressionType)) {
-					PrintError2(tokenizer, item, "The type of this item is different to the ones before it in the list.\n");
+					PrintError5(tokenizer, item, node->expressionType->firstChild, item->expressionType,
+							"The type of this item is different to the ones before it in the list.\n");
 					return false;
 				}
 
@@ -3991,6 +4044,24 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	return true;
 }
 
+bool ASTCheckNoBreak(Node *node) {
+	Node *child = node->firstChild;
+
+	while (child) {
+		if (child->type == T_BREAK) {
+			return false;
+		} else if (child->type == T_WHILE || child->type == T_FOR || child->type == T_FOR_EACH) {
+			// break statements inside here will not break the outer loop.
+		} else if (!ASTCheckNoBreak(child)) {
+			return false;
+		}
+
+		child = child->sibling;
+	}
+
+	return true;
+}
+
 bool ASTCheckForReturnStatements(Tokenizer *tokenizer, Node *node) {
 	if (node->type == T_ROOT) {
 		Node *child = node->firstChild;
@@ -4014,7 +4085,8 @@ bool ASTCheckForReturnStatements(Tokenizer *tokenizer, Node *node) {
 
 		if (lastStatement && (lastStatement->type == T_RETURN || lastStatement->type == T_RETURN_TUPLE)) {
 			return true;
-		} else if (lastStatement && (lastStatement->type == T_IF || lastStatement->type == T_IF_ERR || lastStatement->type == T_BLOCK)) {
+		} else if (lastStatement && (lastStatement->type == T_IF || lastStatement->type == T_IF_ERR || lastStatement->type == T_BLOCK
+					|| (lastStatement->type == T_WHILE && lastStatement->firstChild->type == T_TRUE && ASTCheckNoBreak(lastStatement->firstChild->sibling)))) {
 			return ASTCheckForReturnStatements(tokenizer, lastStatement);
 		} else {
 			PrintError2(tokenizer, node, "This block needs to end with a return statement.\n");
@@ -4122,8 +4194,13 @@ bool FunctionBuilderVariable(Tokenizer *tokenizer, FunctionBuilder *builder, Nod
 					}
 
 					if (scope->entries[i]->type != T_DECLARE && forAssignment) {
-						PrintError2(tokenizer, node, "A value cannot be assigned to this. "
-								"Try putting a variable name here.\n");
+						if (scope->entries[i]->type == T_ARGUMENT) {
+							PrintError2(tokenizer, node, "Function arguments cannot be modified.\n");
+						} else {
+							PrintError2(tokenizer, node, "A value cannot be assigned to this. "
+									"Try putting a variable name here.\n");
+						}
+
 						return false;
 					}
 				}

@@ -326,6 +326,23 @@ str PathGetLeadingDirectories(str path);
 err[void] PathMove(str source, str destination);
 ```
 
+### File system — errors
+
+You may encounter some of the following error strings when using file system functions:
+
+- `"OPERATION_BLOCKED"` Another application is accessing the file.
+- `"DIRECTORY_NOT_EMPTY"` The directory cannot be operated on because it is not empty.
+- `"FILE_TOO_LARGE"` The underlying file system does not support files this large.
+- `"DRIVE_FULL"` The drive is out of free space.
+- `"FILE_ON_READ_ONLY_VOLUME"` The file cannot be modified because the file system is mounted as read-only.
+- `"INCORRECT_NODE_TYPE"` An attempt was made to perform a directory operation on a file, or a file operation on a directory.
+- `"FILE_DOES_NOT_EXIST"` The item does not exist.
+- `"ALREADY_EXISTS"` The item already exists.
+- `"INSUFFICIENT_RESOURCES"` The system does not have enough resources to perform the operation. Typically, this indicates an out-of-memory condition.
+- `"PERMISSION_NOT_GRANTED"` You do not have permission to perform the operation on the file.
+- `"VOLUME_MISMATCH"` Two items specified for the operation reside on different file system volumes, which the operation does not allow.
+- `"HARDWARE_FAILURE"` The operation could not complete because of a hardware malfunction.
+
 ### System — shell commands
 
 These functions are only available on platforms that have a command line shell.
@@ -416,6 +433,23 @@ int IntegerCountMostSignificantZeroBits(int x);
 
 // Count the number of consecutive set bits in the integer, starting from the most significant bit.
 int IntegerCountMostSignificantOneBits(int x);
+
+// Compute the greatest common divisor of a and b.
+// a and b cannot both be zero. The returned result is always >= 1.
+// a and b are coprime iff the result is 1.
+int IntegerGCD(int a, int b);
+
+// Compute the least common multiple of a and b.
+// a and b cannot both be zero. The returned result is always >= 0.
+int IntegerLCM(int a, int b);
+
+// Runs the extended Euclidean algorithm on a and b, returning gcd, ca, cb.
+// gcd is the GCD as returned by IntegerGCD. ca and cb satisfy: gcd = ca * a + cb * b.
+tuple[int, int, int] IntegerExtendedEuclidean(int a, int b);
+
+// Get the integer solutions to the equations x = r[i] (mod m[i]).
+// Returns x, M. The solutions are of the form x + k * M for all integers k.
+tuple[int, int] IntegerCRT(int[] r, int[] m);
 
 // Get a randomized integer between min and max (inclusive).
 int RandomInt(int min, int max);

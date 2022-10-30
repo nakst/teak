@@ -1,0 +1,8 @@
+int Test() {
+	while true {
+		break;
+	}
+}
+
+void Start() {
+}

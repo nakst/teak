@@ -1,0 +1,43 @@
+void CheckExtendedEuclideanAlgorithm(int a, int b) {
+	int gcd, int ca, int cb = IntegerExtendedEuclidean(a, b);
+	assert gcd == IntegerGCD(a, b);
+	assert gcd == ca * a + cb * b;
+}
+
+void CheckCRT(int[] r, int[] m) {
+	int x, int M = IntegerCRT(r, m);
+	for int i = -5; i <= 5; i += 1 {
+		int y = x + i * M;
+		for int j = 0; j < r:len(); j += 1 {
+			assert IntegerModulo(y, m[j]) == IntegerModulo(r[j], m[j]);
+		}
+	}
+}
+
+void Start() {
+	assert IntegerGCD(8, 10) == 2;
+	assert IntegerGCD(-8, 10) == 2;
+	assert IntegerGCD(-8, -10) == 2;
+	assert IntegerGCD(8, -10) == 2;
+	assert IntegerGCD(8, 9) == 1;
+	assert IntegerGCD(-8, 9) == 1;
+	assert IntegerGCD(-8, -9) == 1;
+	assert IntegerGCD(8, -9) == 1;
+	assert IntegerGCD(0, 3) == 3;
+	assert IntegerGCD(3, 0) == 3;
+	assert IntegerGCD(0, 1) == 1;
+	assert IntegerGCD(1, 0) == 1;
+	assert IntegerGCD(1, 1) == 1;
+	assert IntegerGCD(2, 2) == 2;
+	assert IntegerGCD(3, 3) == 3;
+	assert IntegerGCD(7, 14) == 7;
+	assert IntegerLCM(7, 14) == 14;
+	assert IntegerLCM(5, 6) == 30;
+	assert IntegerLCM(4, 6) == 12;
+	assert IntegerLCM(0, 5) == 0;
+	assert IntegerLCM(-5, 6) == 30;
+
+	for int i = -20; i <= 20; i += 1 { for int j = -20; j <= 20; j += 1 { if i != 0 || j != 0 { CheckExtendedEuclideanAlgorithm(i, j); } } }
+	for int i in [-2, -1, 0, 1, 2] { for int j in [-2, -1, 0, 1, 2] { for int k in [-2, -1, 0, 1, 2] { CheckCRT([i, j, k], [7, 11, 13]); } } }
+	for int i in [-2, -1, 0, 1, 2] { for int j in [-2, -1, 0, 1, 2] { for int k in [-2, -1, 0, 1, 2] { CheckCRT([i, j, k], [7, 12, 13]); } } }
+}
