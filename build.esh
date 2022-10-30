@@ -37,17 +37,15 @@ void RunTests(str executable) {
 
 void Start() { 
 	bool okay;
-	str optimizeFlags = "";
 	str executable = "./esh";
 
 	if SystemGetHostName() == "Windows" {
-		if !debug optimizeFlags = "/O2";
+		str optimizeFlags = "" if debug else "/O2";
 		assert SystemShellExecute("cl.exe /Zi esh.c /Wall %optimizeFlags% /link /OUT:new_esh.exe");
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 		executable = "new_esh";
 	} else {
-		if !debug optimizeFlags = "-O2";
-		else optimizeFlags = "-fsanitize=address";
+		str optimizeFlags = "-fsanitize=address" if debug else "-O2";
 		assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
 		okay = SystemShellExecute("./new_esh examples/hello_world.esh");
 	}

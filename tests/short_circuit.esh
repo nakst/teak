@@ -1,0 +1,43 @@
+int i;
+
+bool Increment(bool b) {
+	i += 1;
+	return b;
+}
+
+void Start() {
+	bool b;
+	assert i == 0;
+	b = true  && Increment(true);
+	assert i == 1;
+	b = false && Increment(true);
+	assert i == 1;
+	b = true  || Increment(true);
+	assert i == 1;
+	b = false || Increment(true);
+	assert i == 2;
+	b = true  && Increment(false);
+	assert i == 3;
+	b = false && Increment(false);
+	assert i == 3;
+	b = true  || Increment(false);
+	assert i == 3;
+	b = false || Increment(false);
+	assert i == 4;
+	b = Increment(true) && true;
+	assert i == 5;
+	b = Increment(true) && false;
+	assert i == 6;
+	b = Increment(true) || true;
+	assert i == 7;
+	b = Increment(true) || false;
+	assert i == 8;
+	b = Increment(false) && true;
+	assert i == 9;
+	b = Increment(false) && false;
+	assert i == 10;
+	b = Increment(false) || true;
+	assert i == 11;
+	b = Increment(false) || false;
+	assert i == 12;
+}

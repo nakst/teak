@@ -3,7 +3,6 @@
 // 	> Using declared types from imported modules.
 // 	> Paths to import modules should be relative to the file that imports them.
 // 	> Setting the initial values of global variables (including options).
-// 	- Ternary operator: x if y else z.
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 // 	- Exponent notation in numeric literals.
@@ -151,6 +150,7 @@
 #define T_CAST_TYPE_WRAPPER   (95)
 #define T_ZERO                (96)
 #define T_PLACEHOLDER         (97)
+#define T_TERNARY             (98)
 
 #define T_EXIT_SCOPE          (100)
 #define T_END_FUNCTION        (101)
@@ -1122,6 +1122,7 @@ uint8_t TokenLookupPrecedence(uint8_t t) {
 	if (t == T_ASTERISK_EQUALS) return 10;
 	if (t == T_SLASH_EQUALS)    return 10;
 	if (t == T_COMMA)           return 12;
+	if (t == T_IF)              return 13;
 	if (t == T_LOGICAL_OR)      return 14;
 	if (t == T_LOGICAL_AND)     return 15;
 	if (t == T_BITWISE_OR)      return 16;
@@ -1786,6 +1787,24 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 			operation->firstChild = node;
 			node->sibling = ParseExpression(tokenizer, false, TokenLookupPrecedence(token.type));
 			if (!node->sibling) return NULL;
+			node = operation;
+		} else if (token.type == T_IF && TokenLookupPrecedence(token.type) >= precedence) {
+			Node *operation = (Node *) AllocateFixed(sizeof(Node));
+			operation->token = TokenNext(tokenizer);
+			operation->type = T_TERNARY;
+			operation->firstChild = node;
+			node->sibling = ParseExpression(tokenizer, false, TokenLookupPrecedence(token.type));
+			if (!node->sibling) return NULL;
+			Token t = TokenNext(tokenizer);
+
+			if (t.type != T_ELSE) {
+				Node n = { .token = t };
+				PrintError2(tokenizer, &n, "Expected \"else\" for the ternary operator.\n");
+				return NULL;
+			}
+
+			node->sibling->sibling = ParseExpression(tokenizer, false, TokenLookupPrecedence(token.type));
+			if (!node->sibling->sibling) return NULL;
 			node = operation;
 		} else if (token.type == T_ADD_EQUALS || token.type == T_MINUS_EQUALS
 				|| token.type == T_ASTERISK_EQUALS || token.type == T_SLASH_EQUALS) {
@@ -3983,7 +4002,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		node->operationType = op;
 	} else if (node->type == T_LOGICAL_NOT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)) {
-			PrintError2(tokenizer, node, "Expected a bool for the logical not '!' operator.\n");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, "Expected a bool for the logical not '!' operator.\n");
 			return false;
 		}
 
@@ -3991,7 +4010,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	} else if (node->type == T_NEGATE || node->type == T_BITWISE_NOT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeInt)
 				&& !ASTMatching(node->firstChild->expressionType, &globalExpressionTypeFloat)) {
-			PrintError2(tokenizer, node, "Expected a int or float for the %s operator.\n", node->type == T_NEGATE ? "unary negate '-'" : "bitwise not '~'");
+			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, "Expected a int or float for the %s operator.\n", 
+					node->type == T_NEGATE ? "unary negate '-'" : "bitwise not '~'");
 			return false;
 		}
 
@@ -4039,6 +4059,20 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		}
 
 		node->expressionType = node->parent;
+	} else if (node->type == T_TERNARY) {
+		if (!ASTMatching(node->firstChild->sibling->expressionType, &globalExpressionTypeBool)) {
+			PrintError5(tokenizer, node, node->firstChild->sibling->expressionType, NULL, 
+					"Expected a bool for the ternary operator condition.\n");
+			return false;
+		}
+
+		if (!ASTMatching(node->firstChild->expressionType, node->firstChild->sibling->sibling->expressionType)) {
+			PrintError5(tokenizer, node, node->firstChild->expressionType, node->firstChild->sibling->sibling->expressionType, 
+					"The types of the values of the ternary operator must match.\n");
+			return false;
+		}
+
+		node->expressionType = node->firstChild->expressionType;
 	} else {
 		PrintDebug("ASTSetTypes %d\n", node->type);
 		Assert(false);
@@ -4711,6 +4745,36 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 
 		delta = builder->dataBytes - writeOffsetElse;
 		MemoryCopy(builder->data + writeOffsetElse, &delta, sizeof(delta));
+
+		return true;
+	} else if (node->type == T_TERNARY) {
+		// Push the condition.
+		if (!FunctionBuilderRecurse(tokenizer, node->firstChild->sibling, builder, false)) return false;
+
+		// If the condition is false, branch.
+		uint8_t b = T_IF;
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		uintptr_t writeOffset1 = builder->dataBytes;
+		uint32_t zero = 0;
+		FunctionBuilderAppend(builder, &zero, sizeof(zero));
+
+		// Push the true option.
+		if (!FunctionBuilderRecurse(tokenizer, node->firstChild, builder, false)) return false;
+
+		// Branch past the false option.
+		b = T_BRANCH;
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		uintptr_t writeOffset2 = builder->dataBytes;
+		FunctionBuilderAppend(builder, &zero, sizeof(zero));
+
+		// Push the false option.
+		int32_t delta1 = builder->dataBytes - writeOffset1;
+		if (!FunctionBuilderRecurse(tokenizer, node->firstChild->sibling->sibling, builder, false)) return false;
+		int32_t delta2 = builder->dataBytes - writeOffset2;
+
+		// Set the branch targets.
+		MemoryCopy(builder->data + writeOffset1, &delta1, sizeof(delta1));
+		MemoryCopy(builder->data + writeOffset2, &delta2, sizeof(delta2));
 
 		return true;
 	} else if (node->type == T_LOGICAL_OR || node->type == T_LOGICAL_AND) {

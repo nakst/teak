@@ -1,0 +1,27 @@
+int cx;
+int cy;
+
+int X() {
+	cx += 1;
+	return 1;
+}
+
+int Y() {
+	cy += 1;
+	return 2;
+}
+
+void Start() {
+	int x = X() if true else Y();
+	assert cx == 1;
+	assert cy == 0;
+	assert x == 1;
+	int y = X() if false else Y();
+	assert cx == 1;
+	assert cy == 1;
+	assert y == 2;
+	int z0 = 1 if false else 2 if false else 3 if false else 2 + 2 if true else 5 if true else 6 if false else 7;
+	int z1 = 1 if false else 2 if false else 3 if false else 4 if false else 5 if false else 6 if false else 7;
+	assert z0 == 4;
+	assert z1 == 7;
+}

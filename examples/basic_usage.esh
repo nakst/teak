@@ -61,6 +61,10 @@ void Start() {
 	// Standard logic operators (with short circuiting) are available.
 	bool b1 = !b0 && (z > y || z > x);
 
+	// A ternary operator is available, with syntax similar to Python.
+	str pick = "a" if 1 < 0 else "b" if 2 < 3 else "c";
+	Log(pick); // Outputs "b".
+
 //////////////////////////////// FLOATING POINT ////////////////////////////////
 
 	// Standard floating point operators are available. 
