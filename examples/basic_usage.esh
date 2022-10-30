@@ -1,5 +1,6 @@
 // This file demonstrates the usage and syntax of the main language features.
 // Line comments begin with two forward slashes.
+/* Block comments are delimited like this. */
 
 void Start() {
 	// The script starts executing in the Start function.
@@ -113,6 +114,9 @@ void Start() {
 
 	// Functions are called by putting the name of the function,
 	// and then the arguments in round brackets.
+	// Function arguments are evaluated from right to left.
+	// Please note that 'ops' that start with a colon like f0:truncate() are NOT function calls,
+	// but rather language builtins, and as such their arguments may be evaluated differently.
 	int result = MyFunction(1, 2, 3);
 	Log("result of MyFunction is %result%.");
 	Part2();

@@ -1,0 +1,24 @@
+int g;
+
+int Next() {
+	g += 1;
+	return g;
+}
+
+void Test(int x, int y) {
+	assert x == 2;
+	assert y == 1;
+}
+
+void Start() {
+	Test(Next(), Next());
+	
+	int[] list = [ 1, 1, 1, 1, 1 ];
+	list:insert(Next(), Next());
+	assert list[3] == 4;
+	g = 1;
+	list:insert_many(Next(), Next());
+	g = 2;
+	list:delete_many(Next(), Next());
+	assert list[0] == 1 && list[1] == 1 && list[2] == 1 && list[3] == 0 && list[4] == 1;
+}

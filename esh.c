@@ -2,11 +2,10 @@
 // 	> Maps: T[int], T[str].
 // 	> Using declared types from imported modules.
 // 	> Setting the initial values of global variables (including options).
-// 	> Operation arguments are evaluated in the opposite order to functions?
+// 	- Ternary operator: x if y else z.
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
 // 	- Exponent notation in numeric literals.
-// 	- Block comments.
 // 	- Multiline string literals.
 // 	- More escape sequences in string literals.
 
@@ -25,8 +24,7 @@
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 
 // TODO Standard library:
-// 	- Integers: 
-// 		- MathLCM, MathGCD, MathCRT, MathPrimeFactorization
+// 	- Integers: MathLCM, MathGCD, MathCRT, MathPrimeFactorization
 // 	- Floats: 
 // 		- FloatAbsolute, FloatMaximum, FloatMinimum, FloatClamp
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
@@ -37,8 +35,7 @@
 // 		- MathNorm, MathArcTan2, MathLinearRemap, MathSign
 // 		- MathIsInfinite, MathIsNaN
 // 		- RandomFloat
-// 	- Lists:
-// 		- ListSort, :clone, :clone_all
+// 	- Lists: :sort, :clone, :clone_all
 // 	- Strings:
 // 		- StringParseAsFloat, StringParseAsInteger
 // 		- StringHashCRC32, StringHashCRC64, StringHashFNV1a
@@ -1114,8 +1111,6 @@ uint8_t TokenLookupPrecedence(uint8_t t) {
 }
 
 Token TokenNext(Tokenizer *tokenizer) {
-	// TODO Block comments.
-
 	Token token = { 0 };
 	token.type = T_ERROR;
 	token.module = tokenizer->module;
@@ -1142,6 +1137,22 @@ Token TokenNext(Tokenizer *tokenizer) {
 		} else if (c == '/' && c1 == '/') {
 			while (tokenizer->position != tokenizer->inputBytes && tokenizer->input[tokenizer->position] != '\n') {
 				tokenizer->position++;
+			}
+
+			continue;
+		} else if (c == '/' && c1 == '*') {
+			while (tokenizer->position < tokenizer->inputBytes - 1) {
+				if (tokenizer->input[tokenizer->position] == '\n') tokenizer->line++;
+				if (tokenizer->input[tokenizer->position] == '*' && tokenizer->input[tokenizer->position + 1] == '/') break;
+				tokenizer->position++;
+			}
+
+			if (tokenizer->position >= tokenizer->inputBytes - 1) {
+				PrintError(tokenizer, "Block comment does not end before the end of the file.\n");
+				tokenizer->error = true;
+				return token;
+			} else {
+				tokenizer->position += 2;
 			}
 
 			continue;
@@ -4666,10 +4677,18 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 
 		if (node->operationType != T_OP_CAST) {
 			Node *argument = node->firstChild->sibling->firstChild;
+			Node *arguments[FUNCTION_MAX_ARGUMENTS];
+			size_t argumentCount = 0;
 
 			while (argument) {
-				FunctionBuilderRecurse(tokenizer, argument, builder, false);
+				arguments[argumentCount++] = argument;
 				argument = argument->sibling;
+			}
+
+			for (uintptr_t i = 0; i < argumentCount; i++) {
+				if (!FunctionBuilderRecurse(tokenizer, arguments[argumentCount - i - 1], builder, false)) {
+					return false;
+				}
 			}
 		}
 
@@ -6200,8 +6219,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				Assert(entry->length <= entry->allocated);
 			}
 
-			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
-			int64_t insertIndex = context->c->stack[context->c->stackPointer - 1].i;
+			if (context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+			int64_t insertIndex = context->c->stack[context->c->stackPointer - 2].i;
 
 			if (insertIndex < 0 || insertIndex > oldLength) {
 				PrintError4(context, instructionPointer - 1, "Cannot insert at index %ld. The list has length %ld.\n",
@@ -6213,8 +6232,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				entry->list[i + 1] = entry->list[i];
 			}
 
-			if (entry->internalValuesAreManaged != context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
-			entry->list[insertIndex] = context->c->stack[context->c->stackPointer - 2];
+			if (entry->internalValuesAreManaged != context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			entry->list[insertIndex] = context->c->stack[context->c->stackPointer - 1];
 
 			context->c->stackPointer -= 3;
 		} else if (command == T_OP_INSERT_MANY) {
@@ -6232,8 +6251,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			HeapEntry *entry = &context->heap[index];
 			if (entry->type != T_LIST) return -1;
 
-			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
-			int64_t insertCount = context->c->stack[context->c->stackPointer - 1].i;
+			if (context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+			int64_t insertCount = context->c->stack[context->c->stackPointer - 2].i;
 			int64_t newLength = (int64_t) entry->length + insertCount;
 
 			if (insertCount < 0) {
@@ -6256,8 +6275,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				Assert(entry->length <= entry->allocated);
 			}
 
-			if (context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
-			int64_t insertIndex = context->c->stack[context->c->stackPointer - 2].i;
+			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			int64_t insertIndex = context->c->stack[context->c->stackPointer - 1].i;
 
 			if (insertIndex < 0 || insertIndex > oldLength) {
 				PrintError4(context, instructionPointer - 1, "Cannot insert at index %ld. The list has length %ld.\n",
@@ -6276,7 +6295,6 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			context->c->stackPointer -= 3;
 		} else if (command == T_OP_DELETE || command == T_OP_DELETE_MANY) {
 			int stackIndexList = command == T_OP_DELETE ? 2 : 3;
-			int stackIndexIndex = command == T_OP_DELETE ? 1 : 2;
 			if (context->c->stackPointer < (uintptr_t) stackIndexList) return -1;
 			if (!context->c->stackIsManaged[context->c->stackPointer - stackIndexList]) return -1;
 			uint64_t index = context->c->stack[context->c->stackPointer - stackIndexList].i;
@@ -6290,8 +6308,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			HeapEntry *entry = &context->heap[index];
 			if (entry->type != T_LIST) return -1;
 
-			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
-			int64_t deleteCount = command == T_OP_DELETE ? 1 : context->c->stack[context->c->stackPointer - 1].i;
+			if (command == T_OP_DELETE_MANY && context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+			int64_t deleteCount = command == T_OP_DELETE ? 1 : context->c->stack[context->c->stackPointer - 2].i;
 			int64_t newLength = (int64_t) entry->length - deleteCount;
 
 			if (deleteCount < 0) {
@@ -6305,8 +6323,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 
 			// TODO Maybe shrink the list storage, if it will save a lot of memory.
 
-			if (context->c->stackIsManaged[context->c->stackPointer - stackIndexIndex]) return -1;
-			int64_t deleteIndex = context->c->stack[context->c->stackPointer - stackIndexIndex].i;
+			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			int64_t deleteIndex = context->c->stack[context->c->stackPointer - 1].i;
 
 			if (deleteIndex < 0 || deleteIndex > newLength) {
 				PrintError4(context, instructionPointer - 1, "Cannot delete %ld items starting at index %ld. The list has length %ld.\n",

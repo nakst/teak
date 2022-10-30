@@ -1,0 +1,5 @@
+void Start() {
+	int y = 2+/*5*
+		   */4;
+	assert y == 6;
+}

@@ -45,6 +45,7 @@ void Start() {
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 	} else {
 		if !debug optimizeFlags = "-O2";
+		else optimizeFlags = "-fsanitize=address";
 		assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
 		okay = SystemShellExecute("./new_esh examples/hello_world.esh");
 	}
