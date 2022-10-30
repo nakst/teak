@@ -1,7 +1,7 @@
 bool debug #option;
 bool runTests #option;
 
-void RunTests() {
+void RunTests(str executable) {
 	// TODO Timeout.
 		
 	FileWriteAll("tests_log.txt", "!! running tests...\n");
@@ -21,7 +21,7 @@ void RunTests() {
 			continue;
 		}
 
-		if SystemShellExecute("./esh --want-completion-confirmation tests/%file% 2>> tests_log.txt") == expected
+		if SystemShellExecute("%executable% --want-completion-confirmation tests/%file% 2>> tests_log.txt") == expected
 				&& PathDelete("completion_confirmation.txt"):success() { 
 			success += 1; 
 		} else { 
@@ -38,11 +38,13 @@ void RunTests() {
 void Start() { 
 	bool okay;
 	str optimizeFlags = "";
+	str executable = "./esh";
 
 	if SystemGetHostName() == "Windows" {
 		if !debug optimizeFlags = "/O2";
-		assert SystemShellExecute("cl.exe esh.c /Wall %optimizeFlags% /link /OUT:new_esh.exe"); 
+		assert SystemShellExecute("cl.exe /Zi esh.c /Wall %optimizeFlags% /link /OUT:new_esh.exe");
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
+		executable = "new_esh";
 	} else {
 		if !debug optimizeFlags = "-O2";
 		else optimizeFlags = "-fsanitize=address";
@@ -51,14 +53,18 @@ void Start() {
 	}
 
 	if okay {
-		LogInfo("New build looks okay, replacing existing executable...");
-		PathMove("new_esh", "esh");
+		if SystemGetHostName() == "Windows" {
+			LogInfo("New build looks okay, please run \"move new_esh.exe esh.exe\".");
+		} else {
+			LogInfo("New build looks okay, replacing existing executable...");
+			PathMove("new_esh", "esh");
+		}
 	} else {
 		LogError("New build looks bad.");
 		assert false;
 	}
 
 	if runTests {
-		RunTests();
+		RunTests(executable);
 	}
 }
