@@ -43,8 +43,9 @@
 // 		- StringParseAsFloat, StringParseAsInteger
 // 		- StringHashCRC32, StringHashCRC64, StringHashFNV1a
 // 		- StringCompareRaw, StringCompareLocale, StringToLowerLocale, StringToUpperLocale
-// 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode
-// 		- StringUTF8IsValid, StringUTF8Encode, StringUTF8Decode, StringUTF8Advance, StringUTF8Retreat
+// 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode, StringEscapeEncode, StringEscapeDecode
+// 		- StringUTF8IsValid, StringUTF8MakeValid (replace bad segments with replacement characters)
+// 		- StringSplitFirstByCharacter, StringSplitLastByCharacter (e.g. "a,b,c,d" gives "a" and "b,c,d")
 // 	- Imaging.
 // 	- Time and date.
 // 	- Data compression.
@@ -55,7 +56,7 @@
 
 // TODO Miscellaneous:
 // 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
-// 	- Inlining small strings; fixed objects for single byte strings.
+// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte).
 // 	- Better handling of memory allocation failures.
 // 	- Shrink lists during garbage collection.
 
@@ -560,6 +561,7 @@ char baseModuleSource[] = {
 
 	"str StringSlice(str x, int start, int end) #extcall;\n"
 	"int CharacterToByte(str x) #extcall;\n"
+	"str StringFromByte(int x) #extcall;\n"
 	"bool StringContains(str haystack, str needle) {\n"
 	"	for int i = 0; i <= haystack:len() - needle:len(); i += 1 {\n"
 	"		bool match = true;\n"
@@ -672,6 +674,7 @@ char baseModuleSource[] = {
 	"	str result, int count = StringReplaceAllWithCount(haystack, needle, with);\n"
 	"	return result;\n"
 	"}\n"
+	"str StringRepeat(str s, int n) { assert n >= 0; str t = \"\"; for int i = 0; i < n; i += 1 { t += s; } return t; }\n"
 
 	// Miscellaneous:
 
@@ -1020,6 +1023,75 @@ char baseModuleSource[] = {
 	"		return true;\n"
 	"	}\n"
 	"}\n"
+
+	// UTF-8.
+
+	"int _StringUTF8CodepointLength(int c) {\n"
+	"	return 1 if (c & 128) ==   0 else \n"
+	"	       2 if (c & 224) == 192 else \n"
+	"	       3 if (c & 240) == 224 else \n"
+	"	       4 if (c & 248) == 240 else 0;\n"
+	"}\n"
+	"int StringUTF8Advance(str x, int i) {\n"
+	"	if i == -1 { return -1; }\n"
+	"	int c0 = CharacterToByte(x[i + 0]);\n"
+	"	int length = _StringUTF8CodepointLength(c0);\n"
+	"	if length == 0 || i + length > x:len() { return -1; }\n"
+	"	return i + length;\n"
+	"}\n"
+	"int StringUTF8Retreat(str x, int i) {\n"
+	"	if i == -1 { return -1; }\n"
+	"	assert i >= 1 && i <= x:len();"
+	"	int j = i;\n"
+	"	while j >= 1 {\n"
+	"		j -= 1;\n"
+	"		int k = CharacterToByte(x[j]);\n"
+	"		if (k & 192) != 128 { return j if j + _StringUTF8CodepointLength(k) == i else -1; }\n"
+	"	}\n"
+	"	return -1;\n"
+	"}\n"
+	"int StringUTF8Count(str x) {\n"
+	"	int i = 0;\n"
+	"	int count = 0;\n"
+	"	\n"
+	"	while i != -1 && i != x:len() { \n"
+	"		i = StringUTF8Advance(x, i); \n"
+	"		count += 1; \n"
+	"	}\n"
+	"	return count if i != -1 else -1;\n"
+	"}\n"
+	"int StringUTF8Decode(str x, int i) {\n"
+	"	if i == -1 { return 65533; }\n"
+	"	int c0 = CharacterToByte(x[i + 0]);\n"
+	"	int length = _StringUTF8CodepointLength(c0);\n"
+	"	if length == 0 || i + length > x:len() { return 65533; }\n"
+	"	if length == 1 { return c0; }\n"
+	"	int c1 = CharacterToByte(x[i + 1]);\n"
+	"	if (c1 & 192) != 128 { return 65533; }\n"
+	"	if length == 2 { return ((c0 & 31) << 6) | (c1 & 63); }\n"
+	"	int c2 = CharacterToByte(x[i + 2]);\n"
+	"	if (c2 & 192) != 128 { return 65533; }\n"
+	"	if length == 3 { return ((c0 & 15) << 12) | ((c1 & 63) << 6) | (c2 & 63); }\n"
+	"	int c3 = CharacterToByte(x[i + 3]);\n"
+	"	if (c3 & 192) != 128 { return 65533; }\n"
+	"	if length == 4 { return ((c0 & 7) << 18) | ((c1 & 63) << 12) | ((c2 & 63) << 6) | (c3 & 63); }\n"
+	"	assert false;\n"
+	"}\n"
+	"str StringUTF8Encode(int value) {\n"
+	"	if value < 128 {\n"
+	"		return StringFromByte(value);\n"
+	"	} else if value < 2048 {\n"
+	"		return StringFromByte(192 | ((value >> 6) & 31)) + StringFromByte(128 | (value & 63));\n"
+	"	} else if value < 65536 {\n"
+	"		return StringFromByte(224 | ((value >> 12) & 15)) + StringFromByte(128 | ((value >> 6) & 63)) + StringFromByte(128 | (value & 63));\n"
+	"	} else if value < 2097152 {\n"
+	"		return StringFromByte(240 | (value >> 18)) + StringFromByte(128 | ((value >> 12) & 63)) \n"
+	"			+ StringFromByte(128 | ((value >> 6) & 63)) + StringFromByte(128 | (value & 63));\n"
+	"	} else {\n"
+	"		return StringUTF8Encode(65533);\n"
+	"	}\n"
+	"}\n"
+
 };
 
 // --------------------------------- External function calls.
@@ -1037,6 +1109,7 @@ int ExternalConsoleWriteStdout(ExecutionContext *context, Value *returnValue);
 int ExternalConsoleWriteStderr(ExecutionContext *context, Value *returnValue);
 int ExternalStringSlice(ExecutionContext *context, Value *returnValue);
 int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue);
+int ExternalStringFromByte(ExecutionContext *context, Value *returnValue);
 int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue);
 int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Value *returnValue);
 int ExternalSystemShellEvaluate(ExecutionContext *context, Value *returnValue);
@@ -1083,6 +1156,7 @@ ExternalFunction externalFunctions[] = {
 	{ .cName = "ConsoleWriteStderr", .callback = ExternalConsoleWriteStderr },
 	{ .cName = "StringSlice", .callback = ExternalStringSlice },
 	{ .cName = "CharacterToByte", .callback = ExternalCharacterToByte },
+	{ .cName = "StringFromByte", .callback = ExternalStringFromByte },
 	{ .cName = "SystemShellExecute", .callback = ExternalSystemShellExecute },
 	{ .cName = "SystemShellExecuteWithWorkingDirectory", .callback = ExternalSystemShellExecuteWithWorkingDirectory },
 	{ .cName = "SystemShellEvaluate", .callback = ExternalSystemShellEvaluate },
@@ -4153,6 +4227,8 @@ bool ASTCheckForReturnStatements(Tokenizer *tokenizer, Node *node) {
 		}
 
 		if (lastStatement && (lastStatement->type == T_RETURN || lastStatement->type == T_RETURN_TUPLE)) {
+			return true;
+		} else if (lastStatement && (lastStatement->type == T_ASSERT && lastStatement->firstChild->type == T_FALSE)) {
 			return true;
 		} else if (lastStatement && (lastStatement->type == T_IF || lastStatement->type == T_IF_ERR || lastStatement->type == T_BLOCK
 					|| (lastStatement->type == T_WHILE && lastStatement->firstChild->type == T_TRUE && ASTCheckNoBreak(lastStatement->firstChild->sibling)))) {
@@ -7458,7 +7534,6 @@ int ScriptExecuteFromFile(char *scriptPath, size_t scriptPathBytes, char *fileDa
 }
 
 int ExternalStringSlice(ExecutionContext *context, Value *returnValue) {
-	(void) returnValue;
 	if (context->c->stackPointer < 3) return -1;
 	STACK_POP_STRING(string, bytes);
 	uint64_t start = context->c->stack[--context->c->stackPointer].i;
@@ -7477,10 +7552,26 @@ int ExternalStringSlice(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue) {
-	(void) returnValue;
 	STACK_POP_STRING(entryText, entryBytes);
-	returnValue->i = entryBytes ? entryText[0] : -1;
+	returnValue->i = entryBytes ? ((uint8_t) entryText[0]) : -1;
 	return EXTCALL_RETURN_UNMANAGED;
+}
+
+int ExternalStringFromByte(ExecutionContext *context, Value *returnValue) {
+	if (context->c->stackPointer < 1) return -1;
+	int64_t byte = context->c->stack[--context->c->stackPointer].i;
+	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
+
+	if (byte < 0 || byte > 255) {
+		char buffer[64];
+		size_t count = PrintIntegerToBuffer(buffer, sizeof(buffer), byte);
+		PrintError4(context, 0, "The byte %.*s is not in the range (0..255).\n", count, buffer);
+		return 0;
+	}
+
+	uint8_t single = byte;
+	RETURN_STRING_COPY(&single, 1);
+	return EXTCALL_RETURN_MANAGED;
 }
 
 // --------------------------------- Platform layer.

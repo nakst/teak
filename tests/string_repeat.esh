@@ -1,0 +1,6 @@
+void Start() {
+	assert StringRepeat("", 0) == "";
+	assert StringRepeat("", 3) == "";
+	assert StringRepeat("hello", 0) == "";
+	assert StringRepeat("hello", 3) == "hellohellohello";
+}

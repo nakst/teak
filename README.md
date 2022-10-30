@@ -44,7 +44,12 @@ Why did I make another programming language? Because I felt like there wasn't a 
 
 ```
 // Extract the byte value (0-255) of the one byte string.
+// If the string is longer than a byte, the first byte is used.
+// If the string is empty, -1 is returned.
 int CharacterToByte(str x);
+
+// Convert the byte value (0-255) to a one byte string.
+str StringFromByte(int x);
 
 // Convert string to uppercase or lowercase.
 // These treat the strings as ASCII, mapping between [a-z] and [A-Z] only.
@@ -54,6 +59,36 @@ str StringToUpperRaw(str s);
 // Remove whitespace characters from the start and end of the string.
 // The whitespace characters are: space, tab, carriage return and newline (ASCII).
 str StringTrim(str string);
+```
+
+### Strings and characters — UTF-8
+
+```c
+// Count the number of UTF-8 codepoints in the string.
+// If the string cannot be traversed, -1 is returned.
+// (This is not a substitute for a proper validation.)
+int StringUTF8Count(str x);
+
+// Get the starting byte index of the first UTF-8 codepoint after the codepoint starting at byte i.
+// If i is the last codepoint in the string, x:len() is returned.
+// If i == -1, then -1 is returned.
+// If the string cannot be traversed, -1 is returned.
+// If i < -1 || i >= x:len(), the script will crash.
+int StringUTF8Advance(str x, int i);
+
+// Get the starting byte index of the first UTF-8 codepoint before the codepoint starting at byte i.
+// If i == x:len(), the starting byte index of the last UTF-8 codepoint in the string is returned.
+// If i == -1, then -1 is returned.
+// If the string cannot be traversed, -1 is returned.
+// If i == 0 || i < -1 || i > x:len(), the script will crash.
+int StringUTF8Retreat(str x, int i);
+
+// Decode the UTF-8 codepoint starting at byte i.
+// If i == -1 or the codepoint is invalid, 0xFFFD is returned.
+int StringUTF8Decode(str x, int i);
+
+// Encode a value from 0 to 0x1FFFFF as a UTF-8 string.
+str StringUTF8Encode(int value);
 ```
 
 ### Strings and characters — testing
@@ -146,6 +181,9 @@ str StringRemoveOptionalPrefix(str s, str prefix);
 
 // If the string ends with the given suffix, it is removed. Otherwise, the original string is returned.
 str StringRemoveOptionalSuffix(str s, str suffix);
+
+// Repeats the string multiple times. n >= 0.
+str StringRepeat(str s, int n);
 ```
 
 ### Strings and characters — file system paths

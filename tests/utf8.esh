@@ -1,0 +1,30 @@
+void Start() {
+	str x = "0öő😀";
+	assert x:len() == 9;
+	assert StringUTF8Count(x) == 4;
+	assert StringUTF8Advance(x, 2) == -1;
+	assert StringUTF8Retreat(x, 2) == -1;
+	assert StringUTF8Decode(x, 2) == 65533;
+	int[] decoded = [];
+	int i = 0;
+	while i != x:len() {
+		int value = StringUTF8Decode(x, i);
+		Log("at %i% = %value%");
+		i = StringUTF8Advance(x, i);
+		decoded:add(value);
+	}
+	assert decoded[0] == 48;
+	assert decoded[1] == 246;
+	assert decoded[2] == 337;
+	assert decoded[3] == 128512;
+	while i != 0 {
+		i = StringUTF8Retreat(x, i);
+		int value = StringUTF8Decode(x, i);
+		Log("at %i% = %value%");
+		assert decoded:last() == value;
+		decoded:delete_last();
+	}
+	for int j = 0; j < 100; j += 1 { assert j == StringUTF8Decode(StringUTF8Encode(j), 0); }
+	for int j = 0; j < 2097152; j += 100 { assert j == StringUTF8Decode(StringUTF8Encode(j), 0); }
+	for int j = 2097152 - 100; j < 2097152; j += 1 { assert j == StringUTF8Decode(StringUTF8Encode(j), 0); }
+}
