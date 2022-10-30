@@ -1,13 +1,12 @@
 // TODO Basic missing features:
-// 	> Maps: T[int], T[str].
-// 	> Using declared types from imported modules.
-// 	> Paths to import modules should be relative to the file that imports them.
-// 	> Setting the initial values of global variables (including options).
+// 	- Maps: T[int], T[str].
+// 	- Using declared types from imported modules.
+// 	- Paths to import modules should be relative to the file that imports them.
+// 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
 // 	- struct inheritance.
-// 	- Exponent notation in numeric literals.
 // 	- Multiline string literals.
-// 	- More escape sequences in string literals.
+// 	- Exponent notation in numeric literals. Binary and hexadecimal literals.
 
 // TODO Syntax sugar: (ideas)
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
@@ -16,12 +15,16 @@
 // 	- Easier way to fill/initialise structs.
 
 // TODO Larger missing features:
+// 	- Importing installed modules from a common location?
 // 	- Serialization.
 // 	- Debugging.
 // 	- Verbose mode, where every external call is logged, every variable modification is logged, every line is logged, etc? Saving output to file.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
-// 	- Set expectedType for T_DECL_GROUP_AND_SET, T_SET_GROUP, T_RETURN_TUPLE.
+
+// TODO Other missing features:
+// 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
+// 	- :ignore(string, valueToUse) for error types.
 
 // TODO Standard library:
 // 	- Integers: IntegerPrimeFactorization
@@ -1115,6 +1118,21 @@ ExternalFunction externalFunctions[] = {
 
 // --------------------------------- Tokenization and parsing.
 
+uint32_t HexValueOf(char c) {
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	Assert(false);
+	return 0;
+}
+
+bool HexIsDigit(char c) {
+	if (c >= '0' && c <= '9') return true;
+	if (c >= 'a' && c <= 'f') return true;
+	if (c >= 'A' && c <= 'F') return true;
+	return false;
+}
+
 uint8_t TokenLookupPrecedence(uint8_t t) {
 	if (t == T_EQUALS)          return 10;
 	if (t == T_ADD_EQUALS)      return 10;
@@ -1299,7 +1317,7 @@ Token TokenNext(Tokenizer *tokenizer) {
 			token.type = T_NUMERIC_LITERAL;
 			token.text = tokenizer->input + tokenizer->position;
 
-			while ((c >= '0' && c <= '9') || (c == '.')) {
+			while ((c >= '0' && c <= '9') || c == '.' || c == '_') {
 				tokenizer->position++;
 				token.textBytes++;
 				if (tokenizer->position == tokenizer->inputBytes) break;
@@ -1341,18 +1359,29 @@ Token TokenNext(Tokenizer *tokenizer) {
 				} else if (tokenizer->input[i] == '%') {
 					inInterpolation = true;
 				} else if (tokenizer->input[i] == '\\') {
-					if (i + 1 == tokenizer->inputBytes 
-							|| (tokenizer->input[i + 1] != 'n' && tokenizer->input[i + 1] != 't' 
-								&& tokenizer->input[i + 1] != 'r' 
-								&& tokenizer->input[i + 1] != '%' 
-								&& tokenizer->input[i + 1] != '"' && tokenizer->input[i + 1] != '\\')) {
-						PrintError(tokenizer, "String contains unrecognized escape sequence '\\%c'. "
-								"Possibilities are: '\\\\', '\\%%', '\\n', '\\r', '\\t' and '\\\"'\n", tokenizer->input[i + 1]);
+					char c1 = i + 1 < tokenizer->inputBytes ? tokenizer->input[i + 1] : 0;
+					char c2 = i + 2 < tokenizer->inputBytes ? tokenizer->input[i + 2] : 0;
+					char c3 = i + 3 < tokenizer->inputBytes ? tokenizer->input[i + 3] : 0;
+
+					if (c1 == 'n' || c1 == 't' || c1 == 'r' || c1 == '%' || c1 == '"' || c1 == '\\'
+							|| (c1 == 'x' && c3)) {
+						i++;
+						token.textBytes++;
+					} else if (!c1 || (c1 == 'x' && !c3)) {
+						PrintError(tokenizer, "End of file reached before end of string escape sequence.\n");
 						tokenizer->error = true;
 						break;
 					} else {
-						i++;
-						token.textBytes++;
+						PrintError(tokenizer, "String contains unrecognized escape sequence '\\%c'. "
+								"Possibilities are: '\\\\', '\\%%', '\\n', '\\r', '\\t', '\\x..' and '\\\"'\n", c1);
+						tokenizer->error = true;
+						break;
+					}
+
+					if (c1 == 'x' && (!HexIsDigit(c2) || !HexIsDigit(c3))) {
+						PrintError(tokenizer, "The two characters following '\\x' must be hexadecimal digits.\n");
+						tokenizer->error = true;
+						break;
 					}
 				} else {
 					token.textBytes++;
@@ -1607,6 +1636,7 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 				else if (c == 't') c = '\t';
 				else if (c == '%') c = '%';
 				else if (c == '"') c = '"';
+				else if (c == 'x') { c = (HexValueOf(raw[i + 1]) << 4) | HexValueOf(raw[i + 2]); i += 2; }
 				else Assert(false);
 				output[outputPosition++] = c;
 				string->token.textBytes++;
@@ -3194,6 +3224,7 @@ Value ASTNumericLiteralToValue(Node *node) {
 		v.i = 0;
 
 		for (uintptr_t i = 0; i < node->token.textBytes; i++) {
+			if (node->token.text[i] == '_') continue;
 			v.i *= 10;
 			v.i += node->token.text[i] - '0';
 		}
@@ -3205,6 +3236,7 @@ Value ASTNumericLiteralToValue(Node *node) {
 		for (uintptr_t i = 0; i < node->token.textBytes; i++) {
 			if (node->token.text[i] == '.') {
 				dot = true;
+			} else if (node->token.text[i] == '_') {
 			} else if (dot) {
 				v.f += (node->token.text[i] - '0') * m;
 				m /= 10;

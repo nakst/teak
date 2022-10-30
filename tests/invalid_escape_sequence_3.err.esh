@@ -1,0 +1,3 @@
+void Start() {
+	Log("\x0z");
+}

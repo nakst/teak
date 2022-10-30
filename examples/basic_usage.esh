@@ -42,6 +42,7 @@ void Start() {
 	bool b0 = true;
 	float f0 = 10.5;
 	int i0 = -100;
+	int j0 = 1_234_567; // Underscores are ignored in numeric literals.
 	str s0 = "String";
 	
 //////////////////////////////// STRINGS ////////////////////////////////

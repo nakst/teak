@@ -1,0 +1,4 @@
+void Start() {
+	str s = "\x41\x42\x43";
+	assert s == "ABC";
+}
