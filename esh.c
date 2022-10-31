@@ -44,6 +44,7 @@
 // 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode, StringEscapeEncode, StringEscapeDecode
 // 		- StringUTF8IsValid, StringUTF8MakeValid (replace bad segments with replacement characters)
 // 		- StringSplitFirstByCharacter, StringSplitLastByCharacter (e.g. "a,b,c,d" gives "a" and "b,c,d")
+// 	- Process management.
 // 	- Imaging.
 // 	- Time and date.
 // 	- Data compression.
@@ -51,6 +52,7 @@
 // 	- INI file format.
 // 	- Networking.
 // 	- Audio.
+// 	- Convert CharacterToByte, StringFromByte, StringSlice to :ops?
 
 // TODO Miscellaneous:
 // 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
@@ -8058,7 +8060,8 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 #pragma message ("ExternalPathDelete unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("ExternalPathDelete is unimplemented.\n");
+	return 0;
 #else
 	(void) returnValue;
 	STACK_POP_STRING(entryText, entryBytes);
@@ -8091,7 +8094,8 @@ int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
 #pragma message ("ExternalPathIsFile unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("ExternalPathIsFile is unimplemented.\n");
+	return 0;
 #else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
@@ -8110,7 +8114,8 @@ int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
 #pragma message ("ExternalPathIsDirectory unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("ExternalPathIsDirectory is unimplemented.\n");
+	return 0;
 #else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
@@ -8257,7 +8262,8 @@ int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *r
 #pragma message ("External_DirectoryInternalStartIteration unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("External_DirectoryInternalStartIteration is unimplemented.\n");
+	return 0;
 #else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
@@ -8276,7 +8282,8 @@ int External_DirectoryInternalEndIteration(ExecutionContext *context, Value *ret
 #pragma message ("External_DirectoryInternalEndIteration unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("External_DirectoryInternalEndIteration is unimplemented.\n");
+	return 0;
 #else
 	(void) context;
 	(void) returnValue;
@@ -8292,7 +8299,8 @@ int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *re
 #pragma message ("External_DirectoryInternalNextIteration unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("External_DirectoryInternalNextIteration is unimplemented.\n");
+	return 0;
 #else
 	(void) context;
 	if (!directoryIterator) return 0;
@@ -8529,7 +8537,8 @@ int ExternalConsoleGetLine(ExecutionContext *context, Value *returnValue) {
 #pragma message ("ExternalConsoleGetLine unimplemented")
 	(void) context;
 	(void) returnValue;
-	return -1;
+	PrintError3("ExternalConsoleGetLine is unimplemented.\n");
+	return 0;
 #else
 	char *line = NULL;
 	size_t pos;

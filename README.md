@@ -63,6 +63,8 @@ str StringTrim(str string);
 
 ### Strings and characters — UTF-8
 
+The functions `StringUTF8Advance`, `StringUTF8Retreat` and `StringUTF8Decode` take a byte offset into the string. `-1` is used as a silent error value when something goes wrong. So it is always safe to do, for example, `StringUTF8Decode(x, StringUTF8Advance(x, position))`. Even if the `StringUTF8Advance` fails, it will return `-1` which informs `StringUTF8Decode` to simply return a Unicode replacement character.
+
 ```c
 // Count the number of UTF-8 codepoints in the string.
 // If the string cannot be traversed, -1 is returned.
