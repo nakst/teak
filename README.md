@@ -336,6 +336,7 @@ bool PathIsLink(str source);
 
 ```
 // Create a directory at the given path.
+// It is not considered an error if the directory already exists.
 err[void] PathCreateDirectory(str x);
 
 // Create a directory at the given path, and any leading directories as necessary.
@@ -380,6 +381,7 @@ You may encounter some of the following error strings when using file system fun
 - `"PERMISSION_NOT_GRANTED"` You do not have permission to perform the operation on the file.
 - `"VOLUME_MISMATCH"` Two items specified for the operation reside on different file system volumes, which the operation does not allow.
 - `"HARDWARE_FAILURE"` The operation could not complete because of a hardware malfunction.
+- `"PATH_NOT_TRAVERSABLE"` A non-final directory in the path did not exist, or the drive did not exist.
 
 ### System — shell commands
 

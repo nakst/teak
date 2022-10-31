@@ -19,6 +19,7 @@
 // 	- Debugging.
 // 	- Verbose mode, where every external call is logged, every variable modification is logged, every line is logged, etc? Saving output to file.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
+// 	- Win32: use the Unicode APIs for file system access.
 
 // TODO Other missing features:
 // 	- struct inheritance.
@@ -7751,6 +7752,22 @@ char *StringZeroTerminate(const char *text, size_t bytes) {
 }
 
 #define RETURN_ERROR(error) do { MakeError(context, returnValue, error); return EXTCALL_RETURN_ERR_ERROR; } while (0)
+#define RETURN_ERROR_WIN32(error) do { MakeErrorWin32(context, returnValue, error); return EXTCALL_RETURN_ERR_ERROR; } while (0)
+
+#ifdef _WIN32
+void MakeErrorWin32(ExecutionContext *context, Value *returnValue, int error) {
+	const char *text = NULL;
+
+	if (error == ERROR_PATH_NOT_FOUND) text = "PATH_NOT_TRAVERSABLE";
+	// TODO Other errors.
+
+	if (text) {
+		RETURN_STRING_COPY(text, strlen(text));
+	} else {
+		returnValue->i = 0;
+	}
+}
+#else
 
 void MakeError(ExecutionContext *context, Value *returnValue, int error) {
 	const char *text = NULL;
@@ -8021,14 +8038,18 @@ int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
-#ifdef _WIN32
-#pragma message ("ExternalPathCreateDirectory unimplemented")
-#else
 	returnValue->i = 1;
+#ifdef _WIN32
+	if (!CreateDirectory(temporary, 0)) returnValue->i = GetLastError() == ERROR_ALREADY_EXISTS;
+#else
 	if (mkdir(temporary, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) returnValue->i = errno == EEXIST;
 #endif
 	free(temporary);
+#ifdef _WIN32
+	if (!returnValue->i) RETURN_ERROR_WIN32(GetLastError());
+#else
 	if (!returnValue->i) RETURN_ERROR(errno);
+#endif
 	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
 
