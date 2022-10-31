@@ -1,0 +1,689 @@
+// Logging:
+
+void Log(str x) #extcall;
+void LogInfo(str x) { Log(TextColorHighlight() + x); }
+void LogError(str x) { Log(TextColorError() + "Error: " + x); }
+
+void LogOpenGroup(str title) #extcall;
+// TODO LogOpenList, LogOpenTable, etc.
+void LogClose() #extcall;
+
+str TextColorError() #extcall;
+str TextColorHighlight() #extcall;
+str TextWeight(int i) #extcall;
+str TextMonospaced() #extcall;
+str TextPlain() #extcall;
+str TextBold() { return TextWeight(700); }
+
+// String operations:
+
+str StringSlice(str x, int start, int end) #extcall;
+int CharacterToByte(str x) #extcall;
+str StringFromByte(int x) #extcall;
+
+bool StringContains(str haystack, str needle) {
+	for int i = 0; i <= haystack:len() - needle:len(); i += 1 {
+		bool match = true;
+		for int j = 0; j < needle:len(); j += 1 { if haystack[i + j] != needle[j] match = false; }
+		if match { return true; }
+	}
+	return false;
+}
+
+str StringTrim(str string) {
+	int start = 0;
+	int end = string:len();
+	while start != end && (string[start] == " " || string[start] == "\t" || string[start] == "\r" || string[start] == "\n") { start += 1; }
+	while start != end && (string[end - 1] == " " || string[end - 1] == "\t" || string[end - 1] == "\r" || string[end - 1] == "\n") { end -= 1; }
+	return StringSlice(string, start, end);
+}
+
+str[] StringSplitByCharacter(str string, str character, bool includeEmptyString) {
+	assert character:len() == 1;
+	str[] list = new str[];
+	int x = 0;
+	for int i = 0; i < string:len(); i += 1 {
+		if string[i] == character {
+			if (includeEmptyString || x != i) { list:add(StringSlice(string, x, i)); }
+			x = i + 1;
+		}
+	}
+	if (includeEmptyString || x != string:len()) { list:add(StringSlice(string, x, string:len())); }
+	return list;
+}
+
+str StringJoin(str[] strings, str k, bool trailing) {
+	str c = "";
+	for int i = 0; i < strings:len(); i += 1 {
+		if i < strings:len() - 1 || trailing { c = c + strings[i] + k; }
+		else { c = c + strings[i]; }
+	}
+	return c;
+}
+
+bool StringEndsWith(str s, str x) { 
+	return s:len() >= x:len() && StringSlice(s, s:len() - x:len(), s:len()) == x; 
+}
+bool StringStartsWith(str s, str x) { 
+	return s:len() >= x:len() && StringSlice(s, 0, x:len()) == x; 
+}
+
+bool CharacterIsAlnum(str c) {
+	int b = CharacterToByte(c);
+	return (b >= CharacterToByte("A") && b <= CharacterToByte("Z")) || (b >= CharacterToByte("a") && b <= CharacterToByte("z"))
+		|| (b >= CharacterToByte("0") && b <= CharacterToByte("9"));
+}
+
+bool CharacterIsSpace(str c) { 
+	return c == " " || c == "\t" || c == "\r" || c == "\n"; 
+}
+
+bool CharacterIsDigit(str c) { 
+	int b = CharacterToByte(c); 
+	return b >= CharacterToByte("0") && b <= CharacterToByte("9"); 
+}
+
+str CharacterToUpperRaw(str c) {
+	int b = CharacterToByte(c);
+
+	if b >= CharacterToByte("a") && b <= CharacterToByte("z") {
+		str upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		return upper[b - CharacterToByte("a")];
+	} else {
+		return c;
+	}
+}
+
+str StringToUpperRaw(str s) { 
+	str t = ""; 
+
+	for str c in s { 
+		t += CharacterToUpperRaw(c); 
+
+	} 
+	return t; 
+}
+
+str CharacterToLowerRaw(str c) {
+	int b = CharacterToByte(c);
+
+	if b >= CharacterToByte("A") && b <= CharacterToByte("Z") {
+		str lower = "abcdefghijklmnopqrstuvwxyz";
+		return lower[b - CharacterToByte("A")];
+	} else {
+		return c;
+	}
+}
+
+str StringToLowerRaw(str s) { 
+	str t = ""; 
+
+	for str c in s { 
+		t += CharacterToLowerRaw(c); 
+	} 
+
+	return t; 
+}
+
+str StringRemoveOptionalPrefix(str s, str prefix) { 
+	if StringStartsWith(s, prefix) { 
+		return StringSlice(s, prefix:len(), s:len()); 
+	} else { 
+		return s; 
+	} 
+}
+
+str StringRemoveOptionalSuffix(str s, str suffix) { 
+	if StringEndsWith(s, suffix) { 
+		return StringSlice(s, 0, s:len() - suffix:len()); 
+	} else { 
+		return s; 
+	} 
+}
+
+int StringFind(str haystack, str needle, int startAt, bool reverse) {
+	assert needle:len() != 0;
+	int index = startAt;
+
+	while index >= 0 && index < haystack:len() {
+		if index + needle:len() <= haystack:len() {
+			bool match = true;
+
+			for int j = 0; j < needle:len(); j += 1 { 
+				if haystack[index + j] != needle[j] match = false; 
+			}
+
+			if match { return index; }
+		}
+
+		index += -1 if reverse else 1;
+	}
+
+	return -1;
+}
+
+int StringFindFirst(str haystack, str needle) { return StringFind(haystack, needle, 0, false); }
+
+int StringFindLast(str haystack, str needle) { return StringFind(haystack, needle, haystack:len() - 1, true); }
+
+str StringReplaceFirst(str haystack, str needle, str with) {
+	int index = StringFindFirst(haystack, needle);
+	if index == -1 { return haystack; }
+	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());
+}
+
+str StringReplaceLast(str haystack, str needle, str with) {
+	int index = StringFindLast(haystack, needle);
+	if index == -1 { return haystack; }
+	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());
+}
+
+tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with) {
+	str result = "";
+	int position = 0;
+	int count = 0;
+	while true {
+		int index = StringFind(haystack, needle, position, false);
+		if index == -1 {
+			result += StringSlice(haystack, position, haystack:len());
+			return result, count;
+		}
+		result += StringSlice(haystack, position, index) + with;
+		position = index + needle:len();
+		count += 1;
+	}
+}
+
+str StringReplaceAll(str haystack, str needle, str with) {
+	str result, int count = StringReplaceAllWithCount(haystack, needle, with);
+	return result;
+}
+
+str StringRepeat(str s, int n) { assert n >= 0; str t = ""; for int i = 0; i < n; i += 1 { t += s; } return t; }
+
+// Miscellaneous:
+
+int SystemGetProcessorCount() #extcall;
+bool SystemRunningAsAdministrator() #extcall;
+str SystemGetHostName() #extcall;
+void SystemSleepMs(int ms) #extcall;
+int RandomInt(int min, int max) #extcall;
+
+str UUIDGenerate() {
+	str hexChars = "0123456789abcdef";
+	str result;
+	for int i = 0; i <  8; i += 1 { result += hexChars[RandomInt(0, 15)]; }
+	result += "-";
+	for int i = 0; i <  4; i += 1 { result += hexChars[RandomInt(0, 15)]; }
+	result += "-4";
+	for int i = 0; i <  3; i += 1 { result += hexChars[RandomInt(0, 15)]; }
+	result += "-" + hexChars[RandomInt(8, 11)];
+	for int i = 0; i <  3; i += 1 { result += hexChars[RandomInt(0, 15)]; }
+	result += "-";
+	for int i = 0; i < 12; i += 1 { result += hexChars[RandomInt(0, 15)]; }
+	return result;
+}
+
+// File system access:
+
+bool PathExists(str x) #extcall;
+bool PathIsFile(str source) #extcall;
+bool PathIsDirectory(str source) #extcall;
+bool PathIsLink(str source) #extcall;
+err[void] PathCreateDirectory(str x) #extcall;
+err[void] PathDelete(str x) #extcall;
+err[void] PathMove(str source, str destination) #extcall;
+str PathGetDefaultPrefix() #extcall;
+err[void] PathSetDefaultPrefixToScriptSourceDirectory() #extcall;
+err[str] FileReadAll(str path) #extcall;
+err[void] FileWriteAll(str path, str x) #extcall;
+err[void] FileAppend(str path, str x) #extcall;
+err[void] FileCopy(str source, str destination) #extcall;
+err[int] FileGetSize(str path) #extcall;
+err[void] FileTouch(str path) { return FileAppend(path, ""); }
+				      
+err[void] _DirectoryInternalStartIteration(str path) #extcall;
+str _DirectoryInternalNextIteration() #extcall;
+void _DirectoryInternalEndIteration() #extcall;
+
+err[void] _DirectoryInternalEnumerateChildren(str path, str prefix, str[] result, bool recurse) {
+	reterr _DirectoryInternalStartIteration(path);
+	str child = _DirectoryInternalNextIteration();
+	int start = result:len();
+	while child != "" { result:add(child); child = _DirectoryInternalNextIteration(); }
+	_DirectoryInternalEndIteration();
+	int end = result:len();
+	if recurse {
+		for int i = start; i < end; i += 1 {
+			str actual = path + "/" + result[i];
+			if PathIsDirectory(actual) {
+				_DirectoryInternalEnumerateChildren(actual, prefix + result[i] + "/", result, true);
+			}
+		}
+	}
+	for int i = start; i < end; i += 1 {
+		result[i] = prefix + result[i];
+	}
+	return #success;
+}
+
+err[str[]] DirectoryEnumerate(str path) {
+	str[] result = new str[];
+	err[void] e = _DirectoryInternalEnumerateChildren(path, "", result, false);
+	reterr e; return result;
+}
+
+err[str[]] DirectoryEnumerateRecursively(str path) {
+	str[] result = new str[];
+	err[void] e = _DirectoryInternalEnumerateChildren(PathTrimTrailingSlash(path), "", result, true);
+	reterr e; return result;
+}
+
+err[str[]] DirectoryEnumerateFiltered(str sourceDirectory, str[] filter, int filterWildcard, bool prependSourceDirectory) {
+	assert filter:len() > 0;
+	err[str[]] e;
+	if filterWildcard != -1 || filter:len() > 1 { e = DirectoryEnumerateRecursively(sourceDirectory); }
+	else { e = DirectoryEnumerate(sourceDirectory); }
+	reterr e;
+	str[] allItems = e:assert();
+	str[] filteredItems = new str[];
+	for str item in allItems {
+		if PathMatchesFilter(item, filter, filterWildcard) {
+			if prependSourceDirectory {
+				filteredItems:add(PathEnsureTrailingSlash(sourceDirectory) + item);
+			} else {
+				filteredItems:add(item);
+			}
+		}
+	}
+	return filteredItems;
+}
+
+str PathTrimTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == "/" { return StringSlice(x, 0, x:len() - 1); } return x; }
+str PathEnsureTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == "/" { return x; } return x + "/"; }
+
+err[void] PathDeleteRecursively(str path) {
+	err[str[]] e = DirectoryEnumerateRecursively(path);
+	if str[] all in e {
+		for int i = 0; i < all:len(); i += 1 {
+			str p = path + "/" + all[i];
+			if PathIsFile(p) || PathIsLink(p) {
+				PathDelete(p);
+			}
+		}
+		for int i = all:len(); i > 0; i -= 1 {
+			str p = path + "/" + all[i - 1];
+			if PathIsDirectory(p) {
+				PathDelete(p);
+			}
+		}
+		return PathDelete(path);
+	} else {
+		return new err[void] e:error();
+	}
+}
+
+void PathDeleteAll(str[] files) { 
+	for str file in files { 
+		PathDelete(file); 
+	} 
+}
+
+void PathDeleteAllFiltered(str sourceDirectory, str[] filter, int filterWildcard) {
+	PathDeleteAll(DirectoryEnumerateFiltered(sourceDirectory, filter, filterWildcard, true):default(new str[]));
+}
+
+err[void] PathCopyRecursively(str source, str destination) {
+	err[str[]] e = DirectoryEnumerateRecursively(source);
+
+	if str[] all in e {
+		reterr PathCreateDirectory(destination);
+
+		for int i = 0; i < all:len(); i += 1 {
+			str sourceItem = source + "/" + all[i];
+			str destinationItem = destination + "/" + all[i];
+
+			if PathIsDirectory(sourceItem) {
+				PathCreateDirectory(destinationItem);
+			} else {
+				reterr FileCopy(sourceItem, destinationItem);
+			}
+		}
+		return #success;
+	} else {
+		return new err[void] e:error();
+	}
+}
+
+err[void] PathCopyInto(str sourceDirectory, str item, str destinationDirectory) {
+	str sourceItem = sourceDirectory + "/"+ item;
+	str destinationItem = destinationDirectory + "/"+ item;
+	PathCreateLeadingDirectories(PathGetLeadingDirectories(destinationItem));
+
+	if PathIsDirectory(sourceItem) {
+		return PathCreateDirectory(destinationItem);
+	} else {
+		return FileCopy(sourceItem, destinationItem);
+	}
+}
+
+err[void] PathCopyAllInto(str sourceDirectory, str[] items, str destinationDirectory) {
+	for int i = 0; i < items:len(); i += 1 {
+		reterr PathCopyInto(sourceDirectory, items[i], destinationDirectory);
+	}
+
+	return #success;
+}
+
+err[void] PathCopyFilteredInto(str sourceDirectory, str[] filter, int filterWildcard, str destinationDirectory) {
+	err[str[]] e = DirectoryEnumerateFiltered(sourceDirectory, filter, filterWildcard, false);
+	reterr e;
+	return PathCopyAllInto(sourceDirectory, e:assert(), destinationDirectory);
+}
+
+bool PathMatchesFilter(str path, str[] filterComponents, int _filterWildcard) {
+	str[] pathComponents = StringSplitByCharacter(path, "/", false);
+	int filterWildcard = _filterWildcard;
+
+	if filterWildcard == -1 { 
+		filterWildcard = pathComponents:len(); 
+	}
+
+	if filterComponents:len() > pathComponents:len() { 
+		return false; 
+	}
+
+	for int i = 0; i < filterComponents:len(); i += 1 {
+		str filterComponent = filterComponents[i];
+		str pathComponent;
+		int wildcard = filterComponent:len();
+
+		if i < filterWildcard { 
+			pathComponent = pathComponents[i]; 
+		} else { 
+			pathComponent = pathComponents[pathComponents:len() - filterComponents:len() + i]; 
+		}
+
+		for int j = 0; j < filterComponent:len(); j += 1 { 
+			if filterComponent[j] == "*" { 
+				wildcard = j; 
+
+				if pathComponent:len() < filterComponent:len() - 1 {
+					return false;
+				}
+			} 
+		}
+
+		for int j = 0; j < filterComponent:len(); j += 1 {
+			if j < wildcard {
+				if filterComponent[j] != pathComponent[j] { return false; }
+			} else if j > wildcard {
+				if filterComponent[j] != pathComponent[pathComponent:len() - filterComponent:len() + j] { return false; }
+			}
+		}
+	}
+
+	return true;
+}
+
+str PathGetLeadingDirectories(str path) {
+	for int i = path:len() - 1; i >= 0; i -= 1 {
+		if path[i] == "/" {
+			return StringSlice(path, 0, i);
+		}
+	}
+
+	return "";
+}
+
+err[void] PathCreateLeadingDirectories(str path) {
+	for int i = 0; i < path:len(); i += 1 {
+		if path[i] == "/" {
+			PathCreateDirectory(StringSlice(path, 0, i));
+		}
+	}
+
+	return PathCreateDirectory(path);
+}
+
+// Persistent variables:
+
+bool PersistRead(str path) #extcall;
+
+// Command line:
+
+str ConsoleGetLine() #extcall;
+void ConsoleWriteStdout(str x) #extcall;
+void ConsoleWriteStderr(str x) #extcall;
+err[str] SystemGetEnvironmentVariable(str name) #extcall;
+err[void] SystemSetEnvironmentVariable(str name, str value) #extcall;
+bool SystemShellExecute(str x) #extcall; // Returns true on success.
+bool SystemShellExecuteWithWorkingDirectory(str wd, str x) #extcall; // Returns true on success.
+str SystemShellEvaluate(str x) #extcall; // Captures stdout.
+void SystemShellEnableLogging(bool x) #extcall;
+
+// Integer mathematics:
+
+int IntegerModulo(int x, int y) { assert y >= 1; int d = x / y; int r = x - d * y; if r >= 0 { return r; } else { return r + y; } }
+int IntegerAbsolute(int x) { if x < 0 { return -x; } else { return x; } }
+int IntegerMaximum(int a, int b) { if a < b { return b; } else { return a; } }
+int IntegerMinimum(int a, int b) { if a > b { return b; } else { return a; } }
+int IntegerClamp(int x, int min, int max) { assert min <= max; if x > max { return max; } else if x < min { return min; } else { return x; } }
+
+int IntegerCountLeastSignificantZeroBits(int x) {
+	int count = 0;
+	while count != 64 && ((x & (1 << count)) == 0) { count += 1; }
+	return count;
+}
+
+int IntegerCountLeastSignificantOneBits(int x) {
+	int count = 0;
+	while count != 64 && ((x & (1 << count)) != 0) { count += 1; }
+	return count;
+}
+
+int IntegerCountMostSignificantZeroBits(int x) {
+	int count = 0;
+	while count != 64 && ((x & (1 << (63 - count))) == 0) { count += 1; }
+	return count;
+}
+
+int IntegerCountMostSignificantOneBits(int x) {
+	int count = 0;
+	while count != 64 && ((x & (1 << (63 - count))) != 0) { count += 1; }
+	return count;
+}
+
+int IntegerCountOneBits(int x) {
+	int count = 0;
+	for int i = 0; i < 64; i += 1 {
+		if (x & (1 << i)) != 0 { count += 1; }
+	}
+	return count;
+}
+
+int IntegerGCD(int _a, int _b) {
+	int a = _a;
+	int b = _b;
+	assert a != 0 || b != 0;
+	if a < 0 a = -a;
+	if b < 0 b = -b;
+	while true {
+		if a < b { int t = a; a = b; b = t; }
+		if b == 0 { return a; }
+		if b == 1 { return 1; }
+		a = IntegerModulo(a, b);
+	}
+}
+
+int IntegerLCM(int a, int b) { return IntegerAbsolute(a * b / IntegerGCD(a, b)); }
+
+tuple[int, int, int] IntegerExtendedEuclidean(int _a, int _b) {
+	assert _a != 0 || _b != 0;
+	int ma = 1; int a = _a; int mb = 1; int b = _b;
+	if a < 0 { a = -a; ma = -ma; }
+	if b < 0 { b = -b; mb = -mb; }
+	bool swap = false;
+	if a < b { int t = a; a = b; b = t; t = ma; ma = mb; mb = t; swap = true; }
+	int gcd; int ca; int cb;
+	if b == 0 { gcd = a; ca = 1; cb = 0; } 
+	else if b == 1 { gcd = 1; ca = 0; cb = 1; } 
+	else { int q = a / b; int r = a - q * b; gcd, ca, cb = IntegerExtendedEuclidean(r, b); cb -= ca * q; }
+	if swap { return gcd, cb * mb, ca * ma; } 
+	else { return gcd, ca * ma, cb * mb; }
+}
+
+tuple[int, int] IntegerCRT(int[] r, int[] m) {
+	assert r:len() == m:len() && r:len() != 0;
+	int M = 1;
+	int x = 0;
+	for int mi in m { assert mi >= 1; M *= mi; }
+
+	for int i = 0; i < r:len(); i += 1 {
+		int mi = m[i];
+		int gcd, int ca, int cb = IntegerExtendedEuclidean(IntegerModulo(M / mi, mi), mi);
+		assert gcd == 1;
+		x += r[i] * ca * M / mi;
+	}
+
+	return x, M;
+}
+
+int[] IntegerPrimeFactorization(int _x) {
+	int x = _x;
+	assert x != 0;
+	int[] r = [];
+	if x < 0 { x = -x; r:add(-1); }
+	int p = 2;
+	while x != 1 {
+		if IntegerModulo(x, p) == 0 {
+			x /= p;
+			r:add(p);
+		} else {
+			p += 1;
+		}
+	}
+	return r;
+}
+
+// Floating point mathematics.
+
+float MathLinearRemap(float x, float fromStart, float fromEnd, float toStart, float toEnd) { return (x - fromStart) / (fromEnd - fromStart) * (toEnd - toStart) + toStart; }
+float MathSign(float x) { return 0.0 if x == 0.0 else 1.0 if x > 0.0 else -1.0; }
+float FloatAbsolute(float x) { return x if x >= 0.0 else -x; }
+float FloatMaximum(float x, float y) { return x if x >= y else y; }
+float FloatMinimum(float x, float y) { return x if x <= y else y; }
+float FloatClamp(float x, float min, float max) { assert min <= max; return min if x <= min else max if x >= max else x; }
+float FloatClamp01(float x) { return 0.0 if x <= 0.0 else 1.0 if x >= 1.0 else x; }
+float RandomFloat(float min, float max) { assert min <= max; return (RandomInt(0, 1000000000):float() / 1000000000.0) * (max - min) + min; }
+float RandomFloat01() { return RandomFloat(0.0, 1.0); }
+
+// Permutations.
+
+int[] PermutationFirst(int n) { int[] p = new int[]; for int i = 0; i < n; i += 1 { p:add(i); } return p; }
+
+bool PermutationIterate(int[] p) {
+	int lvi = -1;
+	int xiForLvi;
+	int yiForLvi;
+	for int xi = 0; xi < p:len(); xi += 1 {
+		int i = p[xi];
+		bool odd = false;
+		for int j = 0; j < p:len(); j += 1 {
+			for int k = 0; k < j; k += 1 {
+				if p[j] < i && p[k] < i && p[j] < p[k] {
+					odd = !odd;
+				}
+			}
+		}
+		int yi = xi - 1;
+		if odd yi += 2;
+		bool valid = yi >= 0 && yi < p:len() && p[yi] < i;
+		if valid && i > lvi {
+			lvi = i;
+			xiForLvi = xi;
+			yiForLvi = yi;
+		}
+	}
+	if lvi == -1 {
+		return false;
+	} else {
+		int swap = p[xiForLvi];
+		p[xiForLvi] = p[yiForLvi];
+		p[yiForLvi] = swap;
+		return true;
+	}
+}
+
+// UTF-8.
+
+int _StringUTF8CodepointLength(int c) {
+	return 1 if (c & 0x80) == 0x00 else 
+	       2 if (c & 0xE0) == 0xC0 else 
+	       3 if (c & 0xF0) == 0xE0 else 
+	       4 if (c & 0xF8) == 0xF0 else 0;
+}
+
+int StringUTF8Advance(str x, int i) {
+	if i == -1 { return -1; }
+	int c0 = CharacterToByte(x[i + 0]);
+	int length = _StringUTF8CodepointLength(c0);
+	if length == 0 || i + length > x:len() { return -1; }
+	return i + length;
+}
+
+int StringUTF8Retreat(str x, int i) {
+	if i == -1 { return -1; }
+	assert i >= 1 && i <= x:len();
+	int j = i;
+	while j >= 1 {
+		j -= 1;
+		int k = CharacterToByte(x[j]);
+		if (k & 0xC0) != 0x80 { return j if j + _StringUTF8CodepointLength(k) == i else -1; }
+	}
+	return -1;
+}
+
+int StringUTF8Count(str x) {
+	int i = 0;
+	int count = 0;
+	
+	while i != -1 && i != x:len() { 
+		i = StringUTF8Advance(x, i); 
+		count += 1; 
+	}
+	return count if i != -1 else -1;
+}
+
+int StringUTF8Decode(str x, int i) {
+	if i == -1 { return 0xFFFD; }
+	int c0 = CharacterToByte(x[i + 0]);
+	int length = _StringUTF8CodepointLength(c0);
+	if length == 0 || i + length > x:len() { return 0xFFFD; }
+	if length == 1 { return c0; }
+	int c1 = CharacterToByte(x[i + 1]);
+	if (c1 & 0xC0) != 0x80 { return 0xFFFD; }
+	if length == 2 { return ((c0 & 0x1F) << 6) | (c1 & 0x3F); }
+	int c2 = CharacterToByte(x[i + 2]);
+	if (c2 & 0xC0) != 0x80 { return 0xFFFD; }
+	if length == 3 { return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F); }
+	int c3 = CharacterToByte(x[i + 3]);
+	if (c3 & 0xC0) != 0x80 { return 0xFFFD; }
+	if length == 4 { return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F); }
+	assert false;
+}
+
+str StringUTF8Encode(int value) {
+	if value < 0x80 {
+		return StringFromByte(value);
+	} else if value < 0x800 {
+		return StringFromByte(0xC0 | ((value >> 6) & 0x1F)) + StringFromByte(0x80 | (value & 0x3F));
+	} else if value < 0x10000 {
+		return StringFromByte(0xE0 | ((value >> 12) & 0x0F)) + StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));
+	} else if value < 0x200000 {
+		return StringFromByte(0xF0 | (value >> 18)) + StringFromByte(0x80 | ((value >> 12) & 0x3F)) 
+			+ StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));
+	} else {
+		return StringUTF8Encode(0xFFFD);
+	}
+}
