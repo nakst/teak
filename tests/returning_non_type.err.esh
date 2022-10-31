@@ -1,0 +1,7 @@
+
+Log Test() {
+	return 0;
+}
+
+void Start() {
+}

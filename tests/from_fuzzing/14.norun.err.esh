@@ -1,0 +1,3 @@
+ Log Start() {
+	Log("Hello, world!");
+}

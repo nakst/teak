@@ -8,8 +8,9 @@ void RunTests(str executable) {
 	int success = 0;
 	int total = 0;
 
-	for str file in DirectoryEnumerate("tests"):assert() {
+	for str file in DirectoryEnumerateRecursively("tests"):assert() {
 		bool expected;
+		str noRun = "--output-overview" if StringContains(file, ".norun") else "";
 
 		if StringEndsWith(file, ".err.esh") {
 			FileAppend("tests_log.txt", "!! expecting error from '%file%'...\n");
@@ -21,7 +22,7 @@ void RunTests(str executable) {
 			continue;
 		}
 
-		if SystemShellExecute("%executable% --want-completion-confirmation tests/%file% 2>> tests_log.txt") == expected
+		if SystemShellExecute("%executable% --want-completion-confirmation %noRun% tests/%file% 2>> tests_log.txt") == expected
 				&& PathDelete("completion_confirmation.txt"):success() { 
 			success += 1; 
 		} else { 

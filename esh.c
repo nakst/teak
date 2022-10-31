@@ -1436,7 +1436,11 @@ Token TokenNext(Tokenizer *tokenizer) {
 			
 			for (uintptr_t i = tokenizer->position; true; i++) {
 				if (inInterpolation) {
-					if (tokenizer->input[i] == '%') {
+					if (i == tokenizer->inputBytes) {
+						PrintError(tokenizer, "String does not end before the end of the line (in interpolation).\n");
+						tokenizer->error = true;
+						break;
+					} else if (tokenizer->input[i] == '%') {
 						inInterpolation = false;
 					} else if (tokenizer->input[i] == '"') {
 						PrintError(tokenizer, "Strings are not allowed within a string interpolation expression.\n");
@@ -1778,6 +1782,7 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 	} else if (node->token.type == T_LOGICAL_NOT || node->token.type == T_MINUS || node->token.type == T_BITWISE_NOT) {
 		node->type = node->token.type == T_MINUS ? T_NEGATE : node->token.type;
 		node->firstChild = ParseExpression(tokenizer, false, TokenLookupPrecedence(node->type));
+		if (!node->firstChild) return NULL;
 	} else if (node->token.type == T_LEFT_ROUND) {
 		node = ParseExpression(tokenizer, false, 0);
 		if (!node) return NULL;
@@ -3199,10 +3204,16 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 		if (type->type == T_IDENTIFIER) {
 			Node *lookup = ScopeLookup(tokenizer, type, false);
 			if (!lookup) return false;
-			Node *copy = (Node *) AllocateFixed(sizeof(Node));
-			*copy = *lookup;
-			copy->sibling = NULL;
-			node->firstChild->sibling = copy;
+
+			if (lookup->type == T_FUNCTYPE || lookup->type == T_STRUCT || lookup->type == T_INTTYPE || lookup->type == T_HANDLETYPE) {
+				Node *copy = (Node *) AllocateFixed(sizeof(Node));
+				*copy = *lookup;
+				copy->sibling = NULL;
+				node->firstChild->sibling = copy;
+			} else {
+				PrintError2(tokenizer, type, "The identifier did not resolve to a type.\n");
+				return false;
+			}
 		}
 	}
 
@@ -3255,7 +3266,7 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 					MemoryCopy(node->expressionType, lookup, sizeof(Node));
 				}
 			} else {
-				PrintError2(tokenizer, lookup, "The identifier did not resolve to a type.\n");
+				PrintError2(tokenizer, node, "The identifier did not resolve to a type.\n");
 				return false;
 			}
 
@@ -3524,6 +3535,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			if (!ASTSetTypes(tokenizer, child)) return false;
 			child = child->sibling;
 		}
+	} else if (node->type == T_FUNCPTR) {
+		return true;
 	} else {
 		Node *child = node->firstChild;
 
@@ -3540,7 +3553,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			|| node->type == T_ARGUMENTS || node->type == T_ARGUMENT
 			|| node->type == T_STRUCT || node->type == T_FUNCTYPE || node->type == T_IMPORT 
 			|| node->type == T_IMPORT_PATH || node->type == T_INTTYPE || node->type == T_HANDLETYPE
-			|| node->type == T_FUNCPTR || node->type == T_FUNCBODY || node->type == T_FUNCTION
+			|| node->type == T_FUNCBODY || node->type == T_FUNCTION
 			|| node->type == T_REPL_RESULT || node->type == T_DECLARE_GROUP || node->type == T_CAST_TYPE_WRAPPER
 			|| node->type == T_BREAK || node->type == T_CONTINUE) {
 	} else if (node->type == T_NUMERIC_LITERAL) {
@@ -5603,6 +5616,7 @@ void ScriptHeapEntryToString(ExecutionContext *context, HeapEntry *entry, const 
 }
 
 int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *context) {
+#ifndef NO_SCRIPT_EXECUTE
 	// TODO Things to verify if loading untrusted scripts -- is this a feature we will need?
 	// 	Checking we don't go off the end of the function body.
 	// 	Checking that this is actually a valid function body pointer.
@@ -7054,6 +7068,12 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 	}
 
 	return true;
+#else
+#warning "Compiling without the ability to execute scripts."
+	(void) instructionPointer;
+	(void) context;
+	return 0;
+#endif
 }
 
 bool ScriptParseOptions(ExecutionContext *context) {
@@ -7358,6 +7378,7 @@ bool ScriptLoad(Tokenizer tokenizer, ExecutionContext *context, ImportData *impo
 }
 
 int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
+#ifndef NO_SCRIPT_EXECUTE
 	bool optionMatchingError = false;
 
 	for (uintptr_t i = 0; i < optionCount; i++) {
@@ -7434,6 +7455,11 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 	}
 
 	return 0;
+#else
+	(void) mainModule;
+	(void) context;
+	return 0;
+#endif
 }
 
 void ScriptFreeCoroutine(CoroutineState *c) {
