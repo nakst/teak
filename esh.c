@@ -4,9 +4,8 @@
 // 	- Paths to import modules should be relative to the file that imports them.
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
-// 	- struct inheritance.
 // 	- Multiline string literals.
-// 	- Exponent notation in numeric literals. Binary and hexadecimal literals.
+// 	- Exponent notation in numeric literals.
 
 // TODO Syntax sugar: (ideas)
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
@@ -22,6 +21,7 @@
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
 
 // TODO Other missing features:
+// 	- struct inheritance.
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- :ignore(string, valueToUse) for error types.
@@ -1027,10 +1027,10 @@ char baseModuleSource[] = {
 	// UTF-8.
 
 	"int _StringUTF8CodepointLength(int c) {\n"
-	"	return 1 if (c & 128) ==   0 else \n"
-	"	       2 if (c & 224) == 192 else \n"
-	"	       3 if (c & 240) == 224 else \n"
-	"	       4 if (c & 248) == 240 else 0;\n"
+	"	return 1 if (c & 0x80) == 0x00 else \n"
+	"	       2 if (c & 0xE0) == 0xC0 else \n"
+	"	       3 if (c & 0xF0) == 0xE0 else \n"
+	"	       4 if (c & 0xF8) == 0xF0 else 0;\n"
 	"}\n"
 	"int StringUTF8Advance(str x, int i) {\n"
 	"	if i == -1 { return -1; }\n"
@@ -1046,7 +1046,7 @@ char baseModuleSource[] = {
 	"	while j >= 1 {\n"
 	"		j -= 1;\n"
 	"		int k = CharacterToByte(x[j]);\n"
-	"		if (k & 192) != 128 { return j if j + _StringUTF8CodepointLength(k) == i else -1; }\n"
+	"		if (k & 0xC0) != 0x80 { return j if j + _StringUTF8CodepointLength(k) == i else -1; }\n"
 	"	}\n"
 	"	return -1;\n"
 	"}\n"
@@ -1061,34 +1061,34 @@ char baseModuleSource[] = {
 	"	return count if i != -1 else -1;\n"
 	"}\n"
 	"int StringUTF8Decode(str x, int i) {\n"
-	"	if i == -1 { return 65533; }\n"
+	"	if i == -1 { return 0xFFFD; }\n"
 	"	int c0 = CharacterToByte(x[i + 0]);\n"
 	"	int length = _StringUTF8CodepointLength(c0);\n"
-	"	if length == 0 || i + length > x:len() { return 65533; }\n"
+	"	if length == 0 || i + length > x:len() { return 0xFFFD; }\n"
 	"	if length == 1 { return c0; }\n"
 	"	int c1 = CharacterToByte(x[i + 1]);\n"
-	"	if (c1 & 192) != 128 { return 65533; }\n"
-	"	if length == 2 { return ((c0 & 31) << 6) | (c1 & 63); }\n"
+	"	if (c1 & 0xC0) != 0x80 { return 0xFFFD; }\n"
+	"	if length == 2 { return ((c0 & 0x1F) << 6) | (c1 & 0x3F); }\n"
 	"	int c2 = CharacterToByte(x[i + 2]);\n"
-	"	if (c2 & 192) != 128 { return 65533; }\n"
-	"	if length == 3 { return ((c0 & 15) << 12) | ((c1 & 63) << 6) | (c2 & 63); }\n"
+	"	if (c2 & 0xC0) != 0x80 { return 0xFFFD; }\n"
+	"	if length == 3 { return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F); }\n"
 	"	int c3 = CharacterToByte(x[i + 3]);\n"
-	"	if (c3 & 192) != 128 { return 65533; }\n"
-	"	if length == 4 { return ((c0 & 7) << 18) | ((c1 & 63) << 12) | ((c2 & 63) << 6) | (c3 & 63); }\n"
+	"	if (c3 & 0xC0) != 0x80 { return 0xFFFD; }\n"
+	"	if length == 4 { return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F); }\n"
 	"	assert false;\n"
 	"}\n"
 	"str StringUTF8Encode(int value) {\n"
-	"	if value < 128 {\n"
+	"	if value < 0x80 {\n"
 	"		return StringFromByte(value);\n"
-	"	} else if value < 2048 {\n"
-	"		return StringFromByte(192 | ((value >> 6) & 31)) + StringFromByte(128 | (value & 63));\n"
-	"	} else if value < 65536 {\n"
-	"		return StringFromByte(224 | ((value >> 12) & 15)) + StringFromByte(128 | ((value >> 6) & 63)) + StringFromByte(128 | (value & 63));\n"
-	"	} else if value < 2097152 {\n"
-	"		return StringFromByte(240 | (value >> 18)) + StringFromByte(128 | ((value >> 12) & 63)) \n"
-	"			+ StringFromByte(128 | ((value >> 6) & 63)) + StringFromByte(128 | (value & 63));\n"
+	"	} else if value < 0x800 {\n"
+	"		return StringFromByte(0xC0 | ((value >> 6) & 0x1F)) + StringFromByte(0x80 | (value & 0x3F));\n"
+	"	} else if value < 0x10000 {\n"
+	"		return StringFromByte(0xE0 | ((value >> 12) & 0x0F)) + StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));\n"
+	"	} else if value < 0x200000 {\n"
+	"		return StringFromByte(0xF0 | (value >> 18)) + StringFromByte(0x80 | ((value >> 12) & 0x3F)) \n"
+	"			+ StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));\n"
 	"	} else {\n"
-	"		return StringUTF8Encode(65533);\n"
+	"		return StringUTF8Encode(0xFFFD);\n"
 	"	}\n"
 	"}\n"
 
@@ -1391,7 +1391,7 @@ Token TokenNext(Tokenizer *tokenizer) {
 			token.type = T_NUMERIC_LITERAL;
 			token.text = tokenizer->input + tokenizer->position;
 
-			while ((c >= '0' && c <= '9') || c == '.' || c == '_') {
+			while (HexIsDigit(c) || c == '.' || c == '_' || c == 'x') {
 				tokenizer->position++;
 				token.textBytes++;
 				if (tokenizer->position == tokenizer->inputBytes) break;
@@ -3297,10 +3297,17 @@ Value ASTNumericLiteralToValue(Node *node) {
 	if (node->expressionType == &globalExpressionTypeInt) {
 		v.i = 0;
 
-		for (uintptr_t i = 0; i < node->token.textBytes; i++) {
+		int base = 10;
+
+		if (node->token.textBytes > 2 && node->token.text[0] == '0') {
+			if (node->token.text[1] == 'x') base = 16;
+			if (node->token.text[1] == 'b') base = 2;
+		}
+
+		for (uintptr_t i = base == 10 ? 0 : 2; i < node->token.textBytes; i++) {
 			if (node->token.text[i] == '_') continue;
-			v.i *= 10;
-			v.i += node->token.text[i] - '0';
+			v.i *= base;
+			v.i += HexValueOf(node->token.text[i]);
 		}
 	} else if (node->expressionType == &globalExpressionTypeFloat) {
 		bool dot = false;
@@ -3511,11 +3518,28 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			|| node->type == T_REPL_RESULT || node->type == T_DECLARE_GROUP || node->type == T_CAST_TYPE_WRAPPER
 			|| node->type == T_BREAK || node->type == T_CONTINUE) {
 	} else if (node->type == T_NUMERIC_LITERAL) {
+		int base = 10;
+
+		if (node->token.textBytes > 2 && node->token.text[0] == '0') {
+			if (node->token.text[1] == 'x') base = 16;
+			if (node->token.text[1] == 'b') base = 2;
+		}
+
 		size_t dotCount = 0;
 
-		for (uintptr_t i = 0; i < node->token.textBytes; i++) {
+		for (uintptr_t i = base == 10 ? 0 : 2; i < node->token.textBytes; i++) {
 			if (node->token.text[i] == '.') {
 				dotCount++;
+			} else if (node->token.text[i] == 'x') {
+				PrintError2(tokenizer, node, "Invalid number. \"x\" was unexpected.\n");
+				return false;
+			} else if (base != 16 && ((node->token.text[i] >= 'a' && node->token.text[i] <= 'f')
+						|| (node->token.text[i] >= 'A' && node->token.text[i] <= 'F'))) {
+				PrintError2(tokenizer, node, "The digits ABCDEF cannot be used with the hexadecimal prefix, \"0x\".\n");
+				return false;
+			} else if (base == 2 && node->token.text[i] != '0' && node->token.text[i] != '1') {
+				PrintError2(tokenizer, node, "In binary literals, only the digits 0 and 1 can be used.\n");
+				return false;
 			}
 		}
 
@@ -3523,6 +3547,11 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			node->expressionType = &globalExpressionTypeInt;
 		} else if (dotCount == 1) {
 			node->expressionType = &globalExpressionTypeFloat;
+
+			if (base != 10) {
+				PrintError2(tokenizer, node, "Floats literals cannot have the \"0x\" or \"0b\" prefix.\n");
+				return false;
+			}
 		} else {
 			PrintError2(tokenizer, node, "Invalid number. There should either be one decimal place (for a float), or none (for an integer).\n");
 			return false;
@@ -5899,11 +5928,11 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			context->c->stackIsManaged[context->c->stackPointer - 1] = isManaged;
 		} else if (command == T_BIT_SHIFT_LEFT) {
 			if (context->c->stackPointer < 2) return -1;
-			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].i << context->c->stack[context->c->stackPointer - 1].i;
+			context->c->stack[context->c->stackPointer - 2].i = (uint64_t) context->c->stack[context->c->stackPointer - 2].i << (uint64_t) context->c->stack[context->c->stackPointer - 1].i;
 			context->c->stackPointer--;
 		} else if (command == T_BIT_SHIFT_RIGHT) {
 			if (context->c->stackPointer < 2) return -1;
-			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].i >> context->c->stack[context->c->stackPointer - 1].i;
+			context->c->stack[context->c->stackPointer - 2].i = (uint64_t) context->c->stack[context->c->stackPointer - 2].i >> (uint64_t) context->c->stack[context->c->stackPointer - 1].i;
 			context->c->stackPointer--;
 		} else if (command == T_BITWISE_OR) {
 			if (context->c->stackPointer < 2) return -1;
