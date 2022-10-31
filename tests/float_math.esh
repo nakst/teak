@@ -1,0 +1,20 @@
+void Start() {
+	assert MathLinearRemap(0.5, -1.0, 1.0, 1.0, 5.0) == 4.0;
+	assert MathSign(0.0) == 0.0;
+	assert MathSign(5.0) == 1.0;
+	assert MathSign(-5.0) == -1.0;
+	assert FloatAbsolute(-3.0) == 3.0;
+	assert FloatAbsolute(0.0) == 0.0;
+	assert FloatAbsolute(3.0) == 3.0;
+	assert FloatMaximum(3.0, -2.0) == 3.0;
+	assert FloatMaximum(-3.0, -2.0) == -2.0;
+	assert FloatMinimum(3.0, -2.0) == -2.0;
+	assert FloatMinimum(-3.0, -2.0) == -3.0;
+	assert FloatMinimum(-3.0, -3.0) == -3.0;
+	assert FloatClamp(-1.0, -0.5, 0.5) == -0.5;
+	assert FloatClamp(0.0, -0.5, 0.5) == 0.0;
+	assert FloatClamp(1.0, -0.5, 0.5) == 0.5;
+	assert FloatClamp01(-2.0) == 0.0;
+	assert FloatClamp01(0.5) == 0.5;
+	assert FloatClamp01(2.0) == 1.0;
+}

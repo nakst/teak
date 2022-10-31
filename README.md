@@ -489,8 +489,46 @@ tuple[int, int, int] IntegerExtendedEuclidean(int a, int b);
 // Returns x, M. The solutions are of the form x + k * M for all integers k.
 tuple[int, int] IntegerCRT(int[] r, int[] m);
 
+// Get a list of integers that multiply to give x.
+// Each integer in the list is either -1 or a prime number >= 2.
+// If -1 occurs in the list, it will be the first element.
+int[] IntegerPrimeFactorization(int x);
+
 // Get a randomized integer between min and max (inclusive).
 int RandomInt(int min, int max);
+```
+
+### Floating point mathematics
+
+```
+// Apply x to the unique linear map that sends fromStart to toStart and fromEnd to toEnd.
+float MathLinearRemap(float x, float fromStart, float fromEnd, float toStart, float toEnd);
+
+// Return the sign of x.
+// That is, 1.0 for positive x, -1.0 for negative x, 0.0 for 0.0.
+float MathSign(float x);
+
+// Return the absolute value of x.
+float FloatAbsolute(float x);
+
+// Return the larger (closer to plus infinity) value of a and b.
+float FloatMaximum(float x, float y);
+
+// Return the smaller (closer to minus infinity) value of a and b.
+float FloatMinimum(float x, float y);
+
+// Clamp x between min and max.
+// min must be less than or equal to max.
+float FloatClamp(float x, float min, float max);
+
+// Clamp x between 0.0 and 1.0.
+float FloatClamp01(float x);
+
+// Get a randomized float between min and max (inclusive).
+float RandomFloat(float min, float max);
+
+// Get a randomized float between 0.0 and 1.0 (inclusive).
+float RandomFloat01();
 ```
 
 ### Permutations

@@ -1,3 +1,16 @@
+void CheckPrimeFactorization(int x) {
+	if x == 0 { return; }
+	int[] p = IntegerPrimeFactorization(x);
+	int y = 1;
+	for int q in p { 
+		for int k = 2; k < q; k += 1 {
+			assert IntegerModulo(q, k) != 0;
+		}
+		y *= q; 
+	}
+	assert x == y;
+}
+
 void CheckExtendedEuclideanAlgorithm(int a, int b) {
 	int gcd, int ca, int cb = IntegerExtendedEuclidean(a, b);
 	assert gcd == IntegerGCD(a, b);
@@ -40,4 +53,5 @@ void Start() {
 	for int i = -20; i <= 20; i += 1 { for int j = -20; j <= 20; j += 1 { if i != 0 || j != 0 { CheckExtendedEuclideanAlgorithm(i, j); } } }
 	for int i in [-2, -1, 0, 1, 2] { for int j in [-2, -1, 0, 1, 2] { for int k in [-2, -1, 0, 1, 2] { CheckCRT([i, j, k], [7, 11, 13]); } } }
 	for int i in [-2, -1, 0, 1, 2] { for int j in [-2, -1, 0, 1, 2] { for int k in [-2, -1, 0, 1, 2] { CheckCRT([i, j, k], [7, 12, 13]); } } }
+	for int i = -20; i <= 20; i += 1 { CheckPrimeFactorization(i); }
 }

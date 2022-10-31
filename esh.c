@@ -27,17 +27,14 @@
 // 	- :ignore(string, valueToUse) for error types.
 
 // TODO Standard library:
-// 	- Integers: IntegerPrimeFactorization
 // 	- Floats: 
-// 		- FloatAbsolute, FloatMaximum, FloatMinimum, FloatClamp
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
 // 		- MathRound, MathCeil, MathFloor
 // 		- MathPow, MathModulo, MathExp, MathLog, MathExp2, MathLog2, MathSqrt
 // 		- MathSin, MathCos, MathTan, MathArcSin, MathArcCos, MathArcTan
 // 		- MathSinh, MathCosh, MathTanh, MathArcSinh, MathArcCosh, MathArcTanh
-// 		- MathNorm, MathArcTan2, MathLinearRemap, MathSign
+// 		- MathNorm, MathArcTan2
 // 		- MathIsInfinite, MathIsNaN
-// 		- RandomFloat
 // 	- Lists: :sort, :clone, :clone_all
 // 	- Strings:
 // 		- StringParseAsFloat, StringParseAsInteger
@@ -500,6 +497,7 @@ ImportData *importedModules;
 ImportData **importedModulesLink = &importedModules;
 bool noBaseModule; // Useful for debugging the parser.
 bool outputOverview;
+struct RNGState { uint64_t s[4]; } rngState;
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -987,6 +985,34 @@ char baseModuleSource[] = {
 	"	}\n"
 	"	return x, M;\n"
 	"}\n"
+	"int[] IntegerPrimeFactorization(int _x) {\n"
+	"	int x = _x;\n"
+	"	assert x != 0;\n"
+	"	int[] r = [];\n"
+	"	if x < 0 { x = -x; r:add(-1); }\n"
+	"	int p = 2;\n"
+	"	while x != 1 {\n"
+	"		if IntegerModulo(x, p) == 0 {\n"
+	"			x /= p;\n"
+	"			r:add(p);\n"
+	"		} else {\n"
+	"			p += 1;\n"
+	"		}\n"
+	"	}\n"
+	"	return r;\n"
+	"}\n"
+
+	// Floating point mathematics.
+
+	"float MathLinearRemap(float x, float fromStart, float fromEnd, float toStart, float toEnd) { return (x - fromStart) / (fromEnd - fromStart) * (toEnd - toStart) + toStart; }\n"
+	"float MathSign(float x) { return 0.0 if x == 0.0 else 1.0 if x > 0.0 else -1.0; }\n"
+	"float FloatAbsolute(float x) { return x if x >= 0.0 else -x; }\n"
+	"float FloatMaximum(float x, float y) { return x if x >= y else y; }\n"
+	"float FloatMinimum(float x, float y) { return x if x <= y else y; }\n"
+	"float FloatClamp(float x, float min, float max) { assert min <= max; return min if x <= min else max if x >= max else x; }\n"
+	"float FloatClamp01(float x) { return 0.0 if x <= 0.0 else 1.0 if x >= 1.0 else x; }\n"
+	"float RandomFloat(float min, float max) { assert min <= max; return (RandomInt(0, 1000000000):float() / 1000000000.0) * (max - min) + min; }\n"
+	"float RandomFloat01() { return RandomFloat(0.0, 1.0); }\n"
 
 	// Permutations.
 	
@@ -7603,6 +7629,44 @@ int ExternalStringFromByte(ExecutionContext *context, Value *returnValue) {
 	return EXTCALL_RETURN_MANAGED;
 }
 
+void RandomSeed(uint64_t x) {
+	rngState.s[0] = rngState.s[1] = rngState.s[2] = rngState.s[3] = 0;
+
+	for (uintptr_t i = 0; i < 4; i++) {
+		x += 0x9E3779B97F4A7C15;
+
+		uint64_t result = x;
+		result = (result ^ (result >> 30)) * 0xBF58476D1CE4E5B9;
+		result = (result ^ (result >> 27)) * 0x94D049BB133111EB;
+		rngState.s[i] = result ^ (result >> 31);
+	}
+}
+
+uint64_t RandomU64() {
+	uint64_t result = rngState.s[1] * 5;
+	result = ((result << 7) | (result >> 57)) * 9;
+
+	uint64_t t = rngState.s[1] << 17;
+	rngState.s[2] ^= rngState.s[0];
+	rngState.s[3] ^= rngState.s[1];
+	rngState.s[1] ^= rngState.s[2];
+	rngState.s[0] ^= rngState.s[3];
+	rngState.s[2] ^= t;
+	rngState.s[3] = (rngState.s[3] << 45) | (rngState.s[3] >> 19);
+
+	return result;
+}
+
+int ExternalRandomInt(ExecutionContext *context, Value *returnValue) {
+	if (context->c->stackPointer < 2) return -1;
+	int64_t min = context->c->stack[context->c->stackPointer - 1].i;
+	int64_t max = context->c->stack[context->c->stackPointer - 2].i;
+	if (max < min) { PrintError4(context, 0, "RandomInt() called with maximum limit (%ld) less than the minimum limit (%ld).\n", max, min); return 0; }
+	returnValue->i = (int64_t) (RandomU64() % (uint64_t) (max - min + 1)) + min;
+	context->c->stackPointer -= 2;
+	return EXTCALL_RETURN_UNMANAGED;
+}
+
 // --------------------------------- Platform layer.
 
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
@@ -8471,16 +8535,6 @@ int ExternalSystemGetHostName(ExecutionContext *context, Value *returnValue) {
 	return EXTCALL_RETURN_MANAGED;
 }
 
-int ExternalRandomInt(ExecutionContext *context, Value *returnValue) {
-	if (context->c->stackPointer < 2) return -1;
-	int64_t min = context->c->stack[context->c->stackPointer - 1].i;
-	int64_t max = context->c->stack[context->c->stackPointer - 2].i;
-	if (max < min) { PrintError4(context, 0, "RandomInt() called with maximum limit (%ld) less than the minimum limit (%ld).\n", max, min); return 0; }
-	returnValue->i = rand() % (max - min + 1) + min;
-	context->c->stackPointer -= 2;
-	return EXTCALL_RETURN_UNMANAGED;
-}
-
 void SleepMs(int64_t count) {
 #ifdef _WIN32
 	Sleep(count);
@@ -8896,7 +8950,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	srand(time(NULL));
+	RandomSeed(time(NULL)); // TODO Use nanoseconds!
 #ifndef _WIN32
 	coloredOutput = isatty(STDERR_FILENO);
 #endif
