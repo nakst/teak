@@ -7767,7 +7767,7 @@ void MakeErrorWin32(ExecutionContext *context, Value *returnValue, int error) {
 		returnValue->i = 0;
 	}
 }
-#else
+#endif
 
 void MakeError(ExecutionContext *context, Value *returnValue, int error) {
 	const char *text = NULL;
