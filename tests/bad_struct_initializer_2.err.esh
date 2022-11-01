@@ -1,0 +1,8 @@
+struct V2 {
+	float x;
+	float y;
+};
+
+void Start() {
+	V2 v = [ z = 5 ];
+}

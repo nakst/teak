@@ -249,6 +249,21 @@ void Part3() {
 	v.y = v.x + 5.0;
 	Log("(%v.x%, %v.y%)");
 
+	// Structs can be initialized using the initializer syntax.
+	// Values are evaluated in the order they are given in the initializer.
+	v = [ x = 3.0, y = 4.0 ];
+	// You don't have specify all values.
+	v = [ x = 3.0 ];
+	// In fact, you don't have to specify any.
+	v = [];
+
+	// Note that this syntax can only be used in a few places
+	// such as in assignment, as a return value, or as a function call argument.
+	// For instance, the following
+	// 	float z = [ x = 3.0, y = 4.0 ].x;
+	// won't compile, since the type of the structure is not present
+	// either implicitly or explicitly.
+
 //////////////////////////////// TUPLES ////////////////////////////////
 
 	// Functions can return multiple values via tuples.

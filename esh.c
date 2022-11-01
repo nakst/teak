@@ -7,12 +7,12 @@
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
 // 	- Allow :assert() on err[void].
+// 	- Remove implicitely casting to anytype and instead use ":any()"?
 
 // TODO Syntax sugar: (ideas)
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
 // 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
 // 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
-// 	- Easier way to fill/initialise structs.
 
 // TODO Larger missing features:
 // 	- Importing installed modules from a common location?
@@ -24,7 +24,7 @@
 
 // TODO Other missing features:
 // 	- struct inheritance.
-// 	- Set expectedType for T_RETURN_TUPLE.
+// 	- Set expectedType for T_RETURN_TUPLE, T_OP_<...>, T_MAP_INITIALIZER and T_INITIALIZER_ENTRY.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- :ignore(string, valueToUse) for error types.
 
@@ -91,6 +91,7 @@
 #define T_STRING_LITERAL      (3)
 #define T_NUMERIC_LITERAL     (4)
 
+// Operators.
 #define T_ADD                 (20)
 #define T_MINUS               (21)
 #define T_ASTERISK            (22)
@@ -127,36 +128,40 @@
 #define T_BITWISE_NOT         (53)
 #define T_BITWISE_XOR         (54)
 
-#define T_ROOT                (70)
-#define T_FUNCBODY            (71)
-#define T_ARGUMENTS           (72)
-#define T_ARGUMENT            (73)
-#define T_FUNCTION            (74)
-#define T_BLOCK               (75)
-#define T_VARIABLE            (76)
-#define T_CALL                (77)
-#define T_DECLARE             (78)
-#define T_FUNCPTR             (79)
-#define T_STR_INTERPOLATE     (80)
-#define T_INDEX               (81)
-#define T_LIST                (82)
-#define T_IMPORT_PATH         (83)
-#define T_LIST_LITERAL        (84)
-#define T_REPL_RESULT         (85)
-#define T_RETURN_TUPLE        (86)
-#define T_DECLARE_GROUP       (87)
-#define T_DECL_GROUP_AND_SET  (88)
-#define T_SET_GROUP           (89)
-#define T_FOR_EACH            (90)
-#define T_ERR_CAST            (91)
-#define T_IF_ERR              (92)
-#define T_INTTYPE_CONSTANT    (93)
-#define T_ANYTYPE_CAST        (94)
-#define T_CAST_TYPE_WRAPPER   (95)
-#define T_ZERO                (96)
-#define T_PLACEHOLDER         (97)
-#define T_TERNARY             (98)
+// Parsing nodes only.
+#define T_ROOT                (60)
+#define T_FUNCBODY            (61)
+#define T_ARGUMENTS           (62)
+#define T_ARGUMENT            (63)
+#define T_FUNCTION            (64)
+#define T_BLOCK               (65)
+#define T_VARIABLE            (66)
+#define T_CALL                (67)
+#define T_DECLARE             (68)
+#define T_FUNCPTR             (69)
+#define T_STR_INTERPOLATE     (70)
+#define T_INDEX               (71)
+#define T_LIST                (72)
+#define T_IMPORT_PATH         (73)
+#define T_LIST_INITIALIZER    (74)
+#define T_REPL_RESULT         (75)
+#define T_RETURN_TUPLE        (76)
+#define T_DECLARE_GROUP       (77)
+#define T_DECL_GROUP_AND_SET  (78)
+#define T_SET_GROUP           (79)
+#define T_FOR_EACH            (80)
+#define T_ERR_CAST            (81)
+#define T_IF_ERR              (82)
+#define T_INTTYPE_CONSTANT    (83)
+#define T_ANYTYPE_CAST        (84)
+#define T_CAST_TYPE_WRAPPER   (85)
+#define T_ZERO                (86)
+#define T_PLACEHOLDER         (87)
+#define T_TERNARY             (88)
+#define T_INITIALIZER_ENTRY   (89)
+#define T_MAP_INITIALIZER     (90)
 
+// Instructions only.
 #define T_EXIT_SCOPE          (100)
 #define T_END_FUNCTION        (101)
 #define T_POP                 (102)
@@ -173,6 +178,7 @@
 #define T_LIBCALL             (113)
 #define T_END_CALLBACK        (114)
 
+// Instruction variants.
 #define T_FLOAT_ADD           (120)
 #define T_FLOAT_MINUS         (121)
 #define T_FLOAT_ASTERISK      (122)
@@ -190,6 +196,7 @@
 #define T_EQUALS_LIST         (134)
 #define T_INDEX_LIST          (135)
 
+// :ops.
 #define T_OP_RESIZE           (140)
 #define T_OP_ADD              (141)
 #define T_OP_INSERT           (142)
@@ -217,6 +224,7 @@
 #define T_OP_FLOAT_TRUNCATE   (164)
 #define T_OP_CAST             (165)
 
+// Keywords.
 #define T_IF                  (170)
 #define T_WHILE               (171)
 #define T_FOR                 (172)
@@ -594,6 +602,7 @@ uint8_t TokenLookupPrecedence(uint8_t t) {
 	if (t == T_MINUS_EQUALS)    return 10;
 	if (t == T_ASTERISK_EQUALS) return 10;
 	if (t == T_SLASH_EQUALS)    return 10;
+#define INITIALIZER_PRECENDENCE (11)
 	if (t == T_COMMA)           return 12;
 	if (t == T_IF)              return 13;
 	if (t == T_LOGICAL_OR)      return 14;
@@ -977,6 +986,20 @@ Node *ParseType(Tokenizer *tokenizer, bool maybe, bool allowVoid, bool allowTupl
 			if (token.type == T_ERROR) {
 				return NULL;
 			} else if (token.type == T_LEFT_SQUARE) {
+				if (node->type == T_VOID) {
+					if (!maybe) {
+						PrintError2(tokenizer, node, "\"void\" is not a valid type for storage in a list.\n");
+					}
+
+					return NULL;
+				} else if (node->type == T_TUPLE) {
+					if (!maybe) {
+						PrintError2(tokenizer, node, "\"tuple\" is not a valid type for storage in a list.\n");
+					}
+
+					return NULL;
+				}
+
 				Node *list = (Node *) AllocateFixed(sizeof(Node));
 				list->type = T_LIST;
 				list->token = TokenNext(tokenizer);
@@ -1160,9 +1183,10 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 			if (!node->firstChild->sibling) return NULL;
 		}
 	} else if (node->token.type == T_LEFT_SQUARE) {
-		node->type = T_LIST_LITERAL;
+		node->type = T_LIST_INITIALIZER;
 		Node **link = &node->firstChild;
 		bool needComma = false;
+		int mapLiteral = -1;
 
 		while (true) {
 			Token peek = TokenPeek(tokenizer);
@@ -1176,15 +1200,48 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 
 			if (needComma) {
 				if (peek.type != T_COMMA) {
-					PrintError(tokenizer, "Expected a comma between list literal items.\n");
+					PrintError(tokenizer, "Expected a comma between initializer items.\n");
 					return NULL;
 				} else {
 					TokenNext(tokenizer);
+
+					// Allow trailing commas.
+					if (TokenPeek(tokenizer).type == T_RIGHT_SQUARE) {
+						TokenNext(tokenizer);
+						break;
+					}
 				}
 			}
 
-			Node *item = ParseExpression(tokenizer, false, 0);
+			Node *item = ParseExpression(tokenizer, false, INITIALIZER_PRECENDENCE);
 			if (!item) return NULL;
+
+			if (TokenPeek(tokenizer).type == T_EQUALS) {
+				if (mapLiteral == -1) {
+					mapLiteral = 1;
+					node->type = T_MAP_INITIALIZER;
+				} else if (mapLiteral == 0) {
+					PrintError(tokenizer, "Expected \"<key> = <value>\" in struct/map initializer.\n");
+					return NULL;
+				}
+
+				Node *initializerEntry = (Node *) AllocateFixed(sizeof(Node));
+				initializerEntry->type = T_INITIALIZER_ENTRY;
+				initializerEntry->token = TokenNext(tokenizer);
+				initializerEntry->firstChild = item;
+				item = ParseExpression(tokenizer, false, 0);
+				if (!item) return NULL;
+				initializerEntry->firstChild->sibling = item;
+				item = initializerEntry;
+			} else {
+				if (mapLiteral == -1) {
+					mapLiteral = 0;
+				} else if (mapLiteral == 1) {
+					PrintError(tokenizer, "Expected a comma between list initializer items.\n");
+					return NULL;
+				}
+			}
+
 			*link = item;
 			link = &item->sibling;
 			needComma = true;
@@ -1205,8 +1262,12 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 			return NULL;
 		} else if ((token.type == T_EQUALS || token.type == T_ADD_EQUALS || token.type == T_MINUS_EQUALS 
 					|| token.type == T_ASTERISK_EQUALS || token.type == T_SLASH_EQUALS) && !allowAssignment) {
-			PrintError2(tokenizer, node, "Variable assignment is not allowed within an expression.\n");
-			return NULL;
+			if (TokenLookupPrecedence(token.type) > precedence) {
+				PrintError2(tokenizer, node, "Variable assignment is not allowed within an expression.\n");
+				return NULL;
+			} else {
+				break;
+			}
 		} else if (token.type == T_DOT && TokenLookupPrecedence(token.type) > precedence) {
 			TokenNext(tokenizer);
 			Node *operation = (Node *) AllocateFixed(sizeof(Node));
@@ -2879,8 +2940,14 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
 			Assert(!node->firstChild->sibling);
 		}
-	} else if (node->type == T_LIST_LITERAL) {
+	} else if (node->type == T_LIST_INITIALIZER) {
 		Node *child = node->firstChild;
+
+		if (!child) {
+			if (node->expectedType && node->expectedType->type == T_STRUCT) {
+				node->type = T_MAP_INITIALIZER;
+			}
+		}
 
 		while (child) {
 			if (node->expectedType && node->expectedType->type == T_LIST) {
@@ -2888,6 +2955,27 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			}
 
 			if (!ASTSetTypes(tokenizer, child)) return false;
+			child = child->sibling;
+		}
+	} else if (node->type == T_MAP_INITIALIZER) {
+		Node *child = node->firstChild;
+		bool isStruct = node->expectedType && node->expectedType->type == T_STRUCT;
+
+		while (child) {
+			Assert(child->type == T_INITIALIZER_ENTRY);
+
+			if (isStruct) {
+				if (child->firstChild->type == T_VARIABLE) {
+					child->firstChild->type = T_IDENTIFIER;
+				} else {
+					PrintError2(tokenizer, node, "Keys in a struct initializer must be identifiers.\n");
+					return false;
+				}
+			} else {
+				if (!ASTSetTypes(tokenizer, child->firstChild)) return false;
+			}
+
+			if (!ASTSetTypes(tokenizer, child->firstChild->sibling)) return false;
 			child = child->sibling;
 		}
 	} else if (node->type == T_FUNCPTR) {
@@ -3545,13 +3633,13 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		}
 
 		node->expressionType = node->firstChild->expressionType;
-	} else if (node->type == T_LIST_LITERAL) {
+	} else if (node->type == T_LIST_INITIALIZER) {
 		if (!node->firstChild) {
 			if (node->expectedType && node->expectedType->type == T_LIST) {
 				node->expressionType = node->expectedType;
 				return true;
 			} else {
-				PrintError2(tokenizer, node, "Empty list literals are not allowed in this context. "
+				PrintError2(tokenizer, node, "Empty initializers are not allowed in this context. "
 						"Instead, put 'new T[]' where 'T' is the item type.\n");
 				return false;
 			}
@@ -3573,6 +3661,71 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 				item = item->sibling;
 			}
+		}
+	} else if (node->type == T_MAP_INITIALIZER) {
+		if (node->expectedType && node->expectedType->type == T_STRUCT) {
+			// We need to check that the entries in the initializer match the fields of the structure,
+			// and that no field is repeated.
+
+			Node *initializerField = node->firstChild;
+
+			while (initializerField) {
+				Node *key = initializerField->firstChild;
+				Node *value = key->sibling;
+
+				Assert(initializerField->type == T_INITIALIZER_ENTRY);
+				Assert(key->type == T_IDENTIFIER);
+
+				Node *checkDuplicate = node->firstChild;
+
+				while (checkDuplicate != initializerField) {
+					Node *checkDuplicateKey = checkDuplicate->firstChild;
+					Assert(checkDuplicateKey->type == T_IDENTIFIER);
+
+					if (key->token.textBytes == checkDuplicateKey->token.textBytes
+							&& 0 == MemoryCompare(key->token.text, checkDuplicateKey->token.text, key->token.textBytes)) {
+						PrintError2(tokenizer, node, "Structure initializer contain the field \"%.*s\" more than once.\n",
+								key->token.textBytes, key->token.text);
+						return false;
+					}
+					
+					checkDuplicate = checkDuplicate->sibling;
+				}
+
+				Node *structField = node->expectedType->firstChild;
+
+				while (structField) {
+					Assert(structField->type == T_DECLARE);
+
+					if (key->token.textBytes == structField->token.textBytes
+							&& 0 == MemoryCompare(key->token.text, structField->token.text, key->token.textBytes)) {
+						break;
+					}
+
+					structField = structField->sibling;
+				}
+
+				if (!structField) {
+					PrintError2(tokenizer, node, "The field \"%.*s\" was not found in the structure \"%.*s\".\n",
+							key->token.textBytes, key->token.text, 
+							node->expectedType->token.textBytes, node->expectedType->token.text);
+					return false;
+				}
+
+				if (!ASTMatching(value->expressionType, structField->firstChild)) {
+					PrintError5(tokenizer, value, value->expressionType, structField->firstChild, 
+							"The structure initializer value for \"%.*s\" does not match the field's type.\n",
+							key->token.textBytes, key->token.text);
+					return false;
+				}
+
+				initializerField = initializerField->sibling;
+			}
+
+			node->expressionType = node->expectedType;
+		} else {
+			PrintDebug("ASTSetTypes unimplemented for T_MAP_INITIALIZER of expectedType not T_STRUCT.\n");
+			Assert(false);
 		}
 	} else if (node->type == T_AWAIT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeIntList)) {
@@ -3821,6 +3974,54 @@ void FunctionBuilderSetBreakContinueTargets(Tokenizer *tokenizer, Node *node, Fu
 	uintptr_t writeOffset = node->breakContinueTarget;
 	int32_t delta = target - writeOffset;
 	MemoryCopy(builder->data + writeOffset, &delta, sizeof(delta));
+}
+
+int16_t FunctionBuilderCountStructureFields(Tokenizer *tokenizer, Node *node) {
+	int16_t fieldCount = 0;
+	Node *child = node->firstChild;
+
+	while (child) { 
+		if (fieldCount == 1000) {
+			PrintError2(tokenizer, child, "The struct exceeds the maximum number of fields (1000).\n");
+			return false;
+		}
+
+		fieldCount++; 
+		child = child->sibling; 
+	}
+
+	return fieldCount;
+}
+
+void FunctionBuilderStructDot(FunctionBuilder *builder, bool forAssignment, Node *structureNode, Token fieldToken) {
+	Node *field = structureNode->firstChild;
+	int16_t fieldIndex = 0;
+
+	while (field) {
+		if (field->token.textBytes == fieldToken.textBytes && 
+				0 == MemoryCompare(field->token.text, fieldToken.text, fieldToken.textBytes)) {
+			break;
+		}
+
+		field = field->sibling;
+		fieldIndex++;
+	}
+
+	Assert(field);
+
+	if (ASTIsManagedType(field->firstChild)) {
+		fieldIndex = -1 - fieldIndex;
+	}
+
+	if (forAssignment) {
+		builder->scopeIndex = fieldIndex;
+		builder->isDotAssignment = true;
+		builder->isListAssignment = false;
+	} else {
+		uint8_t b = T_DOT;
+		FunctionBuilderAppend(builder, &b, sizeof(b));
+		FunctionBuilderAppend(builder, &fieldIndex, sizeof(fieldIndex));
+	}
 }
 
 bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *builder, bool forAssignment) {
@@ -4318,6 +4519,48 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		int32_t delta = builder->dataBytes - writeOffset;
 		MemoryCopy(builder->data + writeOffset, &delta, sizeof(delta));
 		return true;
+	} else if (node->type == T_MAP_INITIALIZER) {
+		if (node->expressionType->type == T_STRUCT) {
+			uint8_t b;
+
+			// Step 1: Create the structure.
+			b = T_NEW;
+			FunctionBuilderAddLineNumber(builder, node);
+			FunctionBuilderAppend(builder, &b, sizeof(b));
+			int16_t fieldCount = FunctionBuilderCountStructureFields(tokenizer, node->expressionType);
+			FunctionBuilderAppend(builder, &fieldCount, sizeof(fieldCount));
+
+			// Step 2: Set each field.
+			Node *entry = node->firstChild;
+
+			while (entry) {
+				Assert(entry->type == T_INITIALIZER_ENTRY);
+				Assert(entry->firstChild->type == T_IDENTIFIER);
+
+				// Duplicate the structure.
+				b = T_DUP;
+				FunctionBuilderAppend(builder, &b, sizeof(b));
+
+				// Push the value and swap it with the structure.
+				FunctionBuilderRecurse(tokenizer, entry->firstChild->sibling, builder, false);
+				b = T_SWAP;
+				FunctionBuilderAppend(builder, &b, sizeof(b));
+
+				// Set the field.
+				FunctionBuilderStructDot(builder, true, node->expressionType, entry->firstChild->token);
+				FunctionBuilderAddLineNumber(builder, entry);
+				uint8_t b = T_EQUALS_DOT;
+				FunctionBuilderAppend(builder, &b, sizeof(b));
+				FunctionBuilderAppend(builder, &builder->scopeIndex, sizeof(builder->scopeIndex));
+
+				entry = entry->sibling;
+			}
+
+			return true;
+		} else {
+			PrintDebug("FunctionBuilderRecurse unimplemented for T_MAP_INITIALIZER of expressionType not T_STRUCT.\n");
+			Assert(false);
+		}
 	} else if (node->type == T_NEW) {
 		if (node->firstChild->type == T_ERR) {
 			FunctionBuilderRecurse(tokenizer, node->firstChild->sibling, builder, false);
@@ -4332,17 +4575,7 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		} else if (node->firstChild->type == T_ERR) {
 			fieldCount = ASTIsManagedType(node->firstChild->firstChild) ? -4 : -3;
 		} else {
-			Node *child = node->firstChild->firstChild;
-
-			while (child) { 
-				if (fieldCount == 1000) {
-					PrintError2(tokenizer, child, "The struct exceeds the maximum number of fields (1000).\n");
-					return false;
-				}
-
-				fieldCount++; 
-				child = child->sibling; 
-			}
+			fieldCount = FunctionBuilderCountStructureFields(tokenizer, node->firstChild);
 		}
 
 		FunctionBuilderAppend(builder, &fieldCount, sizeof(fieldCount));
@@ -4375,7 +4608,7 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		}
 
 		return true;
-	} else if (node->type == T_LIST_LITERAL) {
+	} else if (node->type == T_LIST_INITIALIZER) {
 		// Step 1: Create the list.
 		uint8_t b = T_NEW;
 		int16_t isManaged = ASTIsManagedType(node->expressionType->firstChild) ? -2 : -1;
@@ -4545,32 +4778,8 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 		bool isStruct = node->firstChild->expressionType->type == T_STRUCT;
 
 		if (isStruct) {
-			Node *field = node->firstChild->expressionType->firstChild;
-			int16_t fieldIndex = 0;
-
-			while (field) {
-				if (field->token.textBytes == node->token.textBytes && 
-						0 == MemoryCompare(field->token.text, node->token.text, node->token.textBytes)) {
-					break;
-				}
-
-				field = field->sibling;
-				fieldIndex++;
-			}
-
-			if (ASTIsManagedType(field->firstChild)) {
-				fieldIndex = -1 - fieldIndex;
-			}
-
-			if (forAssignment) {
-				builder->scopeIndex = fieldIndex;
-				builder->isDotAssignment = true;
-				builder->isListAssignment = false;
-			} else {
-				FunctionBuilderAddLineNumber(builder, node);
-				FunctionBuilderAppend(builder, &node->type, sizeof(node->type));
-				FunctionBuilderAppend(builder, &fieldIndex, sizeof(fieldIndex));
-			}
+			if (!forAssignment) FunctionBuilderAddLineNumber(builder, node);
+			FunctionBuilderStructDot(builder, forAssignment, node->firstChild->expressionType, node->token);
 		} else {
 			if (forAssignment) {
 				PrintError2(tokenizer, node, "You cannot directly modify a variable from an imported module.\n");

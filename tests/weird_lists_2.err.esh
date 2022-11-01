@@ -1,0 +1,6 @@
+tuple[int, int][] A() {
+	return null;
+}
+
+void Start() {
+}

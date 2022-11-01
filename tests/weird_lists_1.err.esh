@@ -1,0 +1,6 @@
+void[] A() {
+	return null;
+}
+
+void Start() {
+}

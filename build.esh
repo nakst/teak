@@ -34,6 +34,10 @@ void RunTests(str executable) {
 	}
 
 	LogInfo("%success%/%total% tests succeeded.");
+
+	if success < total {
+		SystemExit(1);
+	}
 }
 
 void ProcessBaseModule() {

@@ -1,0 +1,6 @@
+void Test() {
+}
+
+void Start() {
+	int[] a = [Test(), Test()];
+}
