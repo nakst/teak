@@ -25,5 +25,5 @@ jobs:
       shell: cmd
       run: |
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
-        cl.exe esh.c /Wall
+        cl.exe esh.c /Wall /Wno:C4201 /Wno:C4242 /Wno:C4255 /Wno:C4267 /Wno:C4456 /Wno:C4668 /Wno:C4710 /Wno:C4711 /Wno:C4774 /Wno:C4820 /Wno:C4996 /Wno:C5045
         esh.exe build.esh runTests=true
