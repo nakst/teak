@@ -7165,6 +7165,9 @@ char *scriptSourceDirectory;
 
 #ifndef _WIN32
 DIR *directoryIterator;
+#else
+HANDLE directoryIterator = INVALID_HANDLE_VALUE;
+WIN32_FIND_DATAW directoryEntry;
 #endif
 
 char *StringZeroTerminate(const char *text, size_t bytes) {
@@ -7174,6 +7177,42 @@ char *StringZeroTerminate(const char *text, size_t bytes) {
 	buffer[bytes] = 0;
 	return buffer;
 }
+
+#ifdef _WIN32
+wchar_t *WideStringFromUTF8(const char *text, size_t bytes) {
+	if (bytes == 0) return NULL;
+	int c = MultiByteToWideChar(CP_UTF8, 0, text, bytes, NULL, 0);
+	if (!c) return NULL;
+	wchar_t *b = (wchar_t *) calloc(1, (c + 1) * sizeof(wchar_t));
+	if (!b) return NULL;
+	c = MultiByteToWideChar(CP_UTF8, 0, text, bytes, b, c + 1);
+	if (!c) { free(b); return NULL; }
+	return b;
+}
+
+char *WideStringToUTF8(const wchar_t *text) {
+	if (!text) return NULL;
+	int c = WideCharToMultiByte(CP_UTF8, 0, text, -1, NULL, 0, NULL, NULL);
+	if (!c) return NULL;
+	char *b = (char *) calloc(1, c + 1);
+	if (!b) return NULL;
+	c = WideCharToMultiByte(CP_UTF8, 0, text, -1, b, c + 1, NULL, NULL);
+	if (!c) { free(b); return NULL; }
+	return b;
+}
+
+wchar_t *WideStringConcatenate(const wchar_t *a, const wchar_t *b) {
+	size_t k = 0, l = 0;
+	while (a[k]) k++;
+	while (b[l]) l++;
+	wchar_t *buffer = (wchar_t *) malloc((k + l + 1) * sizeof(wchar_t));
+	if (!buffer) return NULL;
+	for (uintptr_t i = 0; i < k; i++) buffer[i] = a[i];
+	for (uintptr_t i = 0; i < l; i++) buffer[k + i] = b[i];
+	buffer[k + l] = 0;
+	return buffer;
+}
+#endif
 
 #define RETURN_ERROR(error) do { MakeError(context, returnValue, error); return EXTCALL_RETURN_ERR_ERROR; } while (0)
 #define RETURN_ERROR_WIN32(error) do { MakeErrorWin32(context, returnValue, error); return EXTCALL_RETURN_ERR_ERROR; } while (0)
@@ -7485,7 +7524,6 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 	PrintError3("ExternalPathDelete is unimplemented.\n");
 	return 0;
 #else
-	(void) returnValue;
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
@@ -7512,43 +7550,43 @@ int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
-#ifdef _WIN32
-#pragma message ("ExternalPathIsFile unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("ExternalPathIsFile is unimplemented.\n");
-	return 0;
-#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
+#ifdef _WIN32
+	wchar_t *temporary = WideStringFromUTF8(entryText, entryBytes);
+	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
+	DWORD attributes = GetFileAttributesW(temporary);
+	returnValue->i = attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+	free(temporary);
+#else
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
 	struct stat s = { 0 };
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISREG(s.st_mode);
 	free(temporary);
-	return EXTCALL_RETURN_UNMANAGED;
 #endif
+	return EXTCALL_RETURN_UNMANAGED;
 }
 
 int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
-#ifdef _WIN32
-#pragma message ("ExternalPathIsDirectory unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("ExternalPathIsDirectory is unimplemented.\n");
-	return 0;
-#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
+#ifdef _WIN32
+	wchar_t *temporary = WideStringFromUTF8(entryText, entryBytes);
+	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
+	DWORD attributes = GetFileAttributesW(temporary);
+	returnValue->i = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+	free(temporary);
+#else
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
 	struct stat s = { 0 };
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISDIR(s.st_mode);
 	free(temporary);
-	return EXTCALL_RETURN_UNMANAGED;
 #endif
+	return EXTCALL_RETURN_UNMANAGED;
 }
 
 int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
@@ -7680,58 +7718,61 @@ int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *retur
 }
 
 int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *returnValue) {
-#ifdef _WIN32
-#pragma message ("External_DirectoryInternalStartIteration unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("External_DirectoryInternalStartIteration is unimplemented.\n");
-	return 0;
-#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
+#ifdef _WIN32
+	if (directoryIterator != INVALID_HANDLE_VALUE) RETURN_ERROR(-1);
+	if (!entryBytes) RETURN_ERROR(ENOENT);
+	wchar_t *temporary1 = WideStringFromUTF8(entryText, entryBytes);
+	if (!temporary1) RETURN_ERROR_WIN32(GetLastError());
+	wchar_t *temporary2 = WideStringConcatenate(temporary1, L"\\*");
+	free(temporary1);
+	if (!temporary2) RETURN_ERROR(ENOMEM);
+	directoryIterator = FindFirstFileW(temporary2, &directoryEntry);
+	free(temporary2);
+	if (directoryIterator == INVALID_HANDLE_VALUE) RETURN_ERROR_WIN32(GetLastError());
+#else
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
 	if (directoryIterator) RETURN_ERROR(-1);
 	directoryIterator = opendir(temporary);
 	free(temporary);
 	if (!directoryIterator) RETURN_ERROR(errno);
-	return EXTCALL_RETURN_ERR_UNMANAGED;
 #endif
+	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
 
 int External_DirectoryInternalEndIteration(ExecutionContext *context, Value *returnValue) {
+	(void) context;
+	(void) returnValue;
 #ifdef _WIN32
-#pragma message ("External_DirectoryInternalEndIteration unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("External_DirectoryInternalEndIteration is unimplemented.\n");
-	return 0;
+	if (directoryIterator == INVALID_HANDLE_VALUE) return 0;
+	FindClose(directoryIterator);
+	directoryIterator = INVALID_HANDLE_VALUE;
 #else
-	(void) context;
-	(void) returnValue;
 	if (!directoryIterator) return 0;
 	closedir(directoryIterator);
 	directoryIterator = NULL;
-	return EXTCALL_NO_RETURN;
 #endif
+	return EXTCALL_NO_RETURN;
 }
 
 int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *returnValue) {
+	(void) context;
 #ifdef _WIN32
-#pragma message ("External_DirectoryInternalNextIteration unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("External_DirectoryInternalNextIteration is unimplemented.\n");
-	return 0;
+	if (directoryIterator == INVALID_HANDLE_VALUE) return 0;
+	if (!directoryEntry.cFileName[0]) { returnValue->i = 0; return EXTCALL_RETURN_MANAGED; }
+	char *utf8 = WideStringToUTF8(directoryEntry.cFileName);
+	RETURN_STRING_COPY(utf8, strlen(utf8));
+	free(utf8);
+	if (!FindNextFileW(directoryIterator, &directoryEntry)) { directoryEntry.cFileName[0] = 0; }
 #else
-	(void) context;
 	if (!directoryIterator) return 0;
 	struct dirent *entry = readdir(directoryIterator);
-	while (entry && (0 == strcmp(entry->d_name, ".") || 0 == strcmp(entry->d_name, ".."))) entry = readdir(directoryIterator);
 	if (!entry) { returnValue->i = 0; return EXTCALL_RETURN_MANAGED; }
 	RETURN_STRING_COPY(entry->d_name, strlen(entry->d_name));
-	return EXTCALL_RETURN_MANAGED;
 #endif
+	return EXTCALL_RETURN_MANAGED;
 }
 
 int ExternalFileReadAll(ExecutionContext *context, Value *returnValue) {

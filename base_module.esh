@@ -250,20 +250,33 @@ err[void] _DirectoryInternalEnumerateChildren(str path, str prefix, str[] result
 	reterr _DirectoryInternalStartIteration(path);
 	str child = _DirectoryInternalNextIteration();
 	int start = result:len();
-	while child != "" { result:add(child); child = _DirectoryInternalNextIteration(); }
+
+	while child != "" { 
+		if child != "." && child != ".." {
+			result:add(child); 
+		}
+
+		child = _DirectoryInternalNextIteration(); 
+	}
+
 	_DirectoryInternalEndIteration();
+
 	int end = result:len();
+
 	if recurse {
 		for int i = start; i < end; i += 1 {
 			str actual = path + "/" + result[i];
+
 			if PathIsDirectory(actual) {
 				_DirectoryInternalEnumerateChildren(actual, prefix + result[i] + "/", result, true);
 			}
 		}
 	}
+
 	for int i = start; i < end; i += 1 {
 		result[i] = prefix + result[i];
 	}
+	
 	return #success;
 }
 
