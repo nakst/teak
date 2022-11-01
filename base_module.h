@@ -208,6 +208,7 @@
 "bool SystemRunningAsAdministrator() #extcall;\n"
 "str SystemGetHostName() #extcall;\n"
 "void SystemSleepMs(int ms) #extcall;\n"
+"void SystemExit(int exitCode) #extcall;\n"
 "int RandomInt(int min, int max) #extcall;\n"
 "\n"
 "str UUIDGenerate() {\n"

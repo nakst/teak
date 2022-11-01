@@ -569,6 +569,9 @@ bool PersistRead(str path);
 // Pause execution of the active coroutine for the specified number of milliseconds.
 void SystemSleepMs(int ms);
 
+// Immediately terminate the current process with the provided exit code.
+void SystemExit(int exitCode);
+
 // Generate a UUID as a string.
 str UUIDGenerate();
 ```

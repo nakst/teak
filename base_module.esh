@@ -207,6 +207,7 @@ int SystemGetProcessorCount() #extcall;
 bool SystemRunningAsAdministrator() #extcall;
 str SystemGetHostName() #extcall;
 void SystemSleepMs(int ms) #extcall;
+void SystemExit(int exitCode) #extcall;
 int RandomInt(int min, int max) #extcall;
 
 str UUIDGenerate() {

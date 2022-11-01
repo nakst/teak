@@ -547,98 +547,28 @@ char baseModuleSource[] = {
 
 // --------------------------------- External function calls.
 
-int ExternalLog(ExecutionContext *context, Value *returnValue);
-int ExternalLogOpenGroup(ExecutionContext *context, Value *returnValue);
-int ExternalLogClose(ExecutionContext *context, Value *returnValue);
-int ExternalTextColorError(ExecutionContext *context, Value *returnValue);
-int ExternalTextColorHighlight(ExecutionContext *context, Value *returnValue);
-int ExternalTextWeight(ExecutionContext *context, Value *returnValue);
-int ExternalTextMonospaced(ExecutionContext *context, Value *returnValue);
-int ExternalTextPlain(ExecutionContext *context, Value *returnValue);
-int ExternalConsoleGetLine(ExecutionContext *context, Value *returnValue);
-int ExternalConsoleWriteStdout(ExecutionContext *context, Value *returnValue);
-int ExternalConsoleWriteStderr(ExecutionContext *context, Value *returnValue);
-int ExternalStringSlice(ExecutionContext *context, Value *returnValue);
-int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue);
-int ExternalStringFromByte(ExecutionContext *context, Value *returnValue);
-int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue);
-int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Value *returnValue);
-int ExternalSystemShellEvaluate(ExecutionContext *context, Value *returnValue);
-int ExternalSystemShellEnableLogging(ExecutionContext *context, Value *returnValue);
-int ExternalSystemGetProcessorCount(ExecutionContext *context, Value *returnValue);
-int ExternalSystemGetEnvironmentVariable(ExecutionContext *context, Value *returnValue);
-int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *returnValue);
-int ExternalSystemRunningAsAdministrator(ExecutionContext *context, Value *returnValue);
-int ExternalSystemGetHostName(ExecutionContext *context, Value *returnValue);
-int ExternalSystemSleepMs(ExecutionContext *context, Value *returnValue);
-int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue);
-int ExternalPathDelete(ExecutionContext *context, Value *returnValue);
-int ExternalPathExists(ExecutionContext *context, Value *returnValue);
-int ExternalPathIsFile(ExecutionContext *context, Value *returnValue);
-int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue);
-int ExternalPathIsLink(ExecutionContext *context, Value *returnValue);
-int ExternalPathMove(ExecutionContext *context, Value *returnValue);
-int ExternalPathGetDefaultPrefix(ExecutionContext *context, Value *returnValue);
-int ExternalPathSetDefaultPrefixToScriptSourceDirectory(ExecutionContext *context, Value *returnValue);
-int ExternalFileReadAll(ExecutionContext *context, Value *returnValue);
-int ExternalFileWriteAll(ExecutionContext *context, Value *returnValue);
-int ExternalFileAppend(ExecutionContext *context, Value *returnValue);
-int ExternalFileCopy(ExecutionContext *context, Value *returnValue);
-int ExternalFileGetSize(ExecutionContext *context, Value *returnValue);
-int ExternalPersistRead(ExecutionContext *context, Value *returnValue);
-int ExternalPersistWrite(ExecutionContext *context, Value *returnValue);
-int ExternalRandomInt(ExecutionContext *context, Value *returnValue); // TODO This shouldn't be in the platform layer.
-int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *returnValue);
-int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *returnValue);
-int External_DirectoryInternalEndIteration(ExecutionContext *context, Value *returnValue);
-int ExternalOpenDocumentEnumerate(ExecutionContext *context, Value *returnValue);
+#define EXTERNAL_FUNCTION_CALLS() \
+	REGISTER(Log) REGISTER(LogOpenGroup) REGISTER(LogClose) \
+	REGISTER(TextColorError) REGISTER(TextColorHighlight) REGISTER(TextWeight) REGISTER(TextMonospaced) REGISTER(TextPlain) \
+	REGISTER(ConsoleGetLine) REGISTER(ConsoleWriteStdout) REGISTER(ConsoleWriteStderr) \
+	REGISTER(StringSlice) REGISTER(CharacterToByte) REGISTER(StringFromByte) \
+	REGISTER(SystemShellExecute) REGISTER(SystemShellExecuteWithWorkingDirectory) REGISTER(SystemShellEvaluate) REGISTER(SystemShellEnableLogging) \
+	REGISTER(SystemGetProcessorCount) REGISTER(SystemGetEnvironmentVariable) REGISTER(SystemSetEnvironmentVariable) REGISTER(SystemRunningAsAdministrator) REGISTER(SystemGetHostName) REGISTER(SystemSleepMs) REGISTER(SystemExit) \
+	REGISTER(PathCreateDirectory) REGISTER(PathDelete) REGISTER(PathExists) REGISTER(PathIsFile) REGISTER(PathIsDirectory) REGISTER(PathIsLink) REGISTER(PathMove) \
+	REGISTER(PathGetDefaultPrefix) REGISTER(PathSetDefaultPrefixToScriptSourceDirectory) \
+	REGISTER(FileReadAll) REGISTER(FileWriteAll) REGISTER(FileAppend) REGISTER(FileCopy) REGISTER(FileGetSize) \
+	REGISTER(PersistRead) REGISTER(PersistWrite) \
+	REGISTER(RandomInt) \
+	REGISTER(_DirectoryInternalStartIteration) REGISTER(_DirectoryInternalNextIteration) REGISTER(_DirectoryInternalEndIteration) \
+
+#define REGISTER(x) int External##x(ExecutionContext *context, Value *returnValue);
+EXTERNAL_FUNCTION_CALLS()
+#undef REGISTER
 
 ExternalFunction externalFunctions[] = {
-	{ .cName = "Log", .callback = ExternalLog },
-	{ .cName = "LogOpenGroup", .callback = ExternalLogOpenGroup },
-	{ .cName = "LogClose", .callback = ExternalLogClose },
-	{ .cName = "TextColorError", .callback = ExternalTextColorError },
-	{ .cName = "TextColorHighlight", .callback = ExternalTextColorHighlight },
-	{ .cName = "TextWeight", .callback = ExternalTextWeight },
-	{ .cName = "TextMonospaced", .callback = ExternalTextMonospaced },
-	{ .cName = "TextPlain", .callback = ExternalTextPlain },
-	{ .cName = "ConsoleGetLine", .callback = ExternalConsoleGetLine },
-	{ .cName = "ConsoleWriteStdout", .callback = ExternalConsoleWriteStdout },
-	{ .cName = "ConsoleWriteStderr", .callback = ExternalConsoleWriteStderr },
-	{ .cName = "StringSlice", .callback = ExternalStringSlice },
-	{ .cName = "CharacterToByte", .callback = ExternalCharacterToByte },
-	{ .cName = "StringFromByte", .callback = ExternalStringFromByte },
-	{ .cName = "SystemShellExecute", .callback = ExternalSystemShellExecute },
-	{ .cName = "SystemShellExecuteWithWorkingDirectory", .callback = ExternalSystemShellExecuteWithWorkingDirectory },
-	{ .cName = "SystemShellEvaluate", .callback = ExternalSystemShellEvaluate },
-	{ .cName = "SystemShellEnableLogging", .callback = ExternalSystemShellEnableLogging },
-	{ .cName = "SystemGetProcessorCount", .callback = ExternalSystemGetProcessorCount },
-	{ .cName = "SystemGetEnvironmentVariable", .callback = ExternalSystemGetEnvironmentVariable },
-	{ .cName = "SystemSetEnvironmentVariable", .callback = ExternalSystemSetEnvironmentVariable },
-	{ .cName = "SystemRunningAsAdministrator", .callback = ExternalSystemRunningAsAdministrator },
-	{ .cName = "SystemGetHostName", .callback = ExternalSystemGetHostName },
-	{ .cName = "SystemSleepMs", .callback = ExternalSystemSleepMs },
-	{ .cName = "PathExists", .callback = ExternalPathExists },
-	{ .cName = "PathIsFile", .callback = ExternalPathIsFile },
-	{ .cName = "PathIsDirectory", .callback = ExternalPathIsDirectory },
-	{ .cName = "PathIsLink", .callback = ExternalPathIsLink },
-	{ .cName = "PathCreateDirectory", .callback = ExternalPathCreateDirectory },
-	{ .cName = "PathDelete", .callback = ExternalPathDelete },
-	{ .cName = "PathMove", .callback = ExternalPathMove },
-	{ .cName = "PathGetDefaultPrefix", .callback = ExternalPathGetDefaultPrefix },
-	{ .cName = "PathSetDefaultPrefixToScriptSourceDirectory", .callback = ExternalPathSetDefaultPrefixToScriptSourceDirectory },
-	{ .cName = "FileReadAll", .callback = ExternalFileReadAll },
-	{ .cName = "FileWriteAll", .callback = ExternalFileWriteAll },
-	{ .cName = "FileAppend", .callback = ExternalFileAppend },
-	{ .cName = "FileCopy", .callback = ExternalFileCopy },
-	{ .cName = "FileGetSize", .callback = ExternalFileGetSize },
-	{ .cName = "PersistRead", .callback = ExternalPersistRead },
-	{ .cName = "PersistWrite", .callback = ExternalPersistWrite },
-	{ .cName = "RandomInt", .callback = ExternalRandomInt },
-	{ .cName = "_DirectoryInternalStartIteration", .callback = External_DirectoryInternalStartIteration },
-	{ .cName = "_DirectoryInternalNextIteration", .callback = External_DirectoryInternalNextIteration },
-	{ .cName = "_DirectoryInternalEndIteration", .callback = External_DirectoryInternalEndIteration },
-	{ .cName = "OpenDocumentEnumerate", .callback = ExternalOpenDocumentEnumerate },
+#define REGISTER(x) { .cName = #x, .callback = External##x },
+	EXTERNAL_FUNCTION_CALLS()
+#undef REGISTER
 };
 
 // --------------------------------- Tokenization and parsing.
@@ -8096,10 +8026,12 @@ int ExternalSystemSleepMs(ExecutionContext *context, Value *returnValue) {
 #endif
 }
 
-int ExternalOpenDocumentEnumerate(ExecutionContext *context, Value *returnValue) {
-	(void) context;
-	returnValue->i = 0;
-	return EXTCALL_RETURN_MANAGED;
+int ExternalSystemExit(ExecutionContext *context, Value *returnValue) {
+	(void) returnValue;
+	if (context->c->stackPointer < 1) return -1;
+	int64_t i = context->c->stack[--context->c->stackPointer].i;
+	exit(i);
+	return -1;
 }
 
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
