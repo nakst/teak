@@ -56,7 +56,7 @@ The following flags are intended for debugging the interpreter itself and theref
 
 ### Strings and characters — conversions
 
-```
+```c
 // Extract the byte value (0-255) of the one byte string.
 // If the string is longer than a byte, the first byte is used.
 // If the string is empty, -1 is returned.
@@ -111,7 +111,7 @@ str StringUTF8Encode(int value);
 
 Important: A string is an immutable, ordered collection of bytes. A "character" refers to a one byte string. Various character functions will assume that this byte represents an ASCII character; this is usually the behaviour you want because UTF-8 strings encode the codepoint range 0-127 as a single byte with that value.
 
-```
+```c
 // Returns whether the one byte string is a alphanumeric ASCII character.
 // That is, whether it is in one of the ranges [a-z], [A-Z], [0-9].
 bool CharacterIsAlnum(str c);
@@ -133,7 +133,7 @@ bool StringEndsWith(str s, str x);
 
 ### Strings and characters — searching
 
-```
+```c
 // Returns whether the haystack string contains the needle somewhere in it.
 bool StringContains(str haystack, str needle);
 
@@ -159,7 +159,7 @@ int StringFindLast(str haystack, str needle);
 
 ### Strings and characters -- replacing
 
-```
+```c
 // Replace the first instance of the needle string in the haystack string with the with string.
 // Or, if it is not found, return the haystack string unchanged.
 str StringReplaceFirst(str haystack, str needle, str with);
@@ -178,7 +178,7 @@ tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with);
 
 ### Strings and characters — joining and splitting
 
-```
+```c
 // Returns a range of the bytes in the string.
 str StringSlice(str x, int start, int end);
 
@@ -204,7 +204,7 @@ str StringRepeat(str s, int n);
 
 ### Strings and characters — file system paths
 
-```
+```c
 // If the input string does not end with a directory separator, then one is appended.
 str PathEnsureTrailingSlash(str x);
 
@@ -214,7 +214,7 @@ str PathTrimTrailingSlash(str x);
 
 ### Logging
 
-```
+```c
 // Log a message in the default color.
 void Log(str x); 
 
@@ -238,7 +238,7 @@ These functions return strings that can be concatenated with other strings to ad
 
 For example, `Log("Hello, %TextBold()%world%TextPlain()%.")` will display the word "world" in bold.
 
-```
+```c
 str TextBold();
 str TextColorError();
 str TextColorHighlight();
@@ -249,7 +249,7 @@ str TextWeight(int i); // e.g. 700 = bold
 
 ### File system — directory enumeration
 
-```
+```c
 // Get the list of names of children of the directory at the given path.
 err[str[]] DirectoryEnumerate(str path);
 
@@ -273,7 +273,7 @@ err[str[]] DirectoryEnumerateFiltered(str sourceDirectory, str[] filter, int fil
 
 ### File system — files
 
-```
+```c
 // Read the file at the given path into a string.
 err[str] FileReadAll(str path);
 
@@ -298,7 +298,7 @@ err[void] FileCopy(str source, str destination);
 
 ### File system — copying
 
-```
+```c
 // Copy the directory at source and all of the files it contains recursively to the destination directory.
 err[void] PathCopyRecursively(str source, str destination);
 
@@ -317,7 +317,7 @@ err[void] PathCopyFilteredInto(str sourceDirectory, str[] filter, int filterWild
 
 ### File system — deleting
 
-```
+```c
 // Delete the file or directory at the given path.
 // If a directory is specified, then it must be empty.
 err[void] PathDelete(str x);
@@ -334,7 +334,7 @@ err[void] PathDeleteRecursively(str path);
 
 ### File system — detecting files
 
-```
+```c
 // Return true if an item exists at the given path.
 bool PathExists(str x);
 
@@ -350,7 +350,7 @@ bool PathIsLink(str source);
 
 ### File system — creating directories
 
-```
+```c
 // Create a directory at the given path.
 // It is not considered an error if the directory already exists.
 err[void] PathCreateDirectory(str x);
@@ -361,7 +361,7 @@ err[void] PathCreateLeadingDirectories(str path);
 
 ### File system — default prefix
 
-```
+```c
 // Get the current prefix that is being appended to all non-absolute paths.
 str PathGetDefaultPrefix();
 
@@ -372,7 +372,7 @@ err[void] PathSetDefaultPrefixToScriptSourceDirectory();
 
 ### File system — other
 
-```
+```c
 // Remove the last component from the path.
 str PathGetLeadingDirectories(str path);
 
@@ -403,7 +403,7 @@ You may encounter some of the following error strings when using file system fun
 
 These functions are only available on platforms that have a command line shell.
 
-```
+```c
 // Execute the specified command, returning true if it succeeded.
 // Its working directory will be the same as the default path prefix of the script.
 bool SystemShellExecute(str x);
@@ -422,7 +422,7 @@ void SystemShellEnableLogging(bool x);
 
 These functions are only available on platforms that use a terminal emulator.
 
-```
+```c
 // Get a line of input from the user.
 str ConsoleGetLine();
 
@@ -437,14 +437,14 @@ void ConsoleWriteStdout(str x);
 
 These functions are only available on platforms that support environment variables.
 
-```
+```c
 err[str] SystemGetEnvironmentVariable(str name);
 err[void] SystemSetEnvironmentVariable(str name, str value);
 ```
 
 ### System — information
 
-```
+```c
 // Get the host platform name, such as "Linux" or "Essence".
 str SystemGetHostName();
 
@@ -457,7 +457,7 @@ bool SystemRunningAsAdministrator();
 
 ### Integer mathematics
 
-```
+```c
 // Return the absolute value of x.
 int IntegerAbsolute(int x);
 
@@ -518,7 +518,7 @@ int RandomInt(int min, int max);
 
 ### Floating point mathematics
 
-```
+```c
 // Apply x to the unique linear map that sends fromStart to toStart and fromEnd to toEnd.
 float MathLinearRemap(float x, float fromStart, float fromEnd, float toStart, float toEnd);
 
@@ -552,7 +552,7 @@ float RandomFloat01();
 ### Permutations
 
 
-```
+```c
 // Create an list of length n with values [0, 1, 2, 3, ..., n - 1].
 int[] PermutationFirst(int n);
 
@@ -562,7 +562,7 @@ bool PermutationIterate(int[] p);
 
 ### Other
 
-```
+```c
 // Set the path to use for storing and loding #persist variables.
 bool PersistRead(str path);
 
