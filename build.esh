@@ -58,8 +58,9 @@ void Start() {
 	ProcessBaseModule();
 
 	if SystemGetHostName() == "Windows" {
+		str warningFlags = "/Wall /wd4201 /wd4242 /wd4244 /wd4255 /wd4267 /wd4456 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd4996 /wd5045";
 		str optimizeFlags = "" if debug else "/O2";
-		assert SystemShellExecute("cl.exe /Zi esh.c /Wall %optimizeFlags% /link /OUT:new_esh.exe");
+		assert SystemShellExecute("cl.exe /Zi esh.c %warningFlags% %optimizeFlags% /link /OUT:new_esh.exe");
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 		executable = "new_esh";
 	} else {
