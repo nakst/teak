@@ -7517,15 +7517,22 @@ int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
-#ifdef _WIN32
-#pragma message ("ExternalPathDelete unimplemented")
-	(void) context;
-	(void) returnValue;
-	PrintError3("ExternalPathDelete is unimplemented.\n");
-	return 0;
-#else
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
+#ifdef _WIN32
+	wchar_t *temporary = WideStringFromUTF8(entryText, entryBytes);
+	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
+	DWORD attributes = GetFileAttributesW(temporary);
+
+	if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+		returnValue->i = RemoveDirectoryW(temporary) != 0;
+	} else {
+		returnValue->i = DeleteFileW(temporary) != 0;
+	}
+
+	free(temporary);
+	if (!returnValue->i) RETURN_ERROR_WIN32(GetLastError());
+#else
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
 	struct stat s = { 0 };
@@ -7533,8 +7540,8 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 	returnValue->i = isDirectory ? (rmdir(temporary) == 0) : (unlink(temporary) == 0);
 	free(temporary);
 	if (!returnValue->i) RETURN_ERROR(errno);
-	return EXTCALL_RETURN_ERR_UNMANAGED;
 #endif
+	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
 
 int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
