@@ -24,7 +24,7 @@
 
 // TODO Other missing features:
 // 	- struct inheritance.
-// 	- Set expectedType for T_RETURN_TUPLE, T_OP_<...>, T_MAP_INITIALIZER and T_INITIALIZER_ENTRY.
+// 	- Set expectedType for T_RETURN_TUPLE, T_OP_DEFAULT, T_OP_CURRY, T_OP_ADD and T_OP_INSERT.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- :ignore(string, valueToUse) for error types.
 
@@ -2965,12 +2965,37 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			Assert(child->type == T_INITIALIZER_ENTRY);
 
 			if (isStruct) {
-				if (child->firstChild->type == T_VARIABLE) {
-					child->firstChild->type = T_IDENTIFIER;
+				Node *key = child->firstChild;
+
+				if (key->type == T_VARIABLE) {
+					key->type = T_IDENTIFIER;
 				} else {
 					PrintError2(tokenizer, node, "Keys in a struct initializer must be identifiers.\n");
 					return false;
 				}
+
+				Node *structField = node->expectedType->firstChild;
+
+				while (structField) {
+					Assert(structField->type == T_DECLARE);
+
+					if (key->token.textBytes == structField->token.textBytes
+							&& 0 == MemoryCompare(key->token.text, structField->token.text, key->token.textBytes)) {
+						break;
+					}
+
+					structField = structField->sibling;
+				}
+
+				if (!structField) {
+					PrintError2(tokenizer, node, "The field \"%.*s\" was not found in the structure \"%.*s\".\n",
+							key->token.textBytes, key->token.text, 
+							node->expectedType->token.textBytes, node->expectedType->token.text);
+					return false;
+				}
+
+				Assert(structField->firstChild);
+				child->firstChild->sibling->expectedType = structField->firstChild;
 			} else {
 				if (!ASTSetTypes(tokenizer, child->firstChild)) return false;
 			}
@@ -3692,28 +3717,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					checkDuplicate = checkDuplicate->sibling;
 				}
 
-				Node *structField = node->expectedType->firstChild;
-
-				while (structField) {
-					Assert(structField->type == T_DECLARE);
-
-					if (key->token.textBytes == structField->token.textBytes
-							&& 0 == MemoryCompare(key->token.text, structField->token.text, key->token.textBytes)) {
-						break;
-					}
-
-					structField = structField->sibling;
-				}
-
-				if (!structField) {
-					PrintError2(tokenizer, node, "The field \"%.*s\" was not found in the structure \"%.*s\".\n",
-							key->token.textBytes, key->token.text, 
-							node->expectedType->token.textBytes, node->expectedType->token.text);
-					return false;
-				}
-
-				if (!ASTMatching(value->expressionType, structField->firstChild)) {
-					PrintError5(tokenizer, value, value->expressionType, structField->firstChild, 
+				if (!ASTMatching(value->expressionType, value->expectedType)) {
+					PrintError5(tokenizer, value, value->expressionType, value->expectedType, 
 							"The structure initializer value for \"%.*s\" does not match the field's type.\n",
 							key->token.textBytes, key->token.text);
 					return false;

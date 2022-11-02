@@ -1,6 +1,8 @@
 struct V2 {
 	float x;
 	float y;
+	int[] z;
+	V2 w;
 };
 
 V2 Test(V2 v) {
@@ -29,4 +31,21 @@ void Start() {
 	v = Test([x = 4.0, y = 7.0]);
 	assert v.x == 4.0;
 	assert v.y == 7.0;
+
+	V2[] u = [[x = 4.0, w = [x=8.0]], [y = 4.5, z = [6]], [x = 5.0, z = []]];
+	assert u:len() == 3;
+	assert u[0].x == 4.0;
+	assert u[0].y == 0.0;
+	assert u[0].z == null;
+	assert u[0].w.x == 8.0;
+	assert u[0].w.y == 0.0;
+	assert u[1].x == 0.0;
+	assert u[1].y == 4.5;
+	assert u[1].z:len() == 1;
+	assert u[1].z[0] == 6;
+	assert u[1].w == null;
+	assert u[2].x == 5.0;
+	assert u[2].y == 0.0;
+	assert u[2].z:len() == 0;
+	assert u[2].w == null;
 }
