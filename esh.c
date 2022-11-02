@@ -27,6 +27,7 @@
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- :ignore(string, valueToUse) for error types.
+// 	- Variant of lists where the variable is constant but initialized to an empty list?
 
 // TODO Standard library:
 // 	- Floats: 
@@ -431,6 +432,11 @@ typedef struct HeapEntry {
 		struct { // T_ANYTYPE
 			Node *anyType;
 			Value anyValue;
+		};
+
+		struct { // T_HANDLETYPE
+			void (*close)(void *);
+			void *handleData;
 		};
 	};
 } HeapEntry;
@@ -2572,13 +2578,13 @@ bool ASTMatching(Node *left, Node *right) {
 		return true;
 	} else if (!left || !right) {
 		return false;
-	} else if (left->type == T_NULL && (right->type == T_STRUCT || right->type == T_LIST || right->type == T_FUNCPTR)) {
+	} else if (left->type == T_NULL && (right->type == T_STRUCT || right->type == T_LIST || right->type == T_FUNCPTR || right->type == T_HANDLETYPE)) {
 		return true;
-	} else if (right->type == T_NULL && (left->type == T_STRUCT || left->type == T_LIST || left->type == T_FUNCPTR)) {
+	} else if (right->type == T_NULL && (left->type == T_STRUCT || left->type == T_LIST || left->type == T_FUNCPTR || left->type == T_HANDLETYPE)) {
 		return true;
-	} else if (left->type == T_ZERO && (right->type == T_INT || right->type == T_INTTYPE || right->type == T_HANDLETYPE)) {
+	} else if (left->type == T_ZERO && (right->type == T_INT || right->type == T_INTTYPE)) {
 		return true;
-	} else if (right->type == T_ZERO && (left->type == T_INT || left->type == T_INTTYPE || left->type == T_HANDLETYPE)) {
+	} else if (right->type == T_ZERO && (left->type == T_INT || left->type == T_INTTYPE)) {
 		return true;
 	} else if (left->type != right->type) {
 		return false;
@@ -2609,7 +2615,7 @@ bool ASTIsIntType(Node *node) {
 }
 
 bool ASTIsManagedType(Node *node) {
-	return node->type == T_STR || node->type == T_LIST || node->type == T_STRUCT 
+	return node->type == T_STR || node->type == T_LIST || node->type == T_STRUCT || node->type == T_HANDLETYPE
 		|| node->type == T_FUNCPTR || node->type == T_FUNCPTR || node->type == T_ERR || node->type == T_ANYTYPE;
 }
 
@@ -3367,6 +3373,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					&& !ASTIsIntType(leftType)
 					&& (!leftType || leftType->type != T_LIST)
 					&& (!leftType || leftType->type != T_STRUCT)
+					&& (!leftType || leftType->type != T_HANDLETYPE)
 					&& (!leftType || leftType->type != T_FUNCPTR)) {
 				PrintError5(tokenizer, node, leftType, NULL, "These types cannot be compared.\n");
 				return false;
@@ -5006,7 +5013,8 @@ void HeapGarbageCollectMark(ExecutionContext *context, uintptr_t index) {
 	if (context->heap[index].gcMark) return;
 	context->heap[index].gcMark = true;
 
-	if (context->heap[index].type == T_EOF || context->heap[index].type == T_STR || context->heap[index].type == T_FUNCPTR) {
+	if (context->heap[index].type == T_EOF || context->heap[index].type == T_STR 
+			|| context->heap[index].type == T_FUNCPTR || context->heap[index].type == T_HANDLETYPE) {
 		// Nothing else to mark.
 	} else if (context->heap[index].type == T_STRUCT) {
 		for (uintptr_t i = 0; i < context->heap[index].fieldCount; i++) {
@@ -5061,6 +5069,8 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 		AllocateResize((uint8_t *) context->heap[i].fields - context->heap[i].fieldCount, 0);
 	} else if (context->heap[i].type == T_LIST) {
 		AllocateResize(context->heap[i].list, 0);
+	} else if (context->heap[i].type == T_HANDLETYPE) {
+		context->heap[i].close(context->heap[i].handleData);
 	} else if (context->heap[i].type == T_OP_DISCARD || context->heap[i].type == T_OP_ASSERT 
 			|| context->heap[i].type == T_FUNCPTR || context->heap[i].type == T_OP_CURRY
 			|| context->heap[i].type == T_CONCAT || context->heap[i].type == T_ERR
@@ -6954,6 +6964,12 @@ void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 				}
 
 				define = define->sibling;
+			}
+		} else if (node->type == T_HANDLETYPE) {
+			PrintOutput("[%.*s]\ntype=handletype\n", (int) node->token.textBytes, node->token.text);
+
+			if (node->firstChild) {
+				PrintOutput("parent=%.*s\n", (int) node->firstChild->token.textBytes, node->firstChild->token.text);
 			}
 		}
 
