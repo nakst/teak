@@ -24,7 +24,7 @@
 
 // TODO Other missing features:
 // 	- struct inheritance.
-// 	- Set expectedType for T_RETURN_TUPLE, T_OP_DEFAULT, T_OP_CURRY, T_OP_ADD and T_OP_INSERT.
+// 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- :ignore(string, valueToUse) for error types.
 
@@ -70,6 +70,24 @@
 // TODO Safety:
 // 	- Safety against extremely large scripts?
 // 	- Loading untrusted bytecode files?
+
+// TODO Sketch for logging IO:
+/*
+--log=
+--trace=
+--confirm=
+
+some combination of:
+e     enumerate directory
+r     read file
+w     write file, append file, create directory, copy file, move file/directory
+d     delete file/directory
+s     get file/directory type/existence/size
+v     get environment variable, set environment variable
+x     execute/evaluate shell command
+
+default is --log=x
+*/
 
 #include <stdint.h>
 #include <stddef.h>
@@ -2634,7 +2652,7 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 	}
 
 	if (node->type == T_DECLARE || node->type == T_ARGUMENT || node->type == T_NEW || node->type == T_LIST 
-			|| node->type == T_CAST_TYPE_WRAPPER || node->hasTypeInheritanceParent) {
+			|| node->type == T_ERR || node->type == T_CAST_TYPE_WRAPPER || node->hasTypeInheritanceParent) {
 		Node *type = node->firstChild;
 
 		if (node->hasTypeInheritanceParent && type && type->type != T_IDENTIFIER && type->type != node->type) {
@@ -3004,6 +3022,217 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			child = child->sibling;
 		}
 	} else if (node->type == T_FUNCPTR) {
+		return true;
+	} else if (node->type == T_COLON) {
+		if (!ASTSetTypes(tokenizer, node->firstChild)) return false;
+
+		Node *expressionType = node->firstChild->expressionType;
+
+		if (!expressionType) {
+			PrintError2(tokenizer, node, "This is not an expression.\n");
+			return false;
+		}
+
+		bool isList = expressionType->type == T_LIST;
+		bool isStr = expressionType->type == T_STR;
+		bool isFuncPtr = expressionType->type == T_FUNCPTR;
+		bool isErr = expressionType->type == T_ERR;
+		bool isInt = expressionType->type == T_INT;
+		bool isFloat = expressionType->type == T_FLOAT;
+		bool isAnyType = expressionType->type == T_ANYTYPE;
+
+		if (!isList && !isStr & !isFuncPtr && !isErr && !isInt && !isFloat && !isAnyType) {
+			PrintError2(tokenizer, node, "This type does not have any ':' operations.\n");
+			return false;
+		}
+
+		Token token = node->token;
+		Node *arguments[2] = { 0 };
+		bool returnsItem = false, returnsInt = false, returnsBool = false, returnsStr = false, returnsFloat = false, simple = true;
+		uint8_t op;
+
+		if (isList && KEYWORD("resize")) arguments[0] = &globalExpressionTypeInt, op = T_OP_RESIZE;
+		else if (isList && KEYWORD("add")) arguments[0] = expressionType->firstChild, op = T_OP_ADD;
+		else if (isList && KEYWORD("insert")) arguments[0] = expressionType->firstChild, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT;
+		else if (isList && KEYWORD("insert_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT_MANY;
+		else if (isList && KEYWORD("delete")) arguments[0] = &globalExpressionTypeInt, op = T_OP_DELETE;
+		else if (isList && KEYWORD("find_and_delete")) arguments[0] = expressionType->firstChild, op = T_OP_FIND_AND_DELETE, returnsBool = true;
+		else if (isList && KEYWORD("find")) arguments[0] = expressionType->firstChild, op = T_OP_FIND, returnsInt = true;
+		else if (isList && KEYWORD("delete_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_DELETE_MANY;
+		else if (isList && KEYWORD("delete_last")) op = T_OP_DELETE_LAST;
+		else if (isList && KEYWORD("delete_all")) op = T_OP_DELETE_ALL;
+		else if (isList && KEYWORD("first")) returnsItem = true, op = T_OP_FIRST;
+		else if (isList && KEYWORD("last")) returnsItem = true, op = T_OP_LAST;
+		else if ((isList || isStr) && KEYWORD("len")) returnsInt = true, op = T_OP_LEN;
+		else if (isInt && KEYWORD("float")) returnsFloat = true, op = T_OP_INT_TO_FLOAT;
+		else if (isFloat && KEYWORD("truncate")) returnsInt = true, op = T_OP_FLOAT_TRUNCATE;
+		else if (isErr && KEYWORD("success")) returnsBool = true, op = T_OP_SUCCESS;
+		else if (isErr && KEYWORD("assert")) returnsItem = true, op = T_OP_ASSERT_ERR;
+		else if (isErr && KEYWORD("error")) returnsStr = true, op = T_OP_ERROR;
+		else if (isErr && KEYWORD("default")) arguments[0] = expressionType->firstChild, returnsItem = true, op = T_OP_DEFAULT; // TODO Warn if the expression has side effects.
+
+		else if (isFuncPtr && KEYWORD("async")) {
+			if (expressionType->firstChild->firstChild) {
+				PrintError2(tokenizer, node, "The function pointer should take no arguments. Use ':curry(...)' to set them before ':async()'.\n");
+				return false;
+			} else if (!ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeVoid)) {
+				PrintError2(tokenizer, node, "The function pointer should not return anything. Use ':discard()' or ':assert()' before ':async()'.\n");
+				return false;
+			}
+
+			// TODO Allow currying here, for convenience.
+			op = T_OP_ASYNC;
+			returnsInt = true;
+		}
+
+		else if (isFuncPtr && (KEYWORD("assert") || KEYWORD("discard"))) {
+			if (KEYWORD("assert")) {
+				op = T_OP_ASSERT;
+
+				if (!ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeBool)) {
+					PrintError2(tokenizer, node, "The return value of the function must be a bool to assert it.\n");
+					return false;
+				}
+			} else {
+				op = T_OP_DISCARD;
+
+				if (ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeVoid)) {
+					PrintError2(tokenizer, node, "The return value cannot be discarded from a function that already returns void.\n");
+					return false;
+				}
+
+				if (expressionType->firstChild->sibling && expressionType->firstChild->sibling->type == T_TUPLE) {
+					// TODO Remove this restriction?
+					PrintError2(tokenizer, node, "The discard operation cannot be used on a function returning a tuple.\n");
+					return false;
+				}
+			}
+
+			if (node->firstChild->sibling->firstChild) {
+				PrintError2(tokenizer, node, "This operation does not take any arguments.\n");
+				return false;
+			}
+
+			node->expressionType = (Node *) AllocateFixed(sizeof(Node));
+			node->expressionType->type = T_FUNCPTR;
+			node->expressionType->firstChild = (Node *) AllocateFixed(sizeof(Node));
+			MemoryCopy(node->expressionType->firstChild, expressionType->firstChild, sizeof(Node));
+			node->expressionType->firstChild->sibling = &globalExpressionTypeVoid;
+			simple = false;
+		}
+
+		else if (isFuncPtr && KEYWORD("curry")) {
+			if (!node->firstChild->sibling->firstChild) {
+				PrintError2(tokenizer, node, ":curry() needs an argument.\n");
+				return false;
+			} else if (!expressionType->firstChild->firstChild) {
+				PrintError2(tokenizer, node, "The function pointer doesn't take any arguments.\n");
+				return false;
+			}
+
+			node->firstChild->sibling->firstChild->expectedType = expressionType->firstChild->firstChild->firstChild;
+
+			if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) {
+				return false;
+			} else if (!ASTMatching(expressionType->firstChild->firstChild->firstChild, node->firstChild->sibling->firstChild->expressionType)) {
+				PrintError2(tokenizer, node, "The curried argument does not match the type of the first argument.\n");
+				return false;
+			} else if (node->firstChild->sibling->firstChild->sibling) {
+				// TODO Allow currying multiple arguments together.
+				PrintError2(tokenizer, node, "You can only curry one argument at a time.\n");
+				return false;
+			}
+
+			node->expressionType = (Node *) AllocateFixed(sizeof(Node));
+			node->expressionType->type = T_FUNCPTR;
+			node->expressionType->firstChild = (Node *) AllocateFixed(sizeof(Node));
+			MemoryCopy(node->expressionType->firstChild, expressionType->firstChild, sizeof(Node));
+			node->expressionType->firstChild->firstChild = node->expressionType->firstChild->firstChild->sibling;
+			node->expressionType->firstChild->sibling = expressionType->firstChild->sibling;
+			op = T_OP_CURRY;
+			simple = false;
+		}
+
+		else if (isAnyType && KEYWORD("cast")) {
+			if (!node->firstChild->sibling->firstChild || node->firstChild->sibling->firstChild->sibling) {
+				PrintError2(tokenizer, node, ":cast() needs exactly one argument, the type to cast to.\n");
+				return false;
+			}
+
+			if (!ASTSetTypes(tokenizer, node->firstChild->sibling)) return false;
+
+			Assert(node->firstChild->sibling->type == T_CAST_TYPE_WRAPPER);
+			node->expressionType = node->firstChild->sibling->firstChild;
+			op = T_OP_CAST;
+			simple = false;
+		}
+
+		else {
+			PrintError5(tokenizer, node, expressionType, NULL, "This type does not have an operation called '%.*s'.\n", token.textBytes, token.text);
+			return false;
+		}
+
+		if (op == T_OP_FIND_AND_DELETE && ASTMatching(arguments[0], &globalExpressionTypeFloat)) {
+			PrintError2(tokenizer, node, "The 'find_and_delete' operation cannot be used with floats.\n");
+			return false;
+		} else if (op == T_OP_FIND && ASTMatching(arguments[0], &globalExpressionTypeFloat)) {
+			PrintError2(tokenizer, node, "The 'find' operation cannot be used with floats.\n");
+			return false;
+		}
+
+		if (op == T_OP_DEFAULT && ASTMatching(arguments[0], &globalExpressionTypeVoid)) {
+			PrintError2(tokenizer, node, "The 'default' operation cannot be used with error values of type void.\n");
+			return false;
+		} else if (op == T_OP_ASSERT_ERR && ASTMatching(expressionType->firstChild, &globalExpressionTypeVoid)) {
+			PrintError2(tokenizer, node, "The 'assert' operation cannot be used with error values of type void.\n");
+			return false;
+		}
+
+		if (op == T_OP_FIND_AND_DELETE && ASTMatching(arguments[0], &globalExpressionTypeStr)) {
+			op = T_OP_FIND_AND_DEL_STR;
+		} else if (op == T_OP_FIND && ASTMatching(arguments[0], &globalExpressionTypeStr)) {
+			op = T_OP_FIND_STR;
+		}
+
+		if (simple) {
+			Node *argument1 = node->firstChild->sibling->firstChild;
+			Node *argument2 = argument1 ? argument1->sibling : NULL;
+			Node *argument3 = argument2 ? argument2->sibling : NULL;
+
+			if (argument1 && arguments[0]) argument1->expectedType = arguments[0];
+			if (argument2 && arguments[1]) argument2->expectedType = arguments[1];
+
+			Node *child = node->firstChild->sibling;
+
+			while (child) {
+				if (!ASTSetTypes(tokenizer, child)) return false;
+				child = child->sibling;
+			}
+
+			if (argument3 || (argument2 && !arguments[1]) || (argument1 && !arguments[0])
+					|| (!argument2 && arguments[1]) || (!argument1 && arguments[0])) {
+				PrintError2(tokenizer, node, "Incorrect number of arguments for the operation '%.*s'.\n", token.textBytes, token.text);
+				return false;
+			}
+
+			if (argument1 && !ASTMatching(argument1->expressionType, arguments[0])) {
+				PrintError5(tokenizer, node, argument1->expressionType, arguments[0], "Incorrect first argument type for the operation '%.*s'.\n", token.textBytes, token.text);
+				return false;
+			}
+
+			if (argument2 && !ASTMatching(argument2->expressionType, arguments[1])) {
+				PrintError5(tokenizer, node, argument2->expressionType, arguments[1], "Incorrect second argument type for the operation '%.*s'.\n", token.textBytes, token.text);
+				return false;
+			}
+
+			node->expressionType = returnsItem ? expressionType->firstChild 
+				: returnsInt ? &globalExpressionTypeInt 
+				: returnsStr ? &globalExpressionTypeStr 
+				: returnsFloat ? &globalExpressionTypeFloat 
+				: returnsBool ? &globalExpressionTypeBool : NULL;
+		}
+
+		node->operationType = op;
 		return true;
 	} else {
 		Node *child = node->firstChild;
@@ -3465,183 +3694,6 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 			node->expressionType = importData->rootNode->scope->entries[index]->expressionType;
 		}
-	} else if (node->type == T_COLON) {
-		Node *expressionType = node->firstChild->expressionType;
-
-		if (!expressionType) {
-			PrintError2(tokenizer, node, "This is not an expression.\n");
-			return false;
-		}
-
-		bool isList = expressionType->type == T_LIST;
-		bool isStr = expressionType->type == T_STR;
-		bool isFuncPtr = expressionType->type == T_FUNCPTR;
-		bool isErr = expressionType->type == T_ERR;
-		bool isInt = expressionType->type == T_INT;
-		bool isFloat = expressionType->type == T_FLOAT;
-		bool isAnyType = expressionType->type == T_ANYTYPE;
-
-		if (!isList && !isStr & !isFuncPtr && !isErr && !isInt && !isFloat && !isAnyType) {
-			PrintError2(tokenizer, node, "This type does not have any ':' operations.\n");
-			return false;
-		}
-
-		Token token = node->token;
-		Node *arguments[2] = { 0 };
-		bool returnsItem = false, returnsInt = false, returnsBool = false, returnsStr = false, returnsFloat = false, simple = true;
-		uint8_t op;
-
-		if (isList && KEYWORD("resize")) arguments[0] = &globalExpressionTypeInt, op = T_OP_RESIZE;
-		else if (isList && KEYWORD("add")) arguments[0] = expressionType->firstChild, op = T_OP_ADD;
-		else if (isList && KEYWORD("insert")) arguments[0] = expressionType->firstChild, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT;
-		else if (isList && KEYWORD("insert_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT_MANY;
-		else if (isList && KEYWORD("delete")) arguments[0] = &globalExpressionTypeInt, op = T_OP_DELETE;
-		else if (isList && KEYWORD("find_and_delete")) arguments[0] = expressionType->firstChild, op = T_OP_FIND_AND_DELETE, returnsBool = true;
-		else if (isList && KEYWORD("find")) arguments[0] = expressionType->firstChild, op = T_OP_FIND, returnsInt = true;
-		else if (isList && KEYWORD("delete_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_DELETE_MANY;
-		else if (isList && KEYWORD("delete_last")) op = T_OP_DELETE_LAST;
-		else if (isList && KEYWORD("delete_all")) op = T_OP_DELETE_ALL;
-		else if (isList && KEYWORD("first")) returnsItem = true, op = T_OP_FIRST;
-		else if (isList && KEYWORD("last")) returnsItem = true, op = T_OP_LAST;
-		else if ((isList || isStr) && KEYWORD("len")) returnsInt = true, op = T_OP_LEN;
-		else if (isInt && KEYWORD("float")) returnsFloat = true, op = T_OP_INT_TO_FLOAT;
-		else if (isFloat && KEYWORD("truncate")) returnsInt = true, op = T_OP_FLOAT_TRUNCATE;
-		else if (isErr && KEYWORD("success")) returnsBool = true, op = T_OP_SUCCESS;
-		else if (isErr && KEYWORD("assert")) returnsItem = true, op = T_OP_ASSERT_ERR;
-		else if (isErr && KEYWORD("error")) returnsStr = true, op = T_OP_ERROR;
-		else if (isErr && KEYWORD("default")) arguments[0] = expressionType->firstChild, returnsItem = true, op = T_OP_DEFAULT; // TODO Warn if the expression has side effects.
-
-		else if (isFuncPtr && KEYWORD("async")) {
-			if (expressionType->firstChild->firstChild) {
-				PrintError2(tokenizer, node, "The function pointer should take no arguments. Use ':curry(...)' to set them before ':async()'.\n");
-				return false;
-			} else if (!ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeVoid)) {
-				PrintError2(tokenizer, node, "The function pointer should not return anything. Use ':discard()' or ':assert()' before ':async()'.\n");
-				return false;
-			}
-
-			// TODO Allow currying here, for convenience.
-			op = T_OP_ASYNC;
-			returnsInt = true;
-		}
-
-		else if (isFuncPtr && (KEYWORD("assert") || KEYWORD("discard"))) {
-			if (KEYWORD("assert")) {
-				op = T_OP_ASSERT;
-
-				if (!ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeBool)) {
-					PrintError2(tokenizer, node, "The return value of the function must be a bool to assert it.\n");
-					return false;
-				}
-			} else {
-				op = T_OP_DISCARD;
-
-				if (ASTMatching(expressionType->firstChild->sibling, &globalExpressionTypeVoid)) {
-					PrintError2(tokenizer, node, "The return value cannot be discarded from a function that already returns void.\n");
-					return false;
-				}
-
-				if (expressionType->firstChild->sibling && expressionType->firstChild->sibling->type == T_TUPLE) {
-					// TODO Remove this restriction?
-					PrintError2(tokenizer, node, "The discard operation cannot be used on a function returning a tuple.\n");
-					return false;
-				}
-			}
-
-			node->expressionType = (Node *) AllocateFixed(sizeof(Node));
-			node->expressionType->type = T_FUNCPTR;
-			node->expressionType->firstChild = (Node *) AllocateFixed(sizeof(Node));
-			MemoryCopy(node->expressionType->firstChild, expressionType->firstChild, sizeof(Node));
-			node->expressionType->firstChild->sibling = &globalExpressionTypeVoid;
-			simple = false;
-		}
-
-		else if (isFuncPtr && KEYWORD("curry")) {
-			if (!expressionType->firstChild->firstChild) {
-				PrintError2(tokenizer, node, "The function pointer doesn't take any arguments.\n");
-				return false;
-			} else if (!ASTMatching(expressionType->firstChild->firstChild->firstChild, node->firstChild->sibling->firstChild->expressionType)) {
-				PrintError2(tokenizer, node, "The curried argument does not match the type of the first argument.\n");
-				return false;
-			} else if (node->firstChild->sibling->firstChild->sibling) {
-				// TODO Allow currying multiple arguments together.
-				PrintError2(tokenizer, node, "You can only curry one argument at a time.\n");
-				return false;
-			}
-
-			node->expressionType = (Node *) AllocateFixed(sizeof(Node));
-			node->expressionType->type = T_FUNCPTR;
-			node->expressionType->firstChild = (Node *) AllocateFixed(sizeof(Node));
-			MemoryCopy(node->expressionType->firstChild, expressionType->firstChild, sizeof(Node));
-			node->expressionType->firstChild->firstChild = node->expressionType->firstChild->firstChild->sibling;
-			node->expressionType->firstChild->sibling = expressionType->firstChild->sibling;
-			op = T_OP_CURRY;
-			simple = false;
-		}
-
-		else if (isAnyType && KEYWORD("cast")) {
-			Assert(node->firstChild->sibling->type == T_CAST_TYPE_WRAPPER);
-			node->expressionType = node->firstChild->sibling->firstChild;
-			op = T_OP_CAST;
-			simple = false;
-		}
-
-		else {
-			PrintError5(tokenizer, node, expressionType, NULL, "This type does not have an operation called '%.*s'.\n", token.textBytes, token.text);
-			return false;
-		}
-
-		if (op == T_OP_FIND_AND_DELETE && ASTMatching(arguments[0], &globalExpressionTypeFloat)) {
-			PrintError2(tokenizer, node, "The 'find_and_delete' operation cannot be used with floats.\n");
-			return false;
-		} else if (op == T_OP_FIND && ASTMatching(arguments[0], &globalExpressionTypeFloat)) {
-			PrintError2(tokenizer, node, "The 'find' operation cannot be used with floats.\n");
-			return false;
-		}
-
-		if (op == T_OP_DEFAULT && ASTMatching(arguments[0], &globalExpressionTypeVoid)) {
-			PrintError2(tokenizer, node, "The 'default' operation cannot be used with error values of type void.\n");
-			return false;
-		} else if (op == T_OP_ASSERT_ERR && ASTMatching(expressionType->firstChild, &globalExpressionTypeVoid)) {
-			PrintError2(tokenizer, node, "The 'assert' operation cannot be used with error values of type void.\n");
-			return false;
-		}
-
-		if (op == T_OP_FIND_AND_DELETE && ASTMatching(arguments[0], &globalExpressionTypeStr)) {
-			op = T_OP_FIND_AND_DEL_STR;
-		} else if (op == T_OP_FIND && ASTMatching(arguments[0], &globalExpressionTypeStr)) {
-			op = T_OP_FIND_STR;
-		}
-
-		if (simple) {
-			Node *argument1 = node->firstChild->sibling->firstChild;
-			Node *argument2 = argument1 ? argument1->sibling : NULL;
-			Node *argument3 = argument2 ? argument2->sibling : NULL;
-
-			if (argument3 || (argument2 && !arguments[1]) || (argument1 && !arguments[0])
-					|| (!argument2 && arguments[1]) || (!argument1 && arguments[0])) {
-				PrintError2(tokenizer, node, "Incorrect number of arguments for the operation '%.*s'.\n", token.textBytes, token.text);
-				return false;
-			}
-
-			if (argument1 && !ASTMatching(argument1->expressionType, arguments[0])) {
-				PrintError2(tokenizer, node, "Incorrect first argument type for the operation '%.*s'.\n", token.textBytes, token.text);
-				return false;
-			}
-
-			if (argument2 && !ASTMatching(argument2->expressionType, arguments[1])) {
-				PrintError2(tokenizer, node, "Incorrect second argument type for the operation '%.*s'.\n", token.textBytes, token.text);
-				return false;
-			}
-
-			node->expressionType = returnsItem ? expressionType->firstChild 
-				: returnsInt ? &globalExpressionTypeInt 
-				: returnsStr ? &globalExpressionTypeStr 
-				: returnsFloat ? &globalExpressionTypeFloat 
-				: returnsBool ? &globalExpressionTypeBool : NULL;
-		}
-
-		node->operationType = op;
 	} else if (node->type == T_LOGICAL_NOT) {
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeBool)) {
 			PrintError5(tokenizer, node, node->firstChild->expressionType, NULL, "Expected a bool for the logical not '!' operator.\n");

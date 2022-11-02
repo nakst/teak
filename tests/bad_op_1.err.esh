@@ -1,0 +1,8 @@
+functype void Empty();
+
+void A(int x) {
+}
+
+void Start() {
+	Empty e = A:curry();
+}

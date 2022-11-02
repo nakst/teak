@@ -1,0 +1,4 @@
+void Start() {
+	anytype a = 5;
+	int b = a:cast();
+}

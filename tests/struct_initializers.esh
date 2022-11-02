@@ -48,4 +48,18 @@ void Start() {
 	assert u[2].y == 0.0;
 	assert u[2].z:len() == 0;
 	assert u[2].w == null;
+	u:add([x = 6.0]);
+	u:insert([x = 6.0], 0);
+	assert u:len() == 5;
+	assert u[0].x == 6.0;
+	assert u[1].x == 4.0;
+	assert u[2].x == 0.0;
+	assert u[3].x == 5.0;
+	assert u[4].x == 6.0;
+
+	err[V2] e = new err[V2] "okay";
+	V2 ev = e:default([x = 10.0]);
+	assert ev.x == 10.0;
+
+	assert (Test:curry([y = 20.0]))().y == 20.0;
 }

@@ -1,0 +1,9 @@
+functype void Empty();
+
+int A() {
+	return 5;
+}
+
+void Start() {
+	Empty e = A:discard(5);
+}
