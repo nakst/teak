@@ -6998,6 +6998,14 @@ bool ScriptReturnInt(void *engine, int64_t input) {
 	return true;
 }
 
+bool ScriptReturnDouble(void *engine, double input) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_UNMANAGED;
+	context->c->returnValue.f = input;
+	return true;
+}
+
 bool ScriptReturnString(void *engine, const void *data, size_t bytes) {
 	ExecutionContext *context = (ExecutionContext *) engine;
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
