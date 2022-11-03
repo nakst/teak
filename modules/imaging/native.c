@@ -53,6 +53,7 @@ bool ScriptExtCreate(void *engine) {
 bool ScriptExtWidth(void *engine) {
 	Bitmap *bitmap;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
+	if (!bitmap) { fprintf(stderr, "(imaging) Width: Bitmap was null.\n"); return false; }
 	if (!ScriptReturnInt(engine, bitmap->width)) return false;
 	return true;
 }
@@ -60,7 +61,8 @@ bool ScriptExtWidth(void *engine) {
 bool ScriptExtHeight(void *engine) {
 	Bitmap *bitmap;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
-	ScriptReturnInt(engine, bitmap->height);
+	if (!bitmap) { fprintf(stderr, "(imaging) Height: Bitmap was null.\n"); return false; }
+	if (!ScriptReturnInt(engine, bitmap->height)) return false;
 	return true;
 }
 
@@ -69,6 +71,7 @@ bool ScriptExtCrop(void *engine) {
 	int64_t left, right, top, bottom;
 
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
+	if (!bitmap) { fprintf(stderr, "(imaging) Crop: Bitmap was null.\n"); return false; }
 	if (!ScriptParameterInt64(engine, &left)) return false;
 	if (!ScriptParameterInt64(engine, &right)) return false;
 	if (!ScriptParameterInt64(engine, &top)) return false;
@@ -101,6 +104,8 @@ bool ScriptExtBlit(void *engine) {
 
 	if (!ScriptParameterHandle(engine, (void **) &destination)) return false;
 	if (!ScriptParameterHandle(engine, (void **) &source)) return false;
+	if (!destination) { fprintf(stderr, "(imaging) Blit: Destination bitmap was null.\n"); return false; }
+	if (!source) { fprintf(stderr, "(imaging) Blit: Source bitmap was null.\n"); return false; }
 	if (!ScriptParameterInt64(engine, &x)) return false;
 	if (!ScriptParameterInt64(engine, &y)) return false;
 	if (x >= destination->width || x <= -source->width) return true;
@@ -143,6 +148,7 @@ bool ScriptExtSave(void *engine) {
 	Bitmap *bitmap;
 	char *format;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
+	if (!bitmap) { fprintf(stderr, "(imaging) Save: Bitmap was null.\n"); return false; }
 	if (!ScriptParameterCString(engine, &format)) return false;
 	bool png = 0 == strcmp(format, "png");
 	free(format);

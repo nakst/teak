@@ -143,7 +143,7 @@ bool ScriptReturnError(void *engine, const char *message);
 
 ## Handle types
 
-In the module script, you can define `handletype`s, which can be used for storing opaque value needed by the native code. There is no way to produce values of `handletype` in scripts; they must originate from native code.
+In the module script, you can define `handletype`s, which can be used for storing opaque value needed by the native code. There is no way to produce values of `handletype` in scripts; they must originate from native code. That said, a `handletype` variable can be set to `null`.
 
 ```java
 handletype Object;
@@ -158,7 +158,7 @@ The native code can read handle parameters using:
 bool ScriptParameterHandle(void *engine, void **output);
 ```
 
-This returns the pointer associated with the handle when it was created. To create and return a handle, using `ScriptReturnHandle`:
+This returns the pointer associated with the handle when it was created. If the handle was `null`, `NULL` is returned. To create and return a handle, using `ScriptReturnHandle`:
 
 ```c
 bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *));

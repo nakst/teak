@@ -6943,8 +6943,9 @@ bool ScriptParameterHandle(void *engine, void **output) {
 	uint64_t index = context->c->stack[context->c->stackPointer - context->c->parameterCount].i;
 	if (context->heapEntriesAllocated <= index) return false;
 	HeapEntry *entry = &context->heap[index];
-	if (entry->type != T_HANDLETYPE) return false;
-	*output = entry->handleData;
+	if (entry->type == T_HANDLETYPE) *output = entry->handleData;
+	else if (entry->type == T_EOF) *output = NULL;
+	else return false;
 	return true;
 }
 
