@@ -513,9 +513,9 @@ typedef struct ExternalFunction {
 } ExternalFunction;
 
 typedef struct ImportData {
-	char *path;
-	char *prettyName;
-	char *baseDirectory;
+	const char *path;
+	const char *prettyName;
+	const char *baseDirectory;
 	void *fileData;
 	size_t fileDataBytes;
 	uintptr_t globalVariableOffset;
@@ -523,7 +523,7 @@ typedef struct ImportData {
 	struct ImportData *parentImport;
 	Node *rootNode;
 	void *library;
-	char *libraryName;
+	const char *libraryName;
 	bool isBaseModule;
 } ImportData;
 
@@ -586,9 +586,9 @@ CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context);
 void ExternalPassREPLResult(ExecutionContext *context, Value value);
 void *LibraryLoad(const char *name);
 void *LibraryGetAddress(void *library, const char *name, const char *libraryName);
-char *PathToAbsolute(const char *path);
-char *PathToPrettyName(const char *path);
-char *PathToBaseDirectory(const char *path);
+const char *PathToAbsolute(const char *path);
+const char *PathToPrettyName(const char *path);
+const char *PathToBaseDirectory(const char *path);
 
 // --------------------------------- Base module.
 
@@ -2253,8 +2253,9 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 				MemoryCopy(name, token.text, token.textBytes);
 				name[token.textBytes] = 0;
 				tokenizer->module->library = LibraryLoad(name);
-				tokenizer->module->libraryName = (char *) AllocateFixed(StringLength(name) + 1);
-				MemoryCopy(tokenizer->module->libraryName, name, StringLength(name) + 1);
+				char *libraryName = (char *) AllocateFixed(StringLength(name) + 1);
+				tokenizer->module->libraryName = libraryName;
+				MemoryCopy(libraryName, name, StringLength(name) + 1);
 
 				if (!tokenizer->module->library) {
 					return NULL;
@@ -2494,13 +2495,28 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		MemoryCopy(path + parentBaseDirectoryBytes, node->firstChild->token.text, node->firstChild->token.textBytes);
 		path[pathBytes] = 0;
 
+		const char *absolutePath = PathToAbsolute(path);
+
+		// Check this hasn't already been imported by this file.
+		Assert(node->parent->type == T_ROOT);
+		Node *rootChild = node->parent->firstChild;
+		while (rootChild != node) {
+			if (rootChild->type == T_IMPORT) {
+				Assert(rootChild->importData);
+				if (0 == StringCompare(rootChild->importData->path, absolutePath)) {
+					PrintError2(tokenizer, node, "The script at path '%s' has been loaded multiple times in this file.\n",
+							PathToPrettyName(absolutePath));
+					return false;
+				}
+			}
+			rootChild = rootChild->sibling;
+		}
+		Assert(rootChild == node);
+
 		ImportData *alreadyImportedModule = importedModules;
 
 		while (alreadyImportedModule) {
-			if (0 == StringCompare(alreadyImportedModule->path, path)) {
-				break;
-			}
-
+			if (0 == StringCompare(alreadyImportedModule->path, absolutePath)) break;
 			alreadyImportedModule = alreadyImportedModule->nextImport;
 		}
 
@@ -2536,9 +2552,9 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 				node->importData->prettyName = path;
 				node->importData->baseDirectory = NULL;
 			} else {
-				node->importData->path = PathToAbsolute(path);
-				node->importData->prettyName = PathToPrettyName(node->importData->path);
-				node->importData->baseDirectory = PathToBaseDirectory(node->importData->path);
+				node->importData->path = absolutePath;
+				node->importData->prettyName = PathToPrettyName(absolutePath);
+				node->importData->baseDirectory = PathToBaseDirectory(absolutePath);
 			}
 
 			node->importData->parentImport = tokenizer->module;
@@ -5183,6 +5199,7 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 	uintptr_t index = context->heapFirstUnusedEntry;
 	Assert(index);
 	context->heapFirstUnusedEntry = context->heap[index].nextUnusedEntry;
+	context->heap[index].externalReferenceCount = 0;
 	return index;
 }
 
@@ -7455,7 +7472,7 @@ CoroutineState *externalCoroutineUnblockedList;
 bool systemShellLoggingEnabled = true;
 bool coloredOutput;
 
-char *scriptSourceDirectory;
+const char *scriptSourceDirectory;
 
 #ifndef _WIN32
 DIR *directoryIterator;
@@ -8591,7 +8608,7 @@ void *AllocateFixed(size_t bytes) {
 	bytes = (bytes + sizeof(uintptr_t) - 1) & ~(sizeof(uintptr_t) - 1);
 
 	if (bytes >= fixedAllocationCurrentSize || fixedAllocationCurrentPosition >= fixedAllocationCurrentSize - bytes) {
-#if 0
+#if 1
 		fixedAllocationCurrentSize = bytes > 1048576 ? bytes : 1048576;
 #else
 		fixedAllocationCurrentSize = bytes;
@@ -8846,7 +8863,7 @@ void *LibraryGetAddress(void *library, const char *name, const char *libraryName
 #endif
 }
 
-char *PathToAbsolute(const char *path) {
+const char *PathToAbsolute(const char *path) {
 	char *n;
 #ifdef _WIN32
 	wchar_t *wide = WideStringFromUTF8(path, strlen(path));
@@ -8857,13 +8874,14 @@ char *PathToAbsolute(const char *path) {
 #else
 	n = realpath(path, NULL);
 #endif
+	if (!n) return path;
 	char *copy = (char *) AllocateFixed(strlen(n) + 1);
 	strcpy(copy, n);
 	free(n);
 	return copy;
 }
 
-char *PathToPrettyName(const char *path) {
+const char *PathToPrettyName(const char *path) {
 	char *copy = (char *) AllocateFixed(strlen(path) + 1);
 	strcpy(copy, path);
 
@@ -8879,7 +8897,7 @@ char *PathToPrettyName(const char *path) {
 	return copy;
 }
 
-char *PathToBaseDirectory(const char *path) {
+const char *PathToBaseDirectory(const char *path) {
 	size_t stop = strlen(path);
 
 	for (uintptr_t i = 0; path[i]; i++) {

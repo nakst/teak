@@ -8,6 +8,12 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#ifdef __linux__
+#define PRINT_I64 "%ld"
+#else
+#define PRINT_I64 "%lld"
+#endif
+
 typedef struct Bitmap {
 	int width, height;
 	uint32_t *bits;
@@ -33,9 +39,9 @@ bool ScriptExtCreate(void *engine) {
 	int64_t width, height;
 	if (!ScriptParameterInt64(engine, &width)) return false;
 	if (!ScriptParameterInt64(engine, &height)) return false;
-	if (width < 0 || width > 1000000) { fprintf(stderr, "(imaging) Create: bad width parameter %ld\n", width); return false; }
-	if (height < 0 || height > 1000000) { fprintf(stderr, "(imaging) Create: bad height parameter %ld\n", height); return false; }
-	if (4 * width * height > 2000000000) { fprintf(stderr, "(imaging) Create: image too big %ldx%ld\n", width, height); return false; }
+	if (width < 0 || width > 1000000) { fprintf(stderr, "(imaging) Create: bad width parameter "PRINT_I64"\n", width); return false; }
+	if (height < 0 || height > 1000000) { fprintf(stderr, "(imaging) Create: bad height parameter "PRINT_I64"\n", height); return false; }
+	if (4 * width * height > 2000000000) { fprintf(stderr, "(imaging) Create: image too big "PRINT_I64"x"PRINT_I64"\n", width, height); return false; }
 	Bitmap *bitmap = (Bitmap *) calloc(1, sizeof(Bitmap));
 	bitmap->width = width;
 	bitmap->height = height;
@@ -67,10 +73,10 @@ bool ScriptExtCrop(void *engine) {
 	if (!ScriptParameterInt64(engine, &right)) return false;
 	if (!ScriptParameterInt64(engine, &top)) return false;
 	if (!ScriptParameterInt64(engine, &bottom)) return false;
-	if (left < 0 || left > bitmap->width || left > right) { fprintf(stderr, "(imaging) Crop: bad left parameter %ld\n", left); return false; }
-	if (right < 0 || right > bitmap->width) { fprintf(stderr, "(imaging) Crop: bad right parameter %ld\n", right); return false; }
-	if (top < 0 || top > bitmap->height || top > bottom) { fprintf(stderr, "(imaging) Crop: bad top parameter %ld\n", top); return false; }
-	if (bottom < 0 || bottom > bitmap->height) { fprintf(stderr, "(imaging) Crop: bad bottom parameter %ld\n", bottom); return false; }
+	if (left < 0 || left > bitmap->width || left > right) { fprintf(stderr, "(imaging) Crop: bad left parameter "PRINT_I64"\n", left); return false; }
+	if (right < 0 || right > bitmap->width) { fprintf(stderr, "(imaging) Crop: bad right parameter "PRINT_I64"\n", right); return false; }
+	if (top < 0 || top > bitmap->height || top > bottom) { fprintf(stderr, "(imaging) Crop: bad top parameter "PRINT_I64"\n", top); return false; }
+	if (bottom < 0 || bottom > bitmap->height) { fprintf(stderr, "(imaging) Crop: bad bottom parameter "PRINT_I64"\n", bottom); return false; }
 
 	Bitmap copy = *bitmap;
 	copy.width = right - left;
