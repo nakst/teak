@@ -504,4 +504,21 @@ void Part7() {
 
 	// If you try to cast it to the wrong type, the script crashes.
 	// int integer = x:cast(int); (script crashes)
+
+	Part8();
+}
+
+//////////////////////////////// MODULES ////////////////////////////////
+
+// You can import another module or script file using the #import statement.
+// Pass it a path relative to the current source file,
+// and the prefix (here "img") to use for the imported symbols.
+#import "../modules/imaging/index.esh" img;
+
+void Part8() {
+	// You can access the types and functions of the module using the prefix you chose.
+	img.Bitmap bitmap = img.Create(100, 100);
+	Log("%img.Width(bitmap)%"); // Outputs 100.
+
+	// You can't modify global variables from imported modules, although you can read them.
 }

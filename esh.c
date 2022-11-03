@@ -3400,8 +3400,9 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		Node *lookup = ScopeLookup(tokenizer, node, false);
 		if (!lookup) return false;
 
-		if (!ScopeIsVariableType(lookup) && lookup->type != T_INLINE && lookup->type != T_IMPORT) {
-			PrintError2(tokenizer, node, "The identifier \"%.*s\" did not resolve to a variable.\n", 
+		if (!ScopeIsVariableType(lookup) && lookup->type != T_INLINE 
+				&& lookup->type != T_IMPORT && lookup->type != T_INTTYPE_CONSTANT) {
+			PrintError2(tokenizer, node, "The identifier \"%.*s\" did not resolve to a variable or constant.\n", 
 					node->token.textBytes, node->token.text);
 			return false;
 		}
