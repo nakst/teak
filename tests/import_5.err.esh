@@ -1,0 +1,6 @@
+
+#import "import_2.txt" a;
+#import "import_3.txt" a;
+
+void Start() {
+}

@@ -1,0 +1,7 @@
+#import "import_2.txt" a;
+#import "import_3.txt" b;
+
+void Start() {
+	assert a.Test() == 2;
+	assert b.Test() == 3;
+}

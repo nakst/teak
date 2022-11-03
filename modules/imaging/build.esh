@@ -1,0 +1,6 @@
+str compilerTemplate #option;
+
+void Start() {
+	assert compilerTemplate != "";
+	SystemShellExecute(StringReplaceFirst(StringReplaceFirst(compilerTemplate, "[SRC]", "modules/imaging/native.c"), "[DST]", "module_imaging"));
+}

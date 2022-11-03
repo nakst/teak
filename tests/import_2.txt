@@ -1,0 +1,4 @@
+
+int Test() {
+	return 2;
+}

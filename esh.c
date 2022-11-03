@@ -1,13 +1,19 @@
 // TODO Basic missing features:
+// 	> Using declared types from imported modules.
 // 	- Maps: T[int], T[str].
-// 	- Using declared types from imported modules.
-// 	- Paths to import modules should be relative to the file that imports them.
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
 // 	- Allow :assert() on err[void].
 // 	- Remove implicitely casting to anytype and instead use ":any()"?
+
+// TODO Implement logging for:
+//		w     write file, append file, create directory, copy file, move file/directory
+//		s     get file/directory type/existence/size
+//		v     get environment variable, set environment variable
+//		x     execute/evaluate shell command
+//	And document the engine flags.
 
 // TODO Syntax sugar: (ideas)
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
@@ -18,7 +24,6 @@
 // 	- Importing installed modules from a common location?
 // 	- Serialization.
 // 	- Debugging.
-// 	- Verbose mode, where every external call is logged, every variable modification is logged, every line is logged, etc? Saving output to file.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
 // 	- Win32: use the Unicode APIs for file system access. Path separator differences?
 
@@ -72,24 +77,6 @@
 // 	- Safety against extremely large scripts?
 // 	- Loading untrusted bytecode files?
 
-// TODO Sketch for logging IO:
-/*
---log=
---trace=
---confirm=
-
-some combination of:
-e     enumerate directory
-r     read file
-w     write file, append file, create directory, copy file, move file/directory
-d     delete file/directory
-s     get file/directory type/existence/size
-v     get environment variable, set environment variable
-x     execute/evaluate shell command
-
-default is --log=x
-*/
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -103,6 +90,27 @@ default is --log=x
 #define EXTCALL_RETURN_ERR_UNMANAGED (5)
 #define EXTCALL_RETURN_ERR_MANAGED   (6)
 #define EXTCALL_RETURN_ERR_ERROR     (7)
+
+// Categories of actions:
+#define ACTION_ENUMERATE   (0)
+#define ACTION_READ        (1)
+#define ACTION_WRITE       (2)
+#define ACTION_DELETE      (3)
+#define ACTION_PROPERTIES  (4)
+#define ACTION_ENVIRONMENT (5)
+#define ACTION_EXECUTE     (6)
+#define ACTION_COUNT       (7)
+
+// What to do before the action is run:
+#define BEFORE_SILENT (0)
+#define BEFORE_LOG    (1)
+#define BEFORE_TRACE  (2)
+#define BEFORE_ASK    (3)
+
+// What to do if the action fails:
+#define FAILURE_PROPAGATE (0)
+#define FAILURE_ASK       (1)
+#define FAILURE_STOP      (2)
 
 #define T_ERROR               (0)
 #define T_EOF                 (1)
@@ -322,7 +330,7 @@ typedef struct Tokenizer {
 	size_t inputBytes;
 	uintptr_t position;
 	uintptr_t line;
-	bool error, isBaseModule;
+	bool error;
 } Tokenizer;
 
 typedef struct Scope {
@@ -452,6 +460,10 @@ typedef struct CoroutineState {
 	size_t stackEntriesAllocated;
 	BackTraceItem backTrace[300];
 	uintptr_t backTracePointer;
+	uintptr_t instructionPointer;
+	uintptr_t variableBase;
+
+	// Coroutine management:
 	uint64_t id;
 	int64_t unblockedBy;
 	struct CoroutineState *nextCoroutine;
@@ -465,8 +477,6 @@ typedef struct CoroutineState {
 	struct CoroutineState ***waitingOn;
 	size_t waitingOnCount;
 	bool awaiting, startedByAsync, externalCoroutine;
-	uintptr_t instructionPointer;
-	uintptr_t variableBase;
 	Value externalCoroutineData;
 	void *externalCoroutineData2;
 
@@ -504,7 +514,8 @@ typedef struct ExternalFunction {
 
 typedef struct ImportData {
 	char *path;
-	size_t pathBytes;
+	char *prettyName;
+	char *baseDirectory;
 	void *fileData;
 	size_t fileDataBytes;
 	uintptr_t globalVariableOffset;
@@ -512,6 +523,8 @@ typedef struct ImportData {
 	struct ImportData *parentImport;
 	Node *rootNode;
 	void *library;
+	char *libraryName;
+	bool isBaseModule;
 } ImportData;
 
 Node globalExpressionTypeVoid = { .type = T_VOID };
@@ -534,6 +547,7 @@ ImportData **importedModulesLink = &importedModules;
 bool noBaseModule; // Useful for debugging the parser.
 bool outputOverview;
 struct RNGState { uint64_t s[4]; } rngState;
+int actionBefore[ACTION_COUNT], actionFailure[ACTION_COUNT];
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -553,6 +567,8 @@ uintptr_t HeapAllocate(ExecutionContext *context);
 void *AllocateFixed(size_t bytes);
 void *AllocateResize(void *old, size_t bytes);
 int MemoryCompare(const void *a, const void *b, size_t bytes);
+int StringCompare(const char *a, const char *b);
+size_t StringLength(const char *a);
 void MemoryCopy(void *a, const void *b, size_t bytes);
 size_t PrintIntegerToBuffer(char *buffer, size_t bufferBytes, int64_t i); // TODO This shouldn't be in the platform layer.
 size_t PrintFloatToBuffer(char *buffer, size_t bufferBytes, double f); // TODO This shouldn't be in the platform layer.
@@ -569,12 +585,15 @@ void *FileLoad(const char *path, size_t *length);
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context);
 void ExternalPassREPLResult(ExecutionContext *context, Value value);
 void *LibraryLoad(const char *name);
-void *LibraryGetAddress(void *library, const char *name);
+void *LibraryGetAddress(void *library, const char *name, const char *libraryName);
+char *PathToAbsolute(const char *path);
+char *PathToPrettyName(const char *path);
+char *PathToBaseDirectory(const char *path);
 
 // --------------------------------- Base module.
 
 char baseModuleSource[] = {
-#include "base_module.h"
+#include "modules/base/index.h"
 };
 
 // --------------------------------- External function calls.
@@ -2006,7 +2025,7 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 	root->type = T_ROOT;
 	Node **link = &root->firstChild;
 
-	if (!tokenizer->isBaseModule && !noBaseModule) {
+	if (!tokenizer->module->isBaseModule && !noBaseModule) {
 		Node *node = (Node *) AllocateFixed(sizeof(Node));
 		node->type = T_IMPORT;
 		node->token.type = T_INLINE;
@@ -2234,6 +2253,8 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 				MemoryCopy(name, token.text, token.textBytes);
 				name[token.textBytes] = 0;
 				tokenizer->module->library = LibraryLoad(name);
+				tokenizer->module->libraryName = (char *) AllocateFixed(StringLength(name) + 1);
+				MemoryCopy(tokenizer->module->libraryName, name, StringLength(name) + 1);
 
 				if (!tokenizer->module->library) {
 					return NULL;
@@ -2333,13 +2354,11 @@ bool ScopeCheckNotAlreadyUsed(Tokenizer *tokenizer, Node *node) {
 							node->token.textBytes, node->token.text);
 
 					if (scope->entries[i]->type == T_INLINE) {
-						if (scope->entries[i]->importData->pathBytes == 15 
-								&& 0 == MemoryCompare(scope->entries[i]->importData->path, "__base_module__", scope->entries[i]->importData->pathBytes)) {
-							PrintDebug("It was declared in base library module.\n", 
-									scope->entries[i]->importData->path);
+						if (scope->entries[i]->importData->isBaseModule) {
+							PrintDebug("It was declared in base library module.\n");
 						} else {
 							PrintDebug("It was imported inline from the module '%s'.\n", 
-									scope->entries[i]->importData->path);
+									scope->entries[i]->importData->prettyName);
 						}
 					}
 
@@ -2463,11 +2482,22 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 	}
 
 	if (node->type == T_IMPORT) {
+		size_t parentBaseDirectoryBytes = node->firstChild->token.module ? (StringLength(node->firstChild->token.module->baseDirectory) + 1) : 0;
+		size_t pathBytes = parentBaseDirectoryBytes + node->firstChild->token.textBytes;
+		char *path = (char *) AllocateFixed(pathBytes + 1);
+
+		if (node->firstChild->token.module) {
+			MemoryCopy(path, node->firstChild->token.module->baseDirectory, parentBaseDirectoryBytes - 1);
+			path[parentBaseDirectoryBytes - 1] = '/';
+		}
+		
+		MemoryCopy(path + parentBaseDirectoryBytes, node->firstChild->token.text, node->firstChild->token.textBytes);
+		path[pathBytes] = 0;
+
 		ImportData *alreadyImportedModule = importedModules;
 
 		while (alreadyImportedModule) {
-			if (alreadyImportedModule->pathBytes == node->firstChild->token.textBytes
-					&& 0 == MemoryCompare(alreadyImportedModule->path, node->firstChild->token.text, alreadyImportedModule->pathBytes)) {
+			if (0 == StringCompare(alreadyImportedModule->path, path)) {
 				break;
 			}
 
@@ -2475,26 +2505,18 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		}
 
 		if (alreadyImportedModule) {
-#if 0
-			PrintError2(tokenizer, node, "The script at path '%.*s' has already been imported as a module.\n",
-					node->firstChild->token.textBytes, node->firstChild->token.text);
-			return false;
-#else
 			node->importData = alreadyImportedModule;
-#endif
+			// TODO Check for cyclic dependencies?!
 		} else {
-			char *path = (char *) AllocateFixed(node->firstChild->token.textBytes + 1);
-			MemoryCopy(path, node->firstChild->token.text, node->firstChild->token.textBytes);
-			path[node->firstChild->token.textBytes] = 0;
-
 			Tokenizer t = { 0 };
 			void *fileData;
+			bool isBaseModule = false;
 
 			if (node->firstChild->token.textBytes == 15 
 					&& 0 == MemoryCompare(node->firstChild->token.text, "__base_module__", node->firstChild->token.textBytes)) {
 				fileData = baseModuleSource;
 				t.inputBytes = sizeof(baseModuleSource) - 1;
-				t.isBaseModule = true;
+				isBaseModule = true;
 			} else {
 				fileData = FileLoad(path, &t.inputBytes);
 			}
@@ -2508,20 +2530,29 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 			node->importData = (ImportData *) AllocateFixed(sizeof(ImportData));
 			node->importData->fileDataBytes = t.inputBytes;
 			node->importData->fileData = fileData;
-			node->importData->path = path;
-			node->importData->pathBytes = node->firstChild->token.textBytes;
+
+			if (isBaseModule) {
+				node->importData->path = path;
+				node->importData->prettyName = path;
+				node->importData->baseDirectory = NULL;
+			} else {
+				node->importData->path = PathToAbsolute(path);
+				node->importData->prettyName = PathToPrettyName(node->importData->path);
+				node->importData->baseDirectory = PathToBaseDirectory(node->importData->path);
+			}
+
 			node->importData->parentImport = tokenizer->module;
+			node->importData->isBaseModule = isBaseModule;
 
 			ImportData *parentImport = tokenizer->module;
 
 			while (parentImport) {
-				if (parentImport->pathBytes == node->firstChild->token.textBytes
-						&& 0 == MemoryCompare(parentImport->path, node->firstChild->token.text, parentImport->pathBytes)) {
+				if (0 == StringCompare(parentImport->path, path)) {
 					PrintError3("There is a cyclic import dependency.\n");
 					ImportData *data = node->importData;
 
 					while (data->parentImport) {
-						PrintDebug("- '%s' is imported by '%s'\n", data->path, data->parentImport->path);
+						PrintDebug("- '%s' is imported by '%s'\n", data->prettyName, data->parentImport->prettyName);
 						data = data->parentImport;
 					}
 
@@ -3695,7 +3726,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 			if (index == -1) {
 				PrintError2(tokenizer, node, "The variable or function '%.*s' is not in the imported module '%s'.\n",
-						node->token.textBytes, node->token.text, importData->path);
+						node->token.textBytes, node->token.text, importData->prettyName);
 				return false;
 			}
 
@@ -4953,7 +4984,7 @@ bool ASTGenerate(Tokenizer *tokenizer, Node *root, ExecutionContext *context) {
 				MemoryCopy(name, child->token.text, child->token.textBytes);
 				name[child->token.textBytes] = 0;
 
-				void *address = LibraryGetAddress(child->token.module->library, name);
+				void *address = LibraryGetAddress(child->token.module->library, name, child->token.module->libraryName);
 				if (!address) return false;
 				uint8_t b = T_LIBCALL;
 				FunctionBuilderAppend(context->functionData, &b, sizeof(b));
@@ -5244,6 +5275,48 @@ void ScriptHeapEntryToString(ExecutionContext *context, HeapEntry *entry, const 
 		*text = "";
 		*bytes = 0;
 	}
+}
+
+bool ScriptReturnErrors(ExecutionContext *context, int result, Value returnValue) {
+	bool isErr = result == EXTCALL_RETURN_ERR_ERROR 
+		|| result == EXTCALL_RETURN_ERR_MANAGED 
+		|| result == EXTCALL_RETURN_ERR_UNMANAGED;
+
+	if (result == EXTCALL_RETURN_UNMANAGED || result == EXTCALL_RETURN_MANAGED || isErr) {
+		if (context->c->stackPointer == context->c->stackEntriesAllocated) {
+			PrintDebug("Evaluation stack overflow.\n");
+			return false;
+		}
+
+		if (isErr) {
+			if (result != EXTCALL_RETURN_ERR_ERROR || returnValue.i) {
+				// Temporarily put the return value on the stack in case garbage collection occurs 
+				// in the following HeapAllocate (i.e. before the return value has been wrapped).
+				context->c->stackIsManaged[context->c->stackPointer] = result != EXTCALL_RETURN_ERR_UNMANAGED;
+				context->c->stack[context->c->stackPointer++] = returnValue;
+				
+				// TODO Handle memory allocation failures here.
+				uintptr_t index = HeapAllocate(context);
+				context->heap[index].type = T_ERR;
+				context->heap[index].success = result != EXTCALL_RETURN_ERR_ERROR;
+				context->heap[index].internalValuesAreManaged = result != EXTCALL_RETURN_ERR_UNMANAGED;
+				context->heap[index].errorValue = returnValue;
+				returnValue.i = index;
+
+				context->c->stackPointer--;
+			} else {
+				// Unknown error.
+				returnValue.i = 0;
+			}
+
+			result = EXTCALL_RETURN_MANAGED;
+		}
+
+		context->c->stackIsManaged[context->c->stackPointer] = result == EXTCALL_RETURN_MANAGED;
+		context->c->stack[context->c->stackPointer++] = returnValue;
+	}
+
+	return true;
 }
 
 int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *context) {
@@ -6588,43 +6661,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 						// PrintDebug("end external coroutine %ld\n", context->c->id);
 					}
 
-					bool isErr = result == EXTCALL_RETURN_ERR_ERROR 
-						|| result == EXTCALL_RETURN_ERR_MANAGED 
-						|| result == EXTCALL_RETURN_ERR_UNMANAGED;
-
-					if (result == EXTCALL_RETURN_UNMANAGED || result == EXTCALL_RETURN_MANAGED || isErr) {
-						if (context->c->stackPointer == context->c->stackEntriesAllocated) {
-							PrintDebug("Evaluation stack overflow.\n");
-							return -1;
-						}
-
-						if (isErr) {
-							if (result != EXTCALL_RETURN_ERR_ERROR || returnValue.i) {
-								// Temporarily put the return value on the stack in case garbage collection occurs 
-								// in the following HeapAllocate (i.e. before the return value has been wrapped).
-								context->c->stackIsManaged[context->c->stackPointer] = result != EXTCALL_RETURN_ERR_UNMANAGED;
-								context->c->stack[context->c->stackPointer++] = returnValue;
-								
-								// TODO Handle memory allocation failures here.
-								uintptr_t index = HeapAllocate(context);
-								context->heap[index].type = T_ERR;
-								context->heap[index].success = result != EXTCALL_RETURN_ERR_ERROR;
-								context->heap[index].internalValuesAreManaged = result != EXTCALL_RETURN_ERR_UNMANAGED;
-								context->heap[index].errorValue = returnValue;
-								returnValue.i = index;
-
-								context->c->stackPointer--;
-							} else {
-								// Unknown error.
-								returnValue.i = 0;
-							}
-
-							result = EXTCALL_RETURN_MANAGED;
-						}
-
-						context->c->stackIsManaged[context->c->stackPointer] = result == EXTCALL_RETURN_MANAGED;
-						context->c->stack[context->c->stackPointer++] = returnValue;
-					}
+					if (!ScriptReturnErrors(context, result, returnValue)) return -1;
 				} else {
 					return -1;
 				}
@@ -6641,16 +6678,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				}
 
 				context->c->stackPointer -= context->c->parameterCount;
-
-				if (context->c->returnValueType != EXTCALL_NO_RETURN) {
-					if (context->c->stackPointer == context->c->stackEntriesAllocated) {
-						PrintDebug("Evaluation stack overflow.\n");
-						return -1;
-					}
-
-					context->c->stackIsManaged[context->c->stackPointer] = context->c->returnValueType == EXTCALL_RETURN_MANAGED;
-					context->c->stack[context->c->stackPointer++] = context->c->returnValue;
-				}
+				if (!ScriptReturnErrors(context, context->c->returnValueType, context->c->returnValue)) return -1;
 			}
 
 			context->c->localVariableCount = variableBase + 1;
@@ -6820,6 +6848,32 @@ bool ScriptParameterCString(void *engine, char **output) {
 	return true;
 }
 
+bool ScriptParameterString(void *engine, const void **output, size_t *outputBytes) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	context->c->parameterCount++;
+	if (context->c->stackPointer < context->c->parameterCount) return false;
+	if (!context->c->stackIsManaged[context->c->stackPointer - context->c->parameterCount]) return false;
+	uint64_t index = context->c->stack[context->c->stackPointer - context->c->parameterCount].i;
+	if (context->heapEntriesAllocated <= index) return false;
+	HeapEntry *entry = &context->heap[index];
+	ScriptHeapEntryToString(context, entry, (const char **) output, outputBytes);
+	return true;
+}
+
+bool ScriptParameterHandle(void *engine, void **output) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	context->c->parameterCount++;
+	if (context->c->stackPointer < context->c->parameterCount) return false;
+	if (!context->c->stackIsManaged[context->c->stackPointer - context->c->parameterCount]) return false;
+	uint64_t index = context->c->stack[context->c->stackPointer - context->c->parameterCount].i;
+	if (context->heapEntriesAllocated <= index) return false;
+	HeapEntry *entry = &context->heap[index];
+	if (entry->type != T_HANDLETYPE) return false;
+	*output = entry->handleData;
+	return true;
+}
+
+#if 0
 void ScriptHeapRefClose(void *engine, intptr_t index) {
 	ExecutionContext *context = (ExecutionContext *) engine;
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
@@ -6838,6 +6892,7 @@ bool ScriptParameterHeapRef(void *engine, intptr_t *output) {
 	*output = index;
 	return true;
 }
+#endif
 
 bool ScriptParameterInt64(void *engine, int64_t *output) {
 	ExecutionContext *context = (ExecutionContext *) engine;
@@ -6860,22 +6915,48 @@ bool ScriptParameterUint32(void *engine, uint32_t *output) { int64_t i; if (!Scr
 bool ScriptParameterUint64(void *engine, uint64_t *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
 bool ScriptParameterInt32 (void *engine,  int32_t *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
 
-void ScriptReturnInt(void *engine, int64_t input) {
+bool ScriptReturnInt(void *engine, int64_t input) {
 	ExecutionContext *context = (ExecutionContext *) engine;
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_UNMANAGED;
 	context->c->returnValue.i = input;
-}
-
-bool ScriptParameterPointer(void *engine, void **output) {
-	int64_t i; 
-	if (!ScriptParameterInt64(engine, &i)) return false;
-	*output = (void *) (intptr_t) i; 
 	return true;
 }
 
-void ScriptReturnPointer(void *engine, void *input) {
-	ScriptReturnInt(engine, (int64_t) (intptr_t) input);
+bool ScriptReturnString(void *engine, const void *data, size_t bytes) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
+	Value *returnValue = &context->c->returnValue;
+	RETURN_STRING_COPY((const char *) data, bytes);
+	return true;
+}
+
+bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *)) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
+	int64_t index = context->c->returnValue.i = HeapAllocate(context); // TODO Handle memory allocation failures here.
+	context->heap[index].type = T_HANDLETYPE;
+	context->heap[index].close = close;
+	context->heap[index].handleData = handleData;
+	return true;
+}
+
+bool ScriptReturnBoxInError(void *engine) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	Assert(context->c->returnValueType == EXTCALL_RETURN_MANAGED || context->c->returnValueType == EXTCALL_RETURN_UNMANAGED);
+	context->c->returnValueType = context->c->returnValueType == EXTCALL_RETURN_MANAGED ? EXTCALL_RETURN_ERR_MANAGED : EXTCALL_RETURN_ERR_UNMANAGED;
+	return true;
+}
+
+bool ScriptReturnError(void *engine, const char *message) {
+	ExecutionContext *context = (ExecutionContext *) engine;
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_ERR_ERROR;
+	Value *returnValue = &context->c->returnValue;
+	RETURN_STRING_COPY(message, StringLength(message));
+	return true;
 }
 
 bool ScriptRunCallback(void *engine, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount) {
@@ -7063,7 +7144,7 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 
 		if (index != -1) {
 			if (!ASTMatching(&mainFunctionType, module->rootNode->scope->entries[ScopeLookupIndex(&n, module->rootNode->scope, false, true)]->expressionType)) {
-				PrintError3("The 'Initialise' function in the module '%s' should take no arguments and return 'void'.\n", module->path);
+				PrintError3("The 'Initialise' function in the module '%s' should take no arguments and return 'void'.\n", module->prettyName);
 				return 1;
 			}
 
@@ -7111,7 +7192,7 @@ void ScriptFree(ExecutionContext *context) {
 	ImportData *module = importedModules;
 
 	while (module) {
-		if (module->pathBytes != 15 || 0 != MemoryCompare(module->path, "__base_module__", module->pathBytes)) {
+		if (!module->isBaseModule) {
 			AllocateResize(module->fileData, 0);
 		}
 
@@ -7157,7 +7238,7 @@ void PrintBackTrace(ExecutionContext *context, uint32_t instructionPointer, Coro
 	LineNumberLookup(context, instructionPointer, &lineNumber);
 
 	if (lineNumber.importData) {
-		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, lineNumber.importData->path, lineNumber.lineNumber, lineNumber.function ? "in" : "",
+		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, lineNumber.importData->prettyName, lineNumber.lineNumber, lineNumber.function ? "in" : "",
 				lineNumber.function ? (int) lineNumber.function->textBytes : 0, lineNumber.function ? lineNumber.function->text : "");
 	}
 
@@ -7167,7 +7248,7 @@ void PrintBackTrace(ExecutionContext *context, uint32_t instructionPointer, Coro
 	while (btp > minimum) {
 		BackTraceItem *link = &c->backTrace[--btp];
 		LineNumberLookup(context, link->instructionPointer - 1, &lineNumber);
-		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, lineNumber.importData->path ? lineNumber.importData->path : "??", 
+		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, lineNumber.importData->prettyName ? lineNumber.importData->prettyName : "??", 
 				lineNumber.lineNumber, lineNumber.function ? "in" : "",
 				lineNumber.function ? (int) lineNumber.function->textBytes : 0, lineNumber.function ? lineNumber.function->text : "");
 	}
@@ -7203,11 +7284,12 @@ void PrintLine(ImportData *importData, uintptr_t line) {
 	PrintDebug(">> %.*s\n", (int) length, &((char *) importData->fileData)[position]);
 }
 
-int ScriptExecuteFromFile(char *scriptPath, size_t scriptPathBytes, char *fileData, size_t fileDataBytes, bool replMode) {
+int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes, bool replMode) {
 	Tokenizer tokenizer = { 0 };
 	ImportData importData = { 0 };
-	importData.path = scriptPath;
-	importData.pathBytes = scriptPathBytes;
+	importData.path = PathToAbsolute(scriptPath);
+	importData.prettyName = PathToPrettyName(importData.path);
+	importData.baseDirectory = PathToBaseDirectory(importData.path);
 	importData.fileData = fileData;
 	importData.fileDataBytes = fileDataBytes;
 	tokenizer.module = &importData;
@@ -7430,11 +7512,14 @@ wchar_t *WideStringConcatenate(const wchar_t *a, const wchar_t *b) {
 #define RETURN_ERROR_WIN32(error) do { MakeErrorWin32(context, returnValue, error); return EXTCALL_RETURN_ERR_ERROR; } while (0)
 
 #ifdef _WIN32
-void MakeErrorWin32(ExecutionContext *context, Value *returnValue, int error) {
-	const char *text = NULL;
-
-	if (error == ERROR_PATH_NOT_FOUND) text = "PATH_NOT_TRAVERSABLE";
+const char *ErrorStringFromWin32(int error) {
 	// TODO Other errors.
+	if (error == ERROR_PATH_NOT_FOUND) return "PATH_NOT_TRAVERSABLE";
+	return NULL;
+}
+
+void MakeErrorWin32(ExecutionContext *context, Value *returnValue, int error) {
+	const char *text = ErrorStringFromWin32(error);
 
 	if (text) {
 		RETURN_STRING_COPY(text, strlen(text));
@@ -7443,26 +7528,28 @@ void MakeErrorWin32(ExecutionContext *context, Value *returnValue, int error) {
 	}
 }
 #endif
+
+const char *ErrorStringFromErrno(int error) {
+	if (error == EAGAIN || error == EBUSY) return "OPERATION_BLOCKED";
+	if (error == ENOTEMPTY) return "DIRECTORY_NOT_EMPTY";
+	if (error == EFBIG) return "FILE_TOO_LARGE";
+	if (error == ENOSPC) return "DRIVE_FULL";
+	if (error == EROFS) return "FILE_ON_READ_ONLY_VOLUME";
+	if (error == ENOTDIR || error == EISDIR) return "INCORRECT_NODE_TYPE";
+	if (error == ENOENT) return "FILE_DOES_NOT_EXIST";
+	if (error == EEXIST) return "ALREADY_EXISTS";
+	if (error == ENOMEM) return "INSUFFICIENT_RESOURCES";
+	if (error == EPERM || error == EACCES) return "PERMISSION_NOT_GRANTED";
+	if (error == EXDEV) return "VOLUME_MISMATCH";
+	if (error == EIO) return "HARDWARE_FAILURE";
+#ifndef _WIN32
+	if (error == EDQUOT) return "DRIVE_FULL";
+#endif
+	return NULL;
+}
 
 void MakeError(ExecutionContext *context, Value *returnValue, int error) {
-	const char *text = NULL;
-
-	if (error == EAGAIN || error == EBUSY) text = "OPERATION_BLOCKED";
-	if (error == ENOTEMPTY) text = "DIRECTORY_NOT_EMPTY";
-	if (error == EFBIG) text = "FILE_TOO_LARGE";
-	if (error == ENOSPC) text = "DRIVE_FULL";
-	if (error == EROFS) text = "FILE_ON_READ_ONLY_VOLUME";
-	if (error == ENOTDIR || error == EISDIR) text = "INCORRECT_NODE_TYPE";
-	if (error == ENOENT) text = "FILE_DOES_NOT_EXIST";
-	if (error == EEXIST) text = "ALREADY_EXISTS";
-	if (error == ENOMEM) text = "INSUFFICIENT_RESOURCES";
-	if (error == EPERM || error == EACCES) text = "PERMISSION_NOT_GRANTED";
-	if (error == EXDEV) text = "VOLUME_MISMATCH";
-	if (error == EIO) text = "HARDWARE_FAILURE";
-
-#ifndef _WIN32
-	if (error == EDQUOT) text = "DRIVE_FULL";
-#endif
+	const char *text = ErrorStringFromErrno(error);
 
 	if (text) {
 		RETURN_STRING_COPY(text, strlen(text));
@@ -7470,6 +7557,77 @@ void MakeError(ExecutionContext *context, Value *returnValue, int error) {
 		returnValue->i = 0;
 	}
 }
+
+bool ActionBefore(ExecutionContext *context, int category, const char *name, const char *parameter1, 
+		size_t parameter1Bytes, const char *parameter2, size_t parameter2Bytes) {
+	if (actionBefore[category] != BEFORE_SILENT) {
+		if (parameter2) {
+			PrintDebug("\033[0;32m%s: \"%.*s\" --> \"%.*s\"\033[0m\n", name, parameter1Bytes, parameter1, parameter2Bytes, parameter2);
+		} else if (parameter1) {
+			PrintDebug("\033[0;32m%s: \"%.*s\"\033[0m\n", name, parameter1Bytes, parameter1);
+		} else {
+			PrintDebug("\033[0;32m%s\033[0m\n", name);
+		}
+
+		if (actionBefore[category] == BEFORE_TRACE) {
+			PrintBackTrace(context, 0, context->c, "");
+		}
+
+		if (actionBefore[category] == BEFORE_ASK) {
+#ifdef _WIN32
+#pragma message ("BEFORE_ASK unimplemented")
+#else
+			PrintDebug("\033[0;32mContinue? (Y/n)\033[0m", name);
+			char *line = NULL;
+			size_t pos;
+			size_t unused = getline(&line, &pos, stdin);
+			(void) unused;
+			bool stop = line && (line[0] == 'n' || line[0] == 'N');
+			free(line);
+			if (stop) return false;
+#endif
+		}
+	}
+
+	return true;
+}
+
+bool ActionFailure(ExecutionContext *context, int category, const char *name, const char *error, const char *parameter1, 
+		size_t parameter1Bytes, const char *parameter2, size_t parameter2Bytes) {
+	if (actionFailure[category] != FAILURE_PROPAGATE) {
+		if (parameter2) {
+			PrintDebug("\033[0;31m%s: \"%.*s\" --> \"%.*s\", error \"%s\"\033[0m\n", name, parameter1Bytes, parameter1, parameter2Bytes, parameter2, error);
+		} else if (parameter1) {
+			PrintDebug("\033[0;31m%s: \"%.*s\", error \"%s\"\033[0m\n", name, parameter1Bytes, parameter1, error);
+		} else {
+			PrintDebug("\033[0;31m%s, error \"%s\"\033[0m\n", name, error);
+		}
+
+		PrintBackTrace(context, 0, context->c, "");
+
+		if (actionFailure[category] == FAILURE_ASK) {
+#ifdef _WIN32
+#pragma message ("FAILURE_ASK unimplemented")
+#else
+			PrintDebug("\033[0;32mContinue? (Y/n)\033[0m", name);
+			char *line = NULL;
+			size_t pos;
+			size_t unused = getline(&line, &pos, stdin);
+			(void) unused;
+			bool stop = line && (line[0] == 'n' || line[0] == 'N');
+			free(line);
+			if (stop) return false;
+#endif
+		}
+
+		if (actionFailure[category] == FAILURE_STOP) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 
 void ExternalCoroutineDone(CoroutineState *coroutine) {
 #ifdef __linux__
@@ -7731,6 +7889,7 @@ int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
+	if (!ActionBefore(context, ACTION_DELETE, "delete", entryText, entryBytes, NULL, 0)) return 0;
 #ifdef _WIN32
 	wchar_t *temporary = WideStringFromUTF8(entryText, entryBytes);
 	if (!temporary) return EXTCALL_RETURN_UNMANAGED;
@@ -7743,6 +7902,7 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 	}
 
 	free(temporary);
+	if (!returnValue->i && !ActionFailure(context, ACTION_DELETE, "delete", ErrorStringFromWin32(GetLastError()), entryText, entryBytes, NULL, 0)) return 0;
 	if (!returnValue->i) RETURN_ERROR_WIN32(GetLastError());
 #else
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
@@ -7939,6 +8099,7 @@ int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *retur
 int External_DirectoryInternalStartIteration(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
+	if (!ActionBefore(context, ACTION_ENUMERATE, "enumerate directory", entryText, entryBytes, NULL, 0)) return 0;
 #ifdef _WIN32
 	if (directoryIterator != INVALID_HANDLE_VALUE) RETURN_ERROR(-1);
 	if (!entryBytes) RETURN_ERROR(ENOENT);
@@ -7996,12 +8157,14 @@ int External_DirectoryInternalNextIteration(ExecutionContext *context, Value *re
 
 int ExternalFileReadAll(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_READ, "read file", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
 	size_t length = 0;
 	void *data = FileLoad(temporary, &length);
 	free(temporary);
+	if (!data && !ActionFailure(context, ACTION_READ, "read file", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
 	if (!data) RETURN_ERROR(errno);
 	RETURN_STRING_NO_COPY(data, length);
 	return EXTCALL_RETURN_ERR_MANAGED;
@@ -8428,7 +8591,7 @@ void *AllocateFixed(size_t bytes) {
 	bytes = (bytes + sizeof(uintptr_t) - 1) & ~(sizeof(uintptr_t) - 1);
 
 	if (bytes >= fixedAllocationCurrentSize || fixedAllocationCurrentPosition >= fixedAllocationCurrentSize - bytes) {
-#if 1
+#if 0
 		fixedAllocationCurrentSize = bytes > 1048576 ? bytes : 1048576;
 #else
 		fixedAllocationCurrentSize = bytes;
@@ -8466,6 +8629,14 @@ void *AllocateResize(void *old, size_t bytes) {
 	}
 
 	return p;
+}
+
+int StringCompare(const char *a, const char *b) {
+	return strcmp(a, b);
+}
+
+size_t StringLength(const char *a) {
+	return strlen(a);
 }
 
 int MemoryCompare(const void *a, const void *b, size_t bytes) {
@@ -8561,7 +8732,7 @@ void PrintOutputType(Node *node) {
 }
 
 void PrintError(Tokenizer *tokenizer, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) tokenizer->line, tokenizer->module->path);
+	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) tokenizer->line, tokenizer->module->prettyName);
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -8570,7 +8741,7 @@ void PrintError(Tokenizer *tokenizer, const char *format, ...) {
 }
 
 void PrintError2(Tokenizer *tokenizer, Node *node, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->path);
+	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->prettyName);
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -8590,7 +8761,7 @@ void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const c
 	LineNumber lineNumber = { 0 };
 	LineNumberLookup(context, instructionPointer, &lineNumber);
 	fprintf(stderr, "\033[0;33mRuntime error on line %d of '%s'\033[0m:\n", lineNumber.lineNumber, 
-			lineNumber.importData ? lineNumber.importData->path : "??");
+			lineNumber.importData ? lineNumber.importData->prettyName : "??");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -8601,7 +8772,7 @@ void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const c
 }
 
 void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->path);
+	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->prettyName);
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -8629,6 +8800,7 @@ void *LibraryLoad(const char *name) {
 	return NULL;
 #else
 	Assert(strlen(name) < 256);
+
 	char name2[256 + 20];
 	strcpy(name2, "l");
 	strcat(name2, name);
@@ -8637,17 +8809,25 @@ void *LibraryLoad(const char *name) {
 	void *library = dlopen(name2, RTLD_LAZY);
 
 	if (!library) {
-		PrintError3("The library \"%s\" could not be found or loaded.\n", name2);
+		strcpy(name2, "./l");
+		strcat(name2, name);
+		strcat(name2, ".so");
+
+		library = dlopen(name2, RTLD_LAZY);
+
+		if (!library) {
+			PrintError3("The library \"%s\" could not be found or loaded.\n", name2);
+		}
 	}
 
 	return library;
 #endif
 }
 
-void *LibraryGetAddress(void *library, const char *name) {
+void *LibraryGetAddress(void *library, const char *name, const char *libraryName) {
 #ifdef _WIN32
 	(void) library;
-	PrintError3("The library symbol \"%s\" could not be found.\n", name);
+	PrintError3("The library symbol \"%s\" could not be found in the library \"%s\".\n", name, libraryName);
 	return NULL;
 #else
 	Assert(strlen(name) < 256);
@@ -8659,11 +8839,63 @@ void *LibraryGetAddress(void *library, const char *name) {
 	void *address = dlsym(library, name2);
 
 	if (!address) {
-		PrintError3("The library symbol \"%s\" could not be found.\n", name2);
+		PrintError3("The library symbol \"%s\" could not be found in the library \"%s\".\n", name2, libraryName);
 	}
 
 	return address;
 #endif
+}
+
+char *PathToAbsolute(const char *path) {
+	char *n;
+#ifdef _WIN32
+	wchar_t *wide = WideStringFromUTF8(path, strlen(path));
+	wchar_t *result = (wchar_t *) calloc(1, sizeof(wchar_t) * (MAX_PATH + 1));
+	GetFullPathNameW(wide, MAX_PATH, result, NULL);
+	n = WideStringToUTF8(wide);
+	free(wide);
+#else
+	n = realpath(path, NULL);
+#endif
+	char *copy = (char *) AllocateFixed(strlen(n) + 1);
+	strcpy(copy, n);
+	free(n);
+	return copy;
+}
+
+char *PathToPrettyName(const char *path) {
+	char *copy = (char *) AllocateFixed(strlen(path) + 1);
+	strcpy(copy, path);
+
+	if (strlen(path) > strlen(scriptSourceDirectory) && 0 == memcmp(path, scriptSourceDirectory, strlen(scriptSourceDirectory))
+			&& (path[strlen(scriptSourceDirectory)] == '/' 
+#ifdef _WIN32
+				|| path[strlen(scriptSourceDirectory)] == '\\'
+#endif
+				)) {
+		strcpy(copy, &path[strlen(scriptSourceDirectory) + 1]);
+	}
+
+	return copy;
+}
+
+char *PathToBaseDirectory(const char *path) {
+	size_t stop = strlen(path);
+
+	for (uintptr_t i = 0; path[i]; i++) {
+		if (path[i] == '/' 
+#ifdef _WIN32
+				|| path[i] == '\\'
+#endif
+				) {
+			stop = i;
+		}
+	}
+
+	char *copy = (char *) AllocateFixed(stop + 1);
+	memcpy(copy, path, stop);
+	copy[stop] = 0;
+	return copy;
 }
 
 void *FileLoad(const char *path, size_t *length) {
@@ -8718,7 +8950,7 @@ int main(int argc, char **argv) {
 		} else if (0 == memcmp(argv[i], "--start=", 8)) {
 			startFunction = argv[i] + 8;
 			startFunctionBytes = strlen(argv[i]) - 8;
-		} else if (0 == memcmp(argv[i], "--debug-bytecode=", 17)) {
+		} else if (strlen(argv[i]) > 17 && 0 == memcmp(argv[i], "--debug-bytecode=", 17)) {
 			debugBytecodeLevel = atoi(argv[i] + 17);
 		} else if (0 == strcmp(argv[i], "--evaluate") || 0 == strcmp(argv[i], "-e")) {
 			evaluateMode = true;
@@ -8728,6 +8960,35 @@ int main(int argc, char **argv) {
 			outputOverview = true;
 		} else if (0 == strcmp(argv[i], "--want-completion-confirmation")) {
 			wantCompletionConfirmation = true;
+		} else if ((strlen(argv[i]) > 6 && 0 == memcmp(argv[i], "--log=", 6))
+				|| (strlen(argv[i]) > 8 && 0 == memcmp(argv[i], "--trace=", 8))
+				|| (strlen(argv[i]) > 6 && 0 == memcmp(argv[i], "--ask=", 6))
+				|| (strlen(argv[i]) > 11 && 0 == memcmp(argv[i], "--error-ask=", 11))
+				|| (strlen(argv[i]) > 12 && 0 == memcmp(argv[i], "--error-stop=", 12))) {
+			bool equals = false;
+			int value;
+
+			if (argv[i][2] == 'e') {
+				value = argv[i][8] == 'a' ? FAILURE_ASK : argv[i][8] == 's' ? FAILURE_STOP : 0;
+			} else {
+				value = argv[i][2] == 'l' ? BEFORE_LOG : argv[i][2] == 't' ? BEFORE_TRACE : argv[i][2] == 'a' ? BEFORE_ASK : 0;
+			}
+
+			int *array = argv[i][2] == 'e' ? actionFailure : actionBefore;
+
+			for (int j = 0; true; j++) {
+				char c = argv[i][j];
+				if (c == 0) break;
+				else if (!equals && c == '=') equals = true;
+				else if (equals && c == 'e') array[ACTION_ENUMERATE] = value;
+				else if (equals && c == 'r') array[ACTION_READ] = value;
+				else if (equals && c == 'w') array[ACTION_WRITE] = value;
+				else if (equals && c == 'd') array[ACTION_DELETE] = value;
+				else if (equals && c == 's') array[ACTION_PROPERTIES] = value;
+				else if (equals && c == 'v') array[ACTION_ENVIRONMENT] = value;
+				else if (equals && c == 'x') array[ACTION_EXECUTE] = value;
+				else if (equals) { fprintf(stderr, "Unrecognised action category: '%c'.\n", c); return 1; }
+			}
 		} else {
 			fprintf(stderr, "Unrecognised engine option: '%s'.\n", argv[i]);
 			return 1;
@@ -8738,18 +8999,8 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Error: %s\n", evaluateMode ? "String to evaluate not specified." : "Path to script not specified.");
 		return 1;
 	}
-
-	if (scriptPath) {
-		scriptSourceDirectory = (char *) malloc(strlen(scriptPath) + 2);
-		strcpy(scriptSourceDirectory, scriptPath);
-		char *lastSlash = strrchr(scriptSourceDirectory, '/');
-		if (lastSlash) *lastSlash = 0;
-		else strcpy(scriptSourceDirectory, ".");
-	} else {
-		scriptSourceDirectory = (char *) malloc(2);
-		scriptSourceDirectory[0] = '.';
-		scriptSourceDirectory[1] = 0;
-	}
+	
+	scriptSourceDirectory = PathToBaseDirectory(PathToAbsolute(scriptPath));
 
 	size_t dataBytes = evaluateMode ? strlen(evaluateString) : 0;
 	void *data = evaluateMode ? malloc(strlen(evaluateString)) : FileLoad(scriptPath, &dataBytes);
@@ -8761,7 +9012,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (evaluateMode) scriptPath = "[input]";
-	int result = ScriptExecuteFromFile(scriptPath, strlen(scriptPath), data, dataBytes, evaluateMode);
+	int result = ScriptExecuteFromFile(scriptPath, data, dataBytes, evaluateMode);
 
 	while (fixedAllocationBlocks) {
 		void *block = fixedAllocationBlocks;
@@ -8769,7 +9020,6 @@ int main(int argc, char **argv) {
 		free(block);
 	}
 
-	free(scriptSourceDirectory);
 	free(optionsMatched);
 
 	if (wantCompletionConfirmation) {

@@ -1,0 +1,6 @@
+#import "import_2.txt" b;
+
+int Test() {
+	assert b.Test() == 2;
+	return 3;
+}

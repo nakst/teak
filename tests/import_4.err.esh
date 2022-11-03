@@ -1,0 +1,6 @@
+// You shouldn't be able to import the same module twice.
+#import "import_2.txt" a;
+#import "import_2.txt" b;
+
+void Start() {
+}

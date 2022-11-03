@@ -7,3 +7,5 @@ new_esh.exe
 .swp
 tests_log.txt
 temp.dat
+*.so
+*.dll
