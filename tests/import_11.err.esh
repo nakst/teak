@@ -1,0 +1,5 @@
+#import "import_8.txt" imp;
+
+void Start() {
+	imp.V2;
+}

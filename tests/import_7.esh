@@ -1,0 +1,16 @@
+#import "import_8.txt" imp;
+
+functype void Function2();
+
+float Test(imp.V2 v) {
+	return v.y;
+}
+
+void Start() {
+ 	imp.V2 v = [ x = 3.0, y = 5.0 ];
+	assert Test(v) == 5.0;
+ 	imp.Function f = Start;
+ 	Function2 f2 = f;
+	assert f2 == f;
+	f2 = imp.F;
+}

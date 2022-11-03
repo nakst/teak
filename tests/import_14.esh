@@ -1,0 +1,17 @@
+#import "import_8.txt" imp;
+
+struct V2 {
+	float x;
+	float y;
+};
+
+int F() {
+	return 5;
+}
+
+void Start() {
+	int x = F();
+	imp.F();
+	V2 v = [ x = 3.0, y = 5.0 ];
+	imp.V2 u = [ x = 4.0, y = 6.0 ];
+}

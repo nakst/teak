@@ -1,0 +1,3 @@
+int x;
+void F(x.y z) {}
+void Start() {}

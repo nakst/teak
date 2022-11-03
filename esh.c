@@ -1,5 +1,4 @@
 // TODO Basic missing features:
-// 	> Using declared types from imported modules.
 // 	- Maps: T[int], T[str].
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
@@ -35,6 +34,7 @@
 // 	- Variant of lists where the variable is constant but initialized to an empty list?
 
 // TODO Standard library:
+// 	- Versions of copy/move that refuse to overwrite; versions of path create/delete that ignore if the item already (doesn't) exist(s).
 // 	- Floats: 
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
 // 		- MathRound, MathCeil, MathFloor
@@ -187,6 +187,7 @@
 #define T_TERNARY             (88)
 #define T_INITIALIZER_ENTRY   (89)
 #define T_MAP_INITIALIZER     (90)
+#define T_IMPORTED_TYPE       (91)
 
 // Instructions only.
 #define T_EXIT_SCOPE          (100)
@@ -345,7 +346,7 @@ typedef struct Node {
 	uint8_t type;
 	bool referencesRootScope, isExternalCall, isPersistentVariable, isOptionVariable, cycleCheck, hasTypeInheritanceParent;
 	uint8_t operationType;
-	int32_t inlineImportVariableIndex;
+	int32_t inlineImportVariableIndex; // Used by T_INLINE.
 	Token token;
 	struct Node *firstChild;
 	struct Node *sibling;
@@ -355,8 +356,8 @@ typedef struct Node {
 	struct Node *expectedType; // Set in ASTSetTypes. Some parent nodes set this for their children.
 				     
 	union {
-		struct ImportData *importData; // The module being imported by this node.
-		uintptr_t breakContinueTarget;
+		struct ImportData *importData; // The module being imported by this node. Used by T_IMPORT and T_INLINE.
+		uintptr_t breakContinueTarget; // T_BREAK, T_CONTINUE
 	};
 } Node;
 
@@ -403,7 +404,6 @@ typedef struct HeapEntry {
 
 	union {
 		struct { // T_STR
-			// TODO Inlining small strings.
 			size_t bytes;
 			char *text;
 		};
@@ -454,7 +454,7 @@ typedef struct CoroutineState {
 	bool *localVariableIsManaged;
 	size_t localVariableCount;
 	size_t localVariablesAllocated;
-	Value stack[50]; // TODO Merge with variables?
+	Value stack[50];
 	bool stackIsManaged[50];
 	uintptr_t stackPointer;
 	size_t stackEntriesAllocated;
@@ -548,6 +548,7 @@ bool noBaseModule; // Useful for debugging the parser.
 bool outputOverview;
 struct RNGState { uint64_t s[4]; } rngState;
 int actionBefore[ACTION_COUNT], actionFailure[ACTION_COUNT];
+bool wantCompletionConfirmation;
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -818,8 +819,6 @@ Token TokenNext(Tokenizer *tokenizer) {
 				break;
 			}
 		} else if (c >= '0' && c <= '9') {
-			// TODO Exponent notation.
-
 			token.textBytes = 0;
 			token.type = T_NUMERIC_LITERAL;
 			token.text = tokenizer->input + tokenizer->position;
@@ -835,8 +834,6 @@ Token TokenNext(Tokenizer *tokenizer) {
 				token.type = T_ZERO;
 			}
 		} else if (c == '"') {
-			// TODO Escape sequence to insert an arbitrary codepoint.
-
 			bool inInterpolation = false;
 			intptr_t startPosition = ++tokenizer->position;
 			intptr_t endPosition = -1;
@@ -1018,6 +1015,36 @@ Node *ParseType(Tokenizer *tokenizer, bool maybe, bool allowVoid, bool allowTupl
 			if (n->type == T_ERR) {
 				if (!maybe) PrintError2(tokenizer, node, "Error types cannot be nested.\n");
 				return NULL;
+			}
+		}
+
+		if (node->type == T_IDENTIFIER) {
+			Token dot = TokenPeek(tokenizer);
+
+			if (dot.type == T_ERROR) {
+				return NULL;
+			} else if (dot.type == T_DOT) {
+				// Imported type.
+				TokenNext(tokenizer);
+				Token identifier = TokenNext(tokenizer);
+
+				if (identifier.type == T_ERROR) {
+					return NULL;
+				} else if (identifier.type == T_IDENTIFIER) {
+					Node *importIdentifier = (Node *) AllocateFixed(sizeof(Node));
+					importIdentifier->token = node->token;
+					importIdentifier->type = T_IDENTIFIER;
+					node->type = T_IMPORTED_TYPE;
+					node->token = identifier;
+					node->firstChild = importIdentifier;
+				} else {
+					if (!maybe) {
+						PrintError2(tokenizer, node, "Expected an identifier for the type to import from the module '%.*s'.\n",
+								node->token.textBytes, node->token.text);
+					}
+
+					return NULL;
+				}
 			}
 		}
 
@@ -2685,6 +2712,21 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 		child = child->sibling;
 	}
 
+	if (node->type == T_IMPORTED_TYPE) {
+		Node *lookup = ScopeLookup(tokenizer, node->firstChild, false);
+		if (!lookup) return false;
+
+		if (lookup->type != T_IMPORT) {
+			PrintError2(tokenizer, node->firstChild, "The identifier '%.*s' did not resolve to an imported module.\n",
+					node->firstChild->token.textBytes, node->firstChild->token.text);
+			return false;
+		}
+
+		node->scope = lookup->importData->rootNode->scope;
+		node->type = T_IDENTIFIER;
+		node->firstChild = NULL;
+	}
+
 	if (node->type == T_FUNCPTR) {
 		Node *type = node->firstChild->sibling;
 
@@ -2698,7 +2740,8 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 				copy->sibling = NULL;
 				node->firstChild->sibling = copy;
 			} else {
-				PrintError2(tokenizer, type, "The identifier did not resolve to a type.\n");
+				PrintError2(tokenizer, type, "The identifier '%.*s' did not resolve to a type.\n",
+						type->token.textBytes, type->token.text);
 				return false;
 			}
 		}
@@ -3356,6 +3399,13 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	} else if (node->type == T_VARIABLE) {
 		Node *lookup = ScopeLookup(tokenizer, node, false);
 		if (!lookup) return false;
+
+		if (!ScopeIsVariableType(lookup) && lookup->type != T_INLINE && lookup->type != T_IMPORT) {
+			PrintError2(tokenizer, node, "The identifier \"%.*s\" did not resolve to a variable.\n", 
+					node->token.textBytes, node->token.text);
+			return false;
+		}
+
 		node->expressionType = lookup->expressionType;
 	} else if (node->type == T_STR_INTERPOLATE) {
 		Node *left = node->firstChild;
@@ -3742,6 +3792,13 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 			if (index == -1) {
 				PrintError2(tokenizer, node, "The variable or function '%.*s' is not in the imported module '%s'.\n",
+						node->token.textBytes, node->token.text, importData->prettyName);
+				return false;
+			}
+
+			if (ScopeLookupIndex(node, importData->rootNode->scope, true, false) == -1) {
+				PrintError2(tokenizer, node, "The identifier '%.*s' did not resolve to a variable or function "
+						"in the imported module '%s'.\n",
 						node->token.textBytes, node->token.text, importData->prettyName);
 				return false;
 			}
@@ -6999,7 +7056,12 @@ bool ScriptRunCallback(void *engine, intptr_t functionPointer, int64_t *paramete
 	}
 
 	int result = ScriptExecuteFunction(2, context);
-	if (result == -1) PrintError3("The script was malformed.\n");
+
+	if (result == -1) {
+		PrintError3("The script was malformed.\n");
+		wantCompletionConfirmation = false;
+	}
+
 	return result > 0;
 }
 
@@ -7172,6 +7234,7 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 				return 1;
 			} else if (result == -1 || context->c->stackPointer != 0) {
 				PrintError3("The script was malformed.\n");
+				wantCompletionConfirmation = false;
 				return 1;
 			}
 		}
@@ -7186,6 +7249,7 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 		return 1;
 	} else if (result == -1 || context->c->stackPointer != 0) {
 		PrintError3("The script was malformed.\n");
+		wantCompletionConfirmation = false;
 		return 1;
 	}
 
@@ -8701,6 +8765,11 @@ void PrintType(Node *type, FILE *file) {
 		PrintType(type->firstChild, file);
 		fprintf(file, "]");
 	} else if (type->type == T_STRUCT || type->type == T_INTTYPE || type->type == T_HANDLETYPE) {
+		if (type->token.module->parentImport) {
+			// TODO Use the import identifier.
+			fprintf(file, "(%s).", type->token.module->prettyName);
+		}
+
 		fprintf(file, "%.*s", (int) type->token.textBytes, type->token.text);
 	} else if (type->type == T_FUNCPTR) {
 		PrintType(type->firstChild->sibling, file);
@@ -8951,7 +9020,6 @@ int main(int argc, char **argv) {
 	char *scriptPath = NULL;
 	char *evaluateString = NULL;
 	bool evaluateMode = false;
-	bool wantCompletionConfirmation = false;
 
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {

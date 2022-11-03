@@ -1,0 +1,8 @@
+#import "import_8.txt" imp;
+
+void F(imp.F x) {
+}
+
+void Start() {
+	
+}

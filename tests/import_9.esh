@@ -1,0 +1,6 @@
+#import "import_10.txt" imp;
+void Start() {
+	imp.Set(10);
+	assert imp.x == 10;
+}
+

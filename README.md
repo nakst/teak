@@ -52,7 +52,7 @@ The following flags are intended for debugging the interpreter itself and theref
 
 ## Standard library
 
-*Please keep in mind that some of these functions may be modified slightly as the language in not yet stable.*
+*Please keep in mind that some of these functions may be modified slightly as the language is not yet stable.*
 
 ### Strings and characters — conversions
 

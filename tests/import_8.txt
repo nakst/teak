@@ -1,0 +1,11 @@
+struct V2 {
+	float x;
+	float y;
+};
+
+functype void Function();
+
+int z;
+
+void F() {
+}
