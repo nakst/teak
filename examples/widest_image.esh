@@ -1,0 +1,38 @@
+// Import the imaging module for loading bitmaps.
+#import "../modules/imaging/index.esh" im;
+
+// You can change the directory that will be scanned by passing "path=..." to the engine's command line.
+str path #option;
+
+void Start() {
+	// If a path option was not specified, use the current directory.
+	// Ensure the path ends with a path separator.
+	path = PathEnsureTrailingSlash(path if path != "" else ".");
+
+	int maxWidth = -1;
+	str result;
+
+	// For every file in the directory...
+	for str file in DirectoryEnumerate(path):assert() {
+		// Load the bitmap.
+		err[im.Bitmap] bitmap = im.LoadFromPath(path + file);
+		if !bitmap:success() { continue; }
+
+		// Get the width.
+		int width = im.Width(bitmap:assert());
+		Log("%file% has width %width%");
+
+		// Check if this is the widest seen so far.
+		if width > maxWidth {
+			maxWidth = width;
+			result = file;
+		}
+	}
+
+	// Print the result.
+	if result == "" {
+		LogError("No images found.");
+	} else {
+		LogInfo("The widest image was '%result%' with a width of %maxWidth%.");
+	}
+}
