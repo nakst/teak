@@ -1,0 +1,15 @@
+void Start() {
+	int k = 0;
+
+	for int i = 0; i < 5; i += 1 {
+		for int j = 0; j < 5; j += 1 {
+			if j == i {
+				break;
+			}
+
+			k += 1;
+		}
+	}
+
+	assert k == 10;
+}

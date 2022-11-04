@@ -8835,6 +8835,8 @@ void PrintType(Node *type, FILE *file) {
 		fprintf(file, "float");
 	} else if (type->type == T_VOID) {
 		fprintf(file, "void");
+	} else if (type->type == T_ANYTYPE) {
+		fprintf(file, "anytype");
 	} else if (type->type == T_LIST) {
 		PrintType(type->firstChild, file);
 		fprintf(file, "[]");
