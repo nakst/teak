@@ -1,0 +1,6 @@
+#import "../modules/imaging/index.esh" im;
+
+void Start() {
+	im.Bitmap bitmap = im.Create(100, 80);
+	assert im.Width(bitmap) == 100;
+}

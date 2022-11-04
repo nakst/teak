@@ -14,20 +14,12 @@
 #define PRINT_I64 "%lld"
 #endif
 
+#include "../native_interface.h"
+
 typedef struct Bitmap {
 	int width, height;
 	uint32_t *bits;
 } Bitmap;
-
-bool ScriptParameterInt64(void *engine, int64_t *output);
-bool ScriptParameterHandle(void *engine, void **output);
-bool ScriptParameterString(void *engine, const void **output, size_t *outputBytes);
-bool ScriptParameterCString(void *engine, char **output);
-bool ScriptReturnInt(void *engine, int64_t input);
-bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *));
-bool ScriptReturnString(void *engine, const void *data, size_t dataBytes);
-bool ScriptReturnBoxInError(void *engine);
-bool ScriptReturnError(void *engine, const char *message);
 
 void CloseBitmapHandle(void *handleData) {
 	Bitmap *bitmap = (Bitmap *) handleData;
@@ -35,7 +27,7 @@ void CloseBitmapHandle(void *handleData) {
 	free(bitmap);
 }
 
-bool ScriptExtCreate(void *engine) {
+LIBRARY_EXPORT bool ScriptExtCreate(struct ExecutionContext *engine) {
 	int64_t width, height;
 	if (!ScriptParameterInt64(engine, &width)) return false;
 	if (!ScriptParameterInt64(engine, &height)) return false;
@@ -50,7 +42,7 @@ bool ScriptExtCreate(void *engine) {
 	return true;
 }
 
-bool ScriptExtWidth(void *engine) {
+LIBRARY_EXPORT bool ScriptExtWidth(struct ExecutionContext *engine) {
 	Bitmap *bitmap;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
 	if (!bitmap) { fprintf(stderr, "(imaging) Width: Bitmap was null.\n"); return false; }
@@ -58,7 +50,7 @@ bool ScriptExtWidth(void *engine) {
 	return true;
 }
 
-bool ScriptExtHeight(void *engine) {
+LIBRARY_EXPORT bool ScriptExtHeight(struct ExecutionContext *engine) {
 	Bitmap *bitmap;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;
 	if (!bitmap) { fprintf(stderr, "(imaging) Height: Bitmap was null.\n"); return false; }
@@ -66,7 +58,7 @@ bool ScriptExtHeight(void *engine) {
 	return true;
 }
 
-bool ScriptExtCrop(void *engine) {
+LIBRARY_EXPORT bool ScriptExtCrop(struct ExecutionContext *engine) {
 	Bitmap *bitmap;
 	int64_t left, right, top, bottom;
 
@@ -98,7 +90,7 @@ bool ScriptExtCrop(void *engine) {
 	return true;
 }
 
-bool ScriptExtBlit(void *engine) {
+LIBRARY_EXPORT bool ScriptExtBlit(struct ExecutionContext *engine) {
 	Bitmap *destination, *source;
 	int64_t x, y;
 
@@ -123,7 +115,7 @@ bool ScriptExtBlit(void *engine) {
 	return true;
 }
 
-bool ScriptExtLoad(void *engine) {
+LIBRARY_EXPORT bool ScriptExtLoad(struct ExecutionContext *engine) {
 	const void *input;
 	size_t bytes;
 	if (!ScriptParameterString(engine, &input, &bytes)) return false;
@@ -144,7 +136,7 @@ bool ScriptExtLoad(void *engine) {
 	return true;
 }
 
-bool ScriptExtSave(void *engine) {
+LIBRARY_EXPORT bool ScriptExtSave(struct ExecutionContext *engine) {
 	Bitmap *bitmap;
 	char *format;
 	if (!ScriptParameterHandle(engine, (void **) &bitmap)) return false;

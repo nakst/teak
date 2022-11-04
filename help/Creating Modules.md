@@ -15,13 +15,15 @@ Next, put the prototypes of the functions you will implement in the native code.
 void Hello() #extcall;
 ```
 
-Now we need to write the native code for the `Hello` function. The scripting engine will look for the function `ScriptExtHello` in our library. It will pass one parameter, a pointer to the engine's internal data structures, and will expect a return value of a `bool`. Here's the contents of `my_module.c`:
+Now we need to write the native code for the `Hello` function. The scripting engine will look for the function `ScriptExtHello` in our library. It will pass one parameter, a pointer to the engine's internal data structures, and will expect a return value of a `bool`. You also need to include the native interface header file. Here's the contents of `my_module.c`:
 
 ```c
 #include <stdio.h>
 #include <stdbool.h>
 
-bool ScriptExtHello(void *engine) {
+#include "modules/native_interface.h"
+
+bool ScriptExtHello(struct ExecutionContext *context) {
 	printf("Hello!\n");
 	return true; // true indicates success.
 }
@@ -56,7 +58,7 @@ int Sum(int x, int y) #extcall;
 The native implementation of the function starts like before:
 
 ```c
-bool ScriptExtSum(void *engine) {
+bool ScriptExtSum(struct ExecutionContext *context) {
 	return true;
 }
 ```
@@ -64,19 +66,19 @@ bool ScriptExtSum(void *engine) {
 But this time we need to read the function parameters from the engine and set the return value. Declare the following functions; these are implemented by the scripting engine.
 
 ```c
-bool ScriptParameterInt64(void *engine, int64_t *output);
-bool ScriptReturnInt(void *engine, int64_t input);
+bool ScriptParameterInt64(struct ExecutionContext *context, int64_t *output);
+bool ScriptReturnInt(struct ExecutionContext *context, int64_t input);
 ```
 
 To read the parameters to the function, we simply call `ScriptParameterInt64` for each, and it will return the parameters from left to right. If it returns `false`, then we'll need to return `false` from our function to allow the error to propagate. To set the return value, we call `ScriptReturnInt`. Make sure that you only set the return value once!
 
 ```c
-bool ScriptExtSum(void *engine) {
+bool ScriptExtSum(struct ExecutionContext *context) {
     int64_t left, right;
-    if (!ScriptParameterInt64(engine, &left )) return false;
-    if (!ScriptParameterInt64(engine, &right)) return false;
+    if (!ScriptParameterInt64(context, &left )) return false;
+    if (!ScriptParameterInt64(context, &right)) return false;
     int64_t result = left + right;
-    if (!ScriptReturnInt(engine, result)) return false;
+    if (!ScriptReturnInt(context, result)) return false;
     return true;
 }
 ```
@@ -95,12 +97,12 @@ We see that `10` is output, as expected.
 Integers and booleans can be read and returned with the following functions:
 
 ```c
-bool ScriptParameterBool(void *engine, bool *output);
-bool ScriptParameterInt32(void *engine, int32_t *output);
-bool ScriptParameterInt64(void *engine, int64_t *output);
-bool ScriptParameterUint32(void *engine, uint32_t *output);
-bool ScriptParameterUint64(void *engine, uint64_t *output);
-bool ScriptReturnInt(void *engine, int64_t input);
+bool ScriptParameterBool(struct ExecutionContext *context, bool *output);
+bool ScriptParameterInt32(struct ExecutionContext *context, int32_t *output);
+bool ScriptParameterInt64(struct ExecutionContext *context, int64_t *output);
+bool ScriptParameterUint32(struct ExecutionContext *context, uint32_t *output);
+bool ScriptParameterUint64(struct ExecutionContext *context, uint64_t *output);
+bool ScriptReturnInt(struct ExecutionContext *context, int64_t input);
 ```
 
 ### Floating point values
@@ -108,8 +110,8 @@ bool ScriptReturnInt(void *engine, int64_t input);
 Floating point values can be read and returned with the following functions:
 
 ```c
-bool ScriptParameterDouble(void *engine, double *output);
-bool ScriptReturnDouble(void *engine, double input);
+bool ScriptParameterDouble(struct ExecutionContext *context, double *output);
+bool ScriptReturnDouble(struct ExecutionContext *context, double input);
 ```
 
 ### Strings
@@ -118,13 +120,13 @@ Strings can be read and returned with the following functions:
 
 ```c
 // The returned pointer must be freed using free().
-bool ScriptParameterCString(void *engine, char **output);
+bool ScriptParameterCString(struct ExecutionContext *context, char **output);
 
 // The returned pointer is valid until you return from the extcall function.
-bool ScriptParameterString(void *engine, void **output, size_t *outputBytes);
+bool ScriptParameterString(struct ExecutionContext *context, const void **output, size_t *outputBytes);
 
 // The pointer you pass in only needs to remain valid for the call to ScriptReturnString.
-bool ScriptReturnString(void *engine, const void *input, size_t inputBytes);
+bool ScriptReturnString(struct ExecutionContext *context, const void *input, size_t inputBytes);
 ```
 
 ### Errors
@@ -133,12 +135,12 @@ If you're implementing a function that returns a type wrapped in an `err[...]` b
 
 ```c
 // After setting the return value as normal, call this function to box it in an error.
-bool ScriptReturnBoxInError(void *engine);
+bool ScriptReturnBoxInError(struct ExecutionContext *context);
 
 // If you want to return an error, call this function.
 // Do this instead of calling ScriptReturnInt or whatever.
 // The message pointer you pass in only needs to remain valid for the call to ScriptReturnError.
-bool ScriptReturnError(void *engine, const char *message);
+bool ScriptReturnError(struct ExecutionContext *context, const char *message);
 ```
 
 ## Handle types
@@ -155,13 +157,13 @@ handletype SpecialObject : Object;
 The native code can read handle parameters using:
 
 ```c
-bool ScriptParameterHandle(void *engine, void **output);
+bool ScriptParameterHandle(struct ExecutionContext *context, void **output);
 ```
 
 This returns the pointer associated with the handle when it was created. If the handle was `null`, `NULL` is returned. To create and return a handle, using `ScriptReturnHandle`:
 
 ```c
-bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *));
+bool ScriptReturnHandle(struct ExecutionContext *context, void *handleData, void (*close)(void *));
 ```
 
 You must specify a function to call when the handle is deallocated. Deallocation is done whenever the garbage collector deems it necessary, so don't expect this to happen in any sort of timely manner; but it will certainly be called if the script exits normally.
@@ -178,4 +180,11 @@ int Sum(int x, int y) #extcall;
 void Initialise() { 
     Log("This will be printed before anything else!"); 
 }
+```
+
+## Calling back into the script
+
+```c
+// TODO Document this.
+bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
 ```

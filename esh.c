@@ -81,6 +81,9 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#define SCRIPT_ENGINE
+#include "modules/native_interface.h"
+
 #define FUNCTION_MAX_ARGUMENTS (20) // Also the maximum number of return values in a tuple.
 
 #define EXTCALL_NO_RETURN            (1)
@@ -586,7 +589,7 @@ void *FileLoad(const char *path, size_t *length);
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context);
 void ExternalPassREPLResult(ExecutionContext *context, Value value);
 void *LibraryLoad(const char *name);
-void *LibraryGetAddress(void *library, const char *name, const char *libraryName);
+void *LibraryGetAddress(void *library, const char *name, const char *libraryName, bool addNamePrefix);
 const char *PathToAbsolute(const char *path);
 const char *PathToPrettyName(const char *path);
 const char *PathToBaseDirectory(const char *path);
@@ -2287,6 +2290,15 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 				if (!tokenizer->module->library) {
 					return NULL;
 				}
+
+				ScriptSetNativeInterfacePointerFunction f = LibraryGetAddress(tokenizer->module->library, 
+						"ScriptSetNativeInterfacePointer", libraryName, false);
+
+				if (!f) {
+					return NULL;
+				}
+
+				f(&_scriptNativeInterface);
 			}
 
 			if (TokenNext(tokenizer).type != T_SEMICOLON) {
@@ -5058,7 +5070,7 @@ bool ASTGenerate(Tokenizer *tokenizer, Node *root, ExecutionContext *context) {
 				MemoryCopy(name, child->token.text, child->token.textBytes);
 				name[child->token.textBytes] = 0;
 
-				void *address = LibraryGetAddress(child->token.module->library, name, child->token.module->libraryName);
+				void *address = LibraryGetAddress(child->token.module->library, name, child->token.module->libraryName, true);
 				if (!address) return false;
 				uint8_t b = T_LIBCALL;
 				FunctionBuilderAppend(context->functionData, &b, sizeof(b));
@@ -6906,8 +6918,7 @@ bool ScriptParseOptions(ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptParameterCString(void *engine, char **output) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterCString(ExecutionContext *context, char **output) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	if (!context->c->stackIsManaged[context->c->stackPointer - context->c->parameterCount]) return false;
@@ -6923,8 +6934,7 @@ bool ScriptParameterCString(void *engine, char **output) {
 	return true;
 }
 
-bool ScriptParameterString(void *engine, const void **output, size_t *outputBytes) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterString(ExecutionContext *context, const void **output, size_t *outputBytes) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	if (!context->c->stackIsManaged[context->c->stackPointer - context->c->parameterCount]) return false;
@@ -6935,8 +6945,7 @@ bool ScriptParameterString(void *engine, const void **output, size_t *outputByte
 	return true;
 }
 
-bool ScriptParameterHandle(void *engine, void **output) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterHandle(ExecutionContext *context, void **output) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	if (!context->c->stackIsManaged[context->c->stackPointer - context->c->parameterCount]) return false;
@@ -6950,15 +6959,13 @@ bool ScriptParameterHandle(void *engine, void **output) {
 }
 
 #if 0
-void ScriptHeapRefClose(void *engine, intptr_t index) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+void ScriptHeapRefClose(ExecutionContext *context, intptr_t index) {
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
 	Assert(context->heap[index].externalReferenceCount);
 	context->heap[index].externalReferenceCount--;
 }
 
-bool ScriptParameterHeapRef(void *engine, intptr_t *output) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterHeapRef(ExecutionContext *context, intptr_t *output) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	intptr_t index = context->c->stack[context->c->stackPointer - context->c->parameterCount].i;
@@ -6970,45 +6977,40 @@ bool ScriptParameterHeapRef(void *engine, intptr_t *output) {
 }
 #endif
 
-bool ScriptParameterInt64(void *engine, int64_t *output) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterInt64(ExecutionContext *context, int64_t *output) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	*output = context->c->stack[context->c->stackPointer - context->c->parameterCount].i;
 	return true;
 }
 
-bool ScriptParameterDouble(void *engine, double *output) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptParameterDouble(ExecutionContext *context, double *output) {
 	context->c->parameterCount++;
 	if (context->c->stackPointer < context->c->parameterCount) return false;
 	*output = context->c->stack[context->c->stackPointer - context->c->parameterCount].f;
 	return true;
 }
 
-bool ScriptParameterBool  (void *engine,     bool *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
-bool ScriptParameterUint32(void *engine, uint32_t *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
-bool ScriptParameterUint64(void *engine, uint64_t *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
-bool ScriptParameterInt32 (void *engine,  int32_t *output) { int64_t i; if (!ScriptParameterInt64(engine, &i)) return false; *output = i; return true; }
+bool ScriptParameterBool  (ExecutionContext *context,     bool *output) { int64_t i; if (!ScriptParameterInt64(context, &i)) return false; *output = i; return true; }
+bool ScriptParameterUint32(ExecutionContext *context, uint32_t *output) { int64_t i; if (!ScriptParameterInt64(context, &i)) return false; *output = i; return true; }
+bool ScriptParameterUint64(ExecutionContext *context, uint64_t *output) { int64_t i; if (!ScriptParameterInt64(context, &i)) return false; *output = i; return true; }
+bool ScriptParameterInt32 (ExecutionContext *context,  int32_t *output) { int64_t i; if (!ScriptParameterInt64(context, &i)) return false; *output = i; return true; }
 
-bool ScriptReturnInt(void *engine, int64_t input) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnInt(ExecutionContext *context, int64_t input) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_UNMANAGED;
 	context->c->returnValue.i = input;
 	return true;
 }
 
-bool ScriptReturnDouble(void *engine, double input) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnDouble(ExecutionContext *context, double input) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_UNMANAGED;
 	context->c->returnValue.f = input;
 	return true;
 }
 
-bool ScriptReturnString(void *engine, const void *data, size_t bytes) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnString(ExecutionContext *context, const void *data, size_t bytes) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
 	Value *returnValue = &context->c->returnValue;
@@ -7016,8 +7018,7 @@ bool ScriptReturnString(void *engine, const void *data, size_t bytes) {
 	return true;
 }
 
-bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *)) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnHandle(ExecutionContext *context, void *handleData, void (*close)(void *)) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
 	int64_t index = context->c->returnValue.i = HeapAllocate(context); // TODO Handle memory allocation failures here.
@@ -7027,15 +7028,13 @@ bool ScriptReturnHandle(void *engine, void *handleData, void (*close)(void *)) {
 	return true;
 }
 
-bool ScriptReturnBoxInError(void *engine) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnBoxInError(ExecutionContext *context) {
 	Assert(context->c->returnValueType == EXTCALL_RETURN_MANAGED || context->c->returnValueType == EXTCALL_RETURN_UNMANAGED);
 	context->c->returnValueType = context->c->returnValueType == EXTCALL_RETURN_MANAGED ? EXTCALL_RETURN_ERR_MANAGED : EXTCALL_RETURN_ERR_UNMANAGED;
 	return true;
 }
 
-bool ScriptReturnError(void *engine, const char *message) {
-	ExecutionContext *context = (ExecutionContext *) engine;
+bool ScriptReturnError(ExecutionContext *context, const char *message) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_ERR_ERROR;
 	Value *returnValue = &context->c->returnValue;
@@ -7043,10 +7042,8 @@ bool ScriptReturnError(void *engine, const char *message) {
 	return true;
 }
 
-bool ScriptRunCallback(void *engine, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount) {
+bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount) {
 	// TODO Do this in a separate coroutine?
-
-	ExecutionContext *context = (ExecutionContext *) engine;
 
 	for (intptr_t i = parameterCount - 1; i >= -1; i--) {
 		if (context->c->stackPointer == context->c->stackEntriesAllocated) {
@@ -7074,6 +7071,25 @@ bool ScriptRunCallback(void *engine, intptr_t functionPointer, int64_t *paramete
 
 	return result > 0;
 }
+
+const ScriptNativeInterface _scriptNativeInterface = {
+	.ParameterBool = ScriptParameterBool,
+	.ParameterCString = ScriptParameterCString,
+	.ParameterDouble = ScriptParameterDouble,
+	.ParameterHandle = ScriptParameterHandle,
+	.ParameterInt32 = ScriptParameterInt32,
+	.ParameterInt64 = ScriptParameterInt64,
+	.ParameterString = ScriptParameterString,
+	.ParameterUint32 = ScriptParameterUint32,
+	.ParameterUint64 = ScriptParameterUint64,
+	.ReturnBoxInError = ScriptReturnBoxInError,
+	.ReturnDouble = ScriptReturnDouble,
+	.ReturnError = ScriptReturnError,
+	.ReturnHandle = ScriptReturnHandle,
+	.ReturnInt = ScriptReturnInt,
+	.ReturnString = ScriptReturnString,
+	.RunCallback = ScriptRunCallback,
+};
 
 void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 	Node *node = context->rootNode->firstChild;
@@ -8890,56 +8906,59 @@ void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, con
 }
 
 void *LibraryLoad(const char *name) {
-#ifdef _WIN32
-	// TODO.
-	PrintError3("The library \"%s\" could not be found or loaded.\n", name);
-	return NULL;
-#else
 	Assert(strlen(name) < 256);
-
 	char name2[256 + 20];
+	void *result = NULL;
+
+#ifdef _WIN32
+	strcpy(name2, name);
+	strcat(name2, ".dll");
+	result = LoadLibraryA(name2);
+#else
 	strcpy(name2, "l");
 	strcat(name2, name);
 	strcat(name2, ".so");
+	result = dlopen(name2, RTLD_LAZY);
 
-	void *library = dlopen(name2, RTLD_LAZY);
-
-	if (!library) {
+	if (!result) {
 		strcpy(name2, "./l");
 		strcat(name2, name);
 		strcat(name2, ".so");
-
-		library = dlopen(name2, RTLD_LAZY);
-
-		if (!library) {
-			PrintError3("The library \"%s\" could not be found or loaded.\n", name2);
-		}
+		result = dlopen(name2, RTLD_LAZY);
+	}
+#endif
+	
+	if (!result) {
+		PrintError3("The library \"%s\" could not be found or loaded.\n", name2);
 	}
 
-	return library;
-#endif
+	return result;
 }
 
-void *LibraryGetAddress(void *library, const char *name, const char *libraryName) {
-#ifdef _WIN32
-	(void) library;
-	PrintError3("The library symbol \"%s\" could not be found in the library \"%s\".\n", name, libraryName);
-	return NULL;
-#else
+void *LibraryGetAddress(void *library, const char *name, const char *libraryName, bool addNamePrefix) {
 	Assert(strlen(name) < 256);
 	Assert(library);
 	char name2[256 + 20];
-	strcpy(name2, "ScriptExt");
-	strcat(name2, name);
+	void *address = NULL;
 
-	void *address = dlsym(library, name2);
+	if (addNamePrefix) {
+		strcpy(name2, "ScriptExt");
+		strcat(name2, name);
+	} else {
+		strcpy(name2, name);
+	}
+
+#ifdef _WIN32
+	address = (void *) GetProcAddressA((HMODULE) library, name2);
+#else
+	address = dlsym(library, name2);
+#endif
 
 	if (!address) {
 		PrintError3("The library symbol \"%s\" could not be found in the library \"%s\".\n", name2, libraryName);
 	}
 
 	return address;
-#endif
 }
 
 const char *PathToAbsolute(const char *path) {
