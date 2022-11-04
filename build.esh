@@ -68,7 +68,7 @@ void Start() {
 		assert SystemShellExecute("cl.exe /Zi esh.c %warningFlags% %optimizeFlags% /link /OUT:new_esh.exe");
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 		executable = "new_esh";
-		moduleCompilerTemplate = "cl.exe /Zi /DLL [SRC] %warningFlags% %optimizeFlags% /link /OUT:[DST].dll";
+		moduleCompilerTemplate = "cl.exe /Zi [SRC] %warningFlags% %optimizeFlags% /link /DLL /OUT:[DST].dll";
 	} else {
 		str optimizeFlags = "-fsanitize=address" if debug else "-O2";
 		assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl -rdynamic"); 
