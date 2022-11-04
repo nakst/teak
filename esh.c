@@ -8949,7 +8949,7 @@ void *LibraryGetAddress(void *library, const char *name, const char *libraryName
 	}
 
 #ifdef _WIN32
-	address = (void *) GetProcAddressA((HMODULE) library, name2);
+	address = (void *) GetProcAddress((HMODULE) library, name2);
 #else
 	address = dlsym(library, name2);
 #endif
