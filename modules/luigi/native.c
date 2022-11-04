@@ -47,6 +47,7 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 	if (wrapper->messageUser) {
 		intptr_t elementHandle = -1;
 		bool success = WrapperOpen(contextForCallback, wrapper, &elementHandle);
+		(void) success;
 		// TODO How to handle failure?
 
 		int64_t parameters[4] = {

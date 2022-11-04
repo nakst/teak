@@ -4146,6 +4146,8 @@ bool FunctionBuilderVariable(Tokenizer *tokenizer, FunctionBuilder *builder, Nod
 }
 
 void FunctionBuilderSetBreakContinueTargets(Tokenizer *tokenizer, Node *node, FunctionBuilder *builder, uintptr_t breakTarget, uintptr_t continueTarget) {
+	if (node->type == T_STRUCT || node->type == T_WHILE || node->type == T_FOR || node->type == T_FOR_EACH) return;
+
 	Node *child = node->firstChild;
 
 	while (child) {
