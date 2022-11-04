@@ -434,3 +434,61 @@ bool ScriptExtRectangleEquals(struct ExecutionContext *context) {
 	if (index2 != -1) ScriptHeapRefClose(context, index2);
 	return success;
 }
+
+#define SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(name) \
+bool ScriptExtRectangle##name(struct ExecutionContext *context) { \
+	bool success = false; \
+	intptr_t index1 = -1, index2 = -1; \
+	UIRectangle rectangle1, rectangle2; \
+	if (!ScriptParameterHeapRef(context, &index1)) goto error; \
+	if (!ScriptParameterHeapRef(context, &index2)) goto error; \
+	if (!ScriptStructReadInt32(context, index1, 0, &rectangle1.l)) goto error; \
+	if (!ScriptStructReadInt32(context, index1, 1, &rectangle1.r)) goto error; \
+	if (!ScriptStructReadInt32(context, index1, 2, &rectangle1.t)) goto error; \
+	if (!ScriptStructReadInt32(context, index1, 3, &rectangle1.b)) goto error; \
+	if (!ScriptStructReadInt32(context, index2, 0, &rectangle2.l)) goto error; \
+	if (!ScriptStructReadInt32(context, index2, 1, &rectangle2.r)) goto error; \
+	if (!ScriptStructReadInt32(context, index2, 2, &rectangle2.t)) goto error; \
+	if (!ScriptStructReadInt32(context, index2, 3, &rectangle2.b)) goto error; \
+	UIRectangle result = UIRectangle##name(rectangle1, rectangle2); \
+	int64_t fields[4] = { result.l, result.r, result.t, result.b }; \
+	bool managedFields[4] = { false, false, false, false }; \
+	if (!ScriptReturnStruct(context, fields, managedFields, 4)) goto error; \
+	success = true; \
+	error:; \
+	if (index1 != -1) ScriptHeapRefClose(context, index1); \
+	if (index2 != -1) ScriptHeapRefClose(context, index2); \
+	return success; \
+}
+SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Add);
+SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Intersection);
+SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Bounding);
+SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Translate);
+SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Center);
+
+bool ScriptExtRectangleFit(struct ExecutionContext *context) {
+	bool success = false;
+	intptr_t index1 = -1, index2 = -1;
+	bool allowScalingUp;
+	UIRectangle rectangle1, rectangle2;
+	if (!ScriptParameterHeapRef(context, &index1)) goto error;
+	if (!ScriptParameterHeapRef(context, &index2)) goto error;
+	if (!ScriptParameterBool(context, &allowScalingUp)) goto error;
+	if (!ScriptStructReadInt32(context, index1, 0, &rectangle1.l)) goto error;
+	if (!ScriptStructReadInt32(context, index1, 1, &rectangle1.r)) goto error;
+	if (!ScriptStructReadInt32(context, index1, 2, &rectangle1.t)) goto error;
+	if (!ScriptStructReadInt32(context, index1, 3, &rectangle1.b)) goto error;
+	if (!ScriptStructReadInt32(context, index2, 0, &rectangle2.l)) goto error;
+	if (!ScriptStructReadInt32(context, index2, 1, &rectangle2.r)) goto error;
+	if (!ScriptStructReadInt32(context, index2, 2, &rectangle2.t)) goto error;
+	if (!ScriptStructReadInt32(context, index2, 3, &rectangle2.b)) goto error;
+	UIRectangle result = UIRectangleFit(rectangle1, rectangle2, allowScalingUp);
+	int64_t fields[4] = { result.l, result.r, result.t, result.b };
+	bool managedFields[4] = { false, false, false, false };
+	if (!ScriptReturnStruct(context, fields, managedFields, 4)) goto error;
+	success = true;
+	error:;
+	if (index1 != -1) ScriptHeapRefClose(context, index1);
+	if (index2 != -1) ScriptHeapRefClose(context, index2);
+	return success; \
+}

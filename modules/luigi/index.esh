@@ -267,3 +267,9 @@ int RECT_TOTAL_V(Rectangle r) { return r.b + r.t; }
 bool RECT_VALID(Rectangle r) { return r.l < r.r && r.t < r.b; }
 bool RectangleContains(Rectangle a, int x, int y) #extcall;
 bool RectangleEquals(Rectangle a, Rectangle b) #extcall;
+Rectangle RectangleAdd(Rectangle a, Rectangle b) #extcall;
+Rectangle RectangleIntersection(Rectangle a, Rectangle b) #extcall;
+Rectangle RectangleBounding(Rectangle a, Rectangle b) #extcall;
+Rectangle RectangleTranslate(Rectangle a, Rectangle b) #extcall;
+Rectangle RectangleCenter(Rectangle parent, Rectangle child) #extcall;
+Rectangle RectangleFit(Rectangle parent, Rectangle child, bool allowScalingUp) #extcall;

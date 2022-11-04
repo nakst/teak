@@ -5188,7 +5188,7 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 	if (context->heap[i].type == T_STR) {
 		AllocateResize(context->heap[i].text, 0);
 	} else if (context->heap[i].type == T_STRUCT) {
-		AllocateResize((uint8_t *) context->heap[i].fields - context->heap[i].fieldCount, 0);
+		AllocateResize((uint8_t *) context->heap[i].fields - ((context->heap[i].fieldCount + 7) & ~7), 0);
 	} else if (context->heap[i].type == T_LIST) {
 		AllocateResize(context->heap[i].list, 0);
 	} else if (context->heap[i].type == T_HANDLETYPE) {
@@ -6206,7 +6206,9 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			context->heap[index].type = fieldCount >= 0 ? T_STRUCT : fieldCount >= -2 ? T_LIST : T_ERR;
 
 			if (fieldCount >= 0) {
-				context->heap[index].fields = (Value *) ((uint8_t *) AllocateResize(NULL, fieldCount * (1 + sizeof(Value))) + fieldCount);
+				size_t fieldCountAligned = (fieldCount + 7) & ~7;
+				context->heap[index].fields = (Value *) ((uint8_t *) AllocateResize(NULL, 
+							fieldCountAligned + fieldCount * sizeof(Value)) + fieldCountAligned);
 				context->heap[index].fieldCount = fieldCount;
 
 				for (intptr_t i = 0; i < fieldCount; i++) {
@@ -7045,6 +7047,25 @@ bool ScriptReturnString(ExecutionContext *context, const void *data, size_t byte
 	return true;
 }
 
+bool ScriptReturnStruct(ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount) {
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
+
+	uintptr_t index = HeapAllocate(context); // TODO Handle memory allocation failures here.
+	context->heap[index].type = T_STRUCT;
+	size_t fieldCountAligned = (fieldCount + 7) & ~7;
+	context->heap[index].fields = (Value *) ((uint8_t *) AllocateResize(NULL, fieldCountAligned + fieldCount * sizeof(Value)) + fieldCountAligned);
+	context->heap[index].fieldCount = fieldCount;
+	context->c->returnValue.i = index;
+
+	for (uintptr_t i = 0; i < fieldCount; i++) {
+		context->heap[index].fields[i].i = fields[i];
+		((uint8_t *) context->heap[index].fields)[-1 - i] = managedFields[i];
+	}
+
+	return true;
+}
+
 bool ScriptCreateHandle(ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle) {
 	if (handleData) {
 		intptr_t index = *handle = HeapAllocate(context); // TODO Handle memory allocation failures here.
@@ -7139,6 +7160,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnHeapRef = ScriptReturnHeapRef,
 	.ReturnInt = ScriptReturnInt,
 	.ReturnString = ScriptReturnString,
+	.ReturnStruct = ScriptReturnStruct,
 	.RunCallback = ScriptRunCallback,
 	.StructReadInt32 = ScriptStructReadInt32,
 };

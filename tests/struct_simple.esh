@@ -1,0 +1,10 @@
+struct V2 {
+	float x;
+	float y;
+};
+
+void Start() {
+	V2 v = [ x = 3.0, y = 4.0 ];
+	assert v.x == 3.0;
+	assert v.y == 4.0;
+}

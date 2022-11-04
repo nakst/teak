@@ -28,6 +28,7 @@ typedef struct ScriptNativeInterface {
 	bool (*ReturnHeapRef)(struct ExecutionContext *context, intptr_t index);
 	bool (*ReturnInt)(struct ExecutionContext *context, int64_t input);
 	bool (*ReturnString)(struct ExecutionContext *context, const void *input, size_t inputBytes);
+	bool (*ReturnStruct)(struct ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount);
 	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
 	bool (*StructReadInt32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, int32_t *output);
 } ScriptNativeInterface;
@@ -55,6 +56,7 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #define ScriptReturnHeapRef(...)    (scriptNativeInterface->ReturnHeapRef   (__VA_ARGS__))
 #define ScriptReturnInt(...)        (scriptNativeInterface->ReturnInt       (__VA_ARGS__))
 #define ScriptReturnString(...)     (scriptNativeInterface->ReturnString    (__VA_ARGS__))
+#define ScriptReturnStruct(...)     (scriptNativeInterface->ReturnStruct    (__VA_ARGS__))
 #define ScriptRunCallback(...)      (scriptNativeInterface->RunCallback     (__VA_ARGS__))
 #define ScriptStructReadInt32(...)  (scriptNativeInterface->StructReadInt32 (__VA_ARGS__))
 const ScriptNativeInterface *scriptNativeInterface;
