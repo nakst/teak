@@ -15,7 +15,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2          
     - name: build
-      run: ./build.sh && ./esh build.esh runTests=true
+      run: gcc -o esh esh.c -pthread -ldl && ./esh build.esh runTests=true
   build-win32:
     runs-on: windows-latest
     steps:

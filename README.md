@@ -6,9 +6,9 @@ A small scripting language to replace Unix shell scripts.
 
 ## Building
 
-For the first build, run `./build.sh`.
+If you haven't built the interpreter before, first run `gcc -o esh esh.c -pthread -ldl` (Linux/macOS) or `cl.exe esh.c` (Windows).
 
-For subsequent builds, run `./esh build.esh`. For a debug build, run `./esh build.esh debug=true`.
+Then run `./esh build.esh`. For a debug build, run `./esh build.esh debug=true`. (For Windows, don't include the `./` at the start of the commands.)
 
 Run `./esh build.esh runTests=true` to run all the tests.
 
