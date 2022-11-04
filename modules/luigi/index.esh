@@ -1,0 +1,269 @@
+#library "module_luigi";
+
+handletype Element;
+handletype Button       : Element;
+handletype Checkbox     : Element;
+handletype Code         : Element;
+handletype ExpandPane   : Element;
+handletype Gauge        : Element;
+handletype ImageDisplay : Element;
+handletype Label        : Element;
+handletype MDIChild     : Element;
+handletype MDIClient    : Element;
+handletype Menu         : Element;
+handletype Panel        : Element;
+handletype ScrollBar    : Element;
+handletype Slider       : Element;
+handletype Spacer       : Element;
+handletype SplitPane    : Element;
+handletype Switcher     : Element;
+handletype TabPane      : Element;
+handletype Table        : Element;
+handletype Textbox      : Element;
+handletype Window       : Element;
+handletype WrapPanel    : Element;
+
+handletype MessageData;
+handletype Painter;
+
+functype int MessageCallback(Element element, Message message, int di, MessageData dp);
+functype void InvokeCallback(anytype cp);
+
+inttype ElementFlags {
+	ELEMENT_V_FILL      = 1 << 16;
+	ELEMENT_H_FILL      = 1 << 17;
+	ELEMENT_WINDOW      = 1 << 18;
+	ELEMENT_PARENT_PUSH = 1 << 19;
+	ELEMENT_TAB_STOP    = 1 << 20;
+	ELEMENT_NON_CLIENT  = 1 << 21;
+	ELEMENT_DISABLED    = 1 << 22;
+	ELEMENT_BORDER      = 1 << 23;
+};
+
+inttype WindowFlags : ElementFlags {
+	WINDOW_MENU            = 1 << 0;
+	WINDOW_INSPECTOR       = 1 << 1;
+	WINDOW_CENTER_IN_OWNER = 1 << 2;
+	WINDOW_MAXIMIZE        = 1 << 3;
+};
+
+inttype PanelFlags : ElementFlags {
+	PANEL_HORIZONTAL     = 1 << 0;
+	PANEL_COLOR_1        = 1 << 2;
+	PANEL_COLOR_2        = 1 << 3;
+	PANEL_SMALL_SPACING  = 1 << 5;
+	PANEL_MEDIUM_SPACING = 1 << 6;
+	PANEL_LARGE_SPACING  = 1 << 7;
+	PANEL_SCROLL         = 1 << 8;
+	PANEL_EXPAND         = 1 << 9;
+};
+
+inttype ButtonFlags : ElementFlags {
+	BUTTON_SMALL     = 1 <<  0;
+	BUTTON_MENU_ITEM = 1 <<  1;
+	BUTTON_CAN_FOCUS = 1 <<  2;
+	BUTTON_DROP_DOWN = 1 <<  3;
+	BUTTON_CHECKED   = 1 << 15;
+};
+
+inttype CheckboxFlags : ElementFlags {
+	CHECKBOX_ALLOW_INDETERMINATE = 1 << 0;
+};
+
+inttype CodeFlags : ElementFlags {
+	CODE_NO_MARGIN = 1 << 0;
+};
+
+inttype GaugeFlags : ElementFlags {
+	GAUGE_VERTICAL = 1 << 0;
+};
+
+inttype SliderFlags : ElementFlags {
+	SLIDER_VERTICAL = 1 << 0;
+};
+
+inttype MDIClientFlags : ElementFlags {
+	MDI_CLIENT_TRANSPARENT = 1 << 0;
+};
+
+inttype ScrollBarFlags : ElementFlags {
+	SCROLL_BAR_HORIZONTAL = 1 << 0;
+};
+
+inttype SplitPaneFlags : ElementFlags {
+	SPLIT_PANE_VERTICAL = 1 << 0;
+};
+
+inttype Message {
+	// General messages.
+	MSG_PAINT = 0;
+	MSG_PAINT_FOREGROUND = 1;
+	MSG_LAYOUT = 2;
+	MSG_DESTROY = 3;
+	MSG_DEALLOCATE = 4;
+	MSG_UPDATE = 5;
+	MSG_ANIMATE = 6;
+	MSG_SCROLLED = 7;
+	MSG_GET_WIDTH = 8;
+	MSG_GET_HEIGHT = 9;
+	MSG_GET_CHILD_STABILITY = 10;
+
+	// Input events.
+	MSG_INPUT_EVENTS_START = 11;
+	MSG_LEFT_DOWN = 12;
+	MSG_LEFT_UP = 13;
+	MSG_MIDDLE_DOWN = 14;
+	MSG_MIDDLE_UP = 15;
+	MSG_RIGHT_DOWN = 16;
+	MSG_RIGHT_UP = 17;
+	MSG_KEY_TYPED = 18;
+	MSG_KEY_RELEASED = 19;
+	MSG_MOUSE_MOVE = 20;
+	MSG_MOUSE_DRAG = 21;
+	MSG_MOUSE_WHEEL = 22;
+	MSG_CLICKED = 23;
+	MSG_GET_CURSOR = 24;
+	MSG_PRESSED_DESCENDENT = 25;
+	MSG_INPUT_EVENTS_END = 26;
+
+	// Specific elements.
+	MSG_VALUE_CHANGED = 27;
+	MSG_TABLE_GET_ITEM = 28;
+	MSG_CODE_GET_MARGIN_COLOR = 29;
+	MSG_CODE_DECORATE_LINE = 30;
+	MSG_TAB_SELECTED = 31;
+
+	// Windows.
+	MSG_WINDOW_DROP_FILES = 32;
+	MSG_WINDOW_ACTIVATE = 33;
+	MSG_WINDOW_CLOSE = 34;
+	MSG_WINDOW_UPDATE_START = 35;
+	MSG_WINDOW_UPDATE_BEFORE_DESTROY = 36;
+	MSG_WINDOW_UPDATE_BEFORE_LAYOUT = 37;
+	MSG_WINDOW_UPDATE_BEFORE_PAINT = 38;
+	MSG_WINDOW_UPDATE_END = 39;
+
+	// User-defined messages.
+	MSG_USER = 40;
+};
+
+struct Rectangle {
+	int l;
+	int r;
+	int t;
+	int b;
+};
+
+struct Shortcut {
+	int code;
+	bool ctrl;
+	bool shift;
+	bool alt;
+	InvokeCallback invoke;
+	anytype cp;
+};
+
+struct StringSelection {
+	int caret0;
+	int caret1;
+	int colorText;
+	int colorBackground;
+};
+
+struct KeyTyped {
+	str text;
+	int code;
+};
+
+struct CodeDecorateLine {
+	Rectangle bounds;
+	int index;
+	int x;
+	int y;
+	Painter painter;
+};
+
+struct Theme {
+	int panel1;
+	int panel2;
+	int selected;
+	int border;
+	int text;
+	int textDisabled;
+	int textSelected;
+	int buttonNormal;
+	int buttonHovered;
+	int buttonPressed;
+	int buttonDisabled;
+	int textboxNormal;
+	int textboxFocused;
+	int codeFocused;
+	int codeBackground;
+	int codeDefault;
+	int codeComment;
+	int codeString;
+	int codeNumber;
+	int codeOperator;
+	int codePreprocessor;
+};
+
+void Initialise() #extcall;
+int MessageLoop() #extcall;
+
+// ImageDisplay ImageDisplayCreate(Element parent, ElementFlags flags, uint32_t *bits, size_t width, size_t height, size_t stride) #extcall;
+// MDIChild MDIChildCreate(Element parent, ElementFlags flags, UIRectangle initialBounds, str title) #extcall;
+Button ButtonCreate(Element parent, ButtonFlags flags, str label) #extcall;
+Checkbox CheckboxCreate(Element parent, CheckboxFlags flags, str label) #extcall;
+Code CodeCreate(Element parent, CodeFlags flags) #extcall;
+ExpandPane ExpandPaneCreate(Element parent, ElementFlags flags, str label, PanelFlags panelFlags) #extcall;
+Gauge GaugeCreate(Element parent, GaugeFlags flags) #extcall;
+Label LabelCreate(Element parent, ElementFlags flags, str label) #extcall;
+MDIClient MDIClientCreate(Element parent, MDIClientFlags flags) #extcall;
+Panel PanelCreate(Element parent, PanelFlags flags) #extcall;
+ScrollBar ScrollBarCreate(Element parent, ScrollBarFlags flags) #extcall;
+Slider SliderCreate(Element parent, SliderFlags flags) #extcall;
+Spacer SpacerCreate(Element parent, ElementFlags flags, int width, int height) #extcall;
+SplitPane SplitPaneCreate(Element parent, SplitPaneFlags flags, float weight) #extcall;
+Switcher SwitcherCreate(Element parent, ElementFlags flags) #extcall;
+TabPane TabPaneCreate(Element parent, ElementFlags flags, str tabs) #extcall;
+Table TableCreate(Element parent, ElementFlags flags, str columns) #extcall;
+Textbox TextboxCreate(Element parent, ElementFlags flags) #extcall;
+Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
+WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
+
+// UIRectangle UIElementScreenBounds(UIElement *element) #extcall;
+// int UIElementMessage(UIElement *element, UIMessage message, int di, void *dp) #extcall;
+// void UIElementMove(UIElement *element, UIRectangle bounds, bool alwaysLayout) #extcall;
+// void UIElementRepaint(UIElement *element, UIRectangle *region) #extcall;
+bool ElementAnimate(Element element, bool stop) #extcall;
+Element ElementChangeParent(Element element, Element newParent, Element insertBefore) #extcall;
+void ElementDestroy(Element element) #extcall;
+void ElementDestroyDescendents(Element element) #extcall;
+Element ElementFindByPoint(Element element, int x, int y) #extcall;
+void ElementFocus(Element element) #extcall;
+str ElementGetClassName(Element element) #extcall;
+anytype ElementGetContext(Element element) #extcall;
+ElementFlags ElementGetFlags(Element element) #extcall;
+Element ElementGetParent(Element element) #extcall;
+Window ElementGetWindow(Element element) #extcall;
+void ElementMeasurementsChanged(Element element, int which) #extcall;
+void ElementRefresh(Element element) #extcall;
+void ElementRelayout(Element element) #extcall;
+void ElementSetFlags(Element element, ElementFlags flags) #extcall;
+void ElementSetMessageUser(Element element, MessageCallback callback) #extcall;
+void ElementSetContext(Element element, anytype context) #extcall;
+
+Rectangle RECT_1(int x) { return [ l = x, r = x, t = x, b = x ]; }
+Rectangle RECT_1I(int x) { return [ l = x, r = -x, t = x, b = -x ]; }
+Rectangle RECT_2(int x, int y) { return [ l = x, r = x, t = y, b = y ]; }
+Rectangle RECT_2I(int x, int y) { return [ l = x, r = -x, t = y, b = -y ]; }
+Rectangle RECT_2S(int x, int y) { return [ l = 0, r = x, t = 0, b = y ]; }
+Rectangle RECT_4(int x, int y, int z, int w) { return [ l = x, r = y, t = z, b = w ]; }
+Rectangle RECT_4PD(int x, int y, int w, int h) { return [ l = x, r = x + w, t = y, b = y + h ]; }
+int RECT_WIDTH(Rectangle r) { return r.r - r.l; }
+int RECT_HEIGHT(Rectangle r) { return r.b - r.t; }
+int RECT_TOTAL_H(Rectangle r) { return r.r + r.l; }
+int RECT_TOTAL_V(Rectangle r) { return r.b + r.t; }
+bool RECT_VALID(Rectangle r) { return r.l < r.r && r.t < r.b; }
+bool RectangleContains(Rectangle a, int x, int y) #extcall;
+bool RectangleEquals(Rectangle a, Rectangle b) #extcall;

@@ -166,7 +166,12 @@ This returns the pointer associated with the handle when it was created. If the 
 bool ScriptReturnHandle(struct ExecutionContext *context, void *handleData, void (*close)(void *));
 ```
 
-You must specify a function to call when the handle is deallocated. Deallocation is done whenever the garbage collector deems it necessary, so don't expect this to happen in any sort of timely manner; but it will certainly be called if the script exits normally.
+You must specify a function to call when the handle is deallocated. Deallocation is done whenever the garbage collector deems it necessary, so don't expect this to happen in any sort of timely manner; but it will certainly be called if the script exits normally. If the `handleData` is set to `NULL`, then a `null` will be returned to the script, and the `close` callback will be unused.
+
+```c
+// TODO Document this.
+intptr_t ScriptCreateHandle(struct ExecutionContext *context, void *handleData, void (*close)(void *));
+```
 
 ## The Initialise function
 
@@ -186,5 +191,18 @@ void Initialise() {
 
 ```c
 // TODO Document this.
-bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
+bool ScriptRunCallback(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
 ```
+
+## References to heap objects
+
+```c
+// TODO Document these.
+
+bool ScriptParameterHeapRef(struct ExecutionContext *context, intptr_t *output);
+bool ScriptHeapRefClose(struct ExecutionContext *context, intptr_t index);
+bool ScriptReturnHeapRef(struct ExecutionContext *context, intptr_t index);
+
+bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int32_t *output);
+```
+

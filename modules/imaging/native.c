@@ -21,7 +21,8 @@ typedef struct Bitmap {
 	uint32_t *bits;
 } Bitmap;
 
-void CloseBitmapHandle(void *handleData) {
+void CloseBitmapHandle(struct ExecutionContext *context, void *handleData) {
+	(void) context;
 	Bitmap *bitmap = (Bitmap *) handleData;
 	free(bitmap->bits);
 	free(bitmap);

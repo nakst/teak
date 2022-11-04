@@ -6,12 +6,16 @@
 
 struct ExecutionContext;
 typedef bool (*ScriptExtFunction)(struct ExecutionContext *context);
+typedef void (*ScriptCloseHandleFunction)(struct ExecutionContext *context, void *handleData);
 
 typedef struct ScriptNativeInterface {
+	bool (*CreateHandle)(struct ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle);
+	void (*HeapRefClose)(struct ExecutionContext *context, intptr_t index);
 	bool (*ParameterBool)(struct ExecutionContext *context, bool *output);
 	bool (*ParameterCString)(struct ExecutionContext *context, char **output);
 	bool (*ParameterDouble)(struct ExecutionContext *context, double *output);
 	bool (*ParameterHandle)(struct ExecutionContext *context, void **output);
+	bool (*ParameterHeapRef)(struct ExecutionContext *context, intptr_t *index);
 	bool (*ParameterInt32)(struct ExecutionContext *context, int32_t *output);
 	bool (*ParameterInt64)(struct ExecutionContext *context, int64_t *output);
 	bool (*ParameterString)(struct ExecutionContext *context, const void **output, size_t *outputBytes);
@@ -20,20 +24,25 @@ typedef struct ScriptNativeInterface {
 	bool (*ReturnBoxInError)(struct ExecutionContext *context);
 	bool (*ReturnDouble)(struct ExecutionContext *context, double input);
 	bool (*ReturnError)(struct ExecutionContext *context, const char *message);
-	bool (*ReturnHandle)(struct ExecutionContext *context, void *handleData, void (*close)(void *));
+	bool (*ReturnHandle)(struct ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close);
+	bool (*ReturnHeapRef)(struct ExecutionContext *context, intptr_t index);
 	bool (*ReturnInt)(struct ExecutionContext *context, int64_t input);
 	bool (*ReturnString)(struct ExecutionContext *context, const void *input, size_t inputBytes);
 	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
+	bool (*StructReadInt32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, int32_t *output);
 } ScriptNativeInterface;
 
 #ifdef SCRIPT_ENGINE
 typedef void (*ScriptSetNativeInterfacePointerFunction)(const ScriptNativeInterface *s);
 extern const ScriptNativeInterface _scriptNativeInterface;
 #else
+#define ScriptCreateHandle(...)     (scriptNativeInterface->CreateHandle    (__VA_ARGS__))
+#define ScriptHeapRefClose(...)     (scriptNativeInterface->HeapRefClose    (__VA_ARGS__))
 #define ScriptParameterBool(...)    (scriptNativeInterface->ParameterBool   (__VA_ARGS__))
 #define ScriptParameterCString(...) (scriptNativeInterface->ParameterCString(__VA_ARGS__))
 #define ScriptParameterDouble(...)  (scriptNativeInterface->ParameterDouble (__VA_ARGS__))
 #define ScriptParameterHandle(...)  (scriptNativeInterface->ParameterHandle (__VA_ARGS__))
+#define ScriptParameterHeapRef(...) (scriptNativeInterface->ParameterHeapRef(__VA_ARGS__))
 #define ScriptParameterInt32(...)   (scriptNativeInterface->ParameterInt32  (__VA_ARGS__))
 #define ScriptParameterInt64(...)   (scriptNativeInterface->ParameterInt64  (__VA_ARGS__))
 #define ScriptParameterString(...)  (scriptNativeInterface->ParameterString (__VA_ARGS__))
@@ -43,9 +52,11 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #define ScriptReturnDouble(...)     (scriptNativeInterface->ReturnDouble    (__VA_ARGS__))
 #define ScriptReturnError(...)      (scriptNativeInterface->ReturnError     (__VA_ARGS__))
 #define ScriptReturnHandle(...)     (scriptNativeInterface->ReturnHandle    (__VA_ARGS__))
+#define ScriptReturnHeapRef(...)    (scriptNativeInterface->ReturnHeapRef   (__VA_ARGS__))
 #define ScriptReturnInt(...)        (scriptNativeInterface->ReturnInt       (__VA_ARGS__))
 #define ScriptReturnString(...)     (scriptNativeInterface->ReturnString    (__VA_ARGS__))
 #define ScriptRunCallback(...)      (scriptNativeInterface->RunCallback     (__VA_ARGS__))
+#define ScriptStructReadInt32(...)  (scriptNativeInterface->StructReadInt32 (__VA_ARGS__))
 const ScriptNativeInterface *scriptNativeInterface;
 LIBRARY_EXPORT void ScriptSetNativeInterfacePointer(const ScriptNativeInterface *s) { scriptNativeInterface = s; }
 #endif

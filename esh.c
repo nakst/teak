@@ -27,6 +27,7 @@
 // 	- Win32: use the Unicode APIs for file system access. Path separator differences?
 
 // TODO Other missing features:
+// 	- For the native interface, perhaps a scanf-like function for reading data?
 // 	- struct inheritance.
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
@@ -446,7 +447,7 @@ typedef struct HeapEntry {
 		};
 
 		struct { // T_HANDLETYPE
-			void (*close)(void *);
+			ScriptCloseHandleFunction close;
 			void *handleData;
 		};
 	};
@@ -3414,7 +3415,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 		if (!ScopeIsVariableType(lookup) && lookup->type != T_INLINE 
 				&& lookup->type != T_IMPORT && lookup->type != T_INTTYPE_CONSTANT) {
-			PrintError2(tokenizer, node, "The identifier \"%.*s\" did not resolve to a variable or constant.\n", 
+			PrintError2(tokenizer, node, "The identifier \"%.*s\" did not resolve to a variable, function or constant.\n", 
 					node->token.textBytes, node->token.text);
 			return false;
 		}
@@ -3809,8 +3810,10 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 				return false;
 			}
 
-			if (ScopeLookupIndex(node, importData->rootNode->scope, true, false) == -1) {
-				PrintError2(tokenizer, node, "The identifier '%.*s' did not resolve to a variable or function "
+			bool isInttypeConstant = importData->rootNode->scope->entries[index]->type == T_INTTYPE_CONSTANT;
+
+			if (!isInttypeConstant && ScopeLookupIndex(node, importData->rootNode->scope, true, false) == -1) {
+				PrintError2(tokenizer, node, "The identifier '%.*s' did not resolve to a variable, function or constant "
 						"in the imported module '%s'.\n",
 						node->token.textBytes, node->token.text, importData->prettyName);
 				return false;
@@ -5187,7 +5190,7 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 	} else if (context->heap[i].type == T_LIST) {
 		AllocateResize(context->heap[i].list, 0);
 	} else if (context->heap[i].type == T_HANDLETYPE) {
-		context->heap[i].close(context->heap[i].handleData);
+		context->heap[i].close(context, context->heap[i].handleData);
 	} else if (context->heap[i].type == T_OP_DISCARD || context->heap[i].type == T_OP_ASSERT 
 			|| context->heap[i].type == T_FUNCPTR || context->heap[i].type == T_OP_CURRY
 			|| context->heap[i].type == T_CONCAT || context->heap[i].type == T_ERR
@@ -6958,7 +6961,23 @@ bool ScriptParameterHandle(ExecutionContext *context, void **output) {
 	return true;
 }
 
-#if 0
+bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int32_t *output) {
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+
+	if (context->heap[index].type == T_STRUCT) {
+		Assert(fieldIndex < context->heap[index].fieldCount);
+		Assert(!((uint8_t *) context->heap[index].fields)[-1 - fieldIndex]);
+		*output = context->heap[index].fields[fieldIndex].i;
+		return true;
+	} else if (context->heap[index].type == T_EOF) {
+		PrintError4(context, 0, "Structure is null.");
+		return false;
+	} else {
+		PrintError3("The script was malformed.\n");
+		return false;
+	}
+}
+
 void ScriptHeapRefClose(ExecutionContext *context, intptr_t index) {
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
 	Assert(context->heap[index].externalReferenceCount);
@@ -6975,7 +6994,6 @@ bool ScriptParameterHeapRef(ExecutionContext *context, intptr_t *output) {
 	*output = index;
 	return true;
 }
-#endif
 
 bool ScriptParameterInt64(ExecutionContext *context, int64_t *output) {
 	context->c->parameterCount++;
@@ -7010,6 +7028,13 @@ bool ScriptReturnDouble(ExecutionContext *context, double input) {
 	return true;
 }
 
+bool ScriptReturnHeapRef(ExecutionContext *context, intptr_t index) {
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
+	context->c->returnValue.i = index;
+	return true;
+}
+
 bool ScriptReturnString(ExecutionContext *context, const void *data, size_t bytes) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
@@ -7018,13 +7043,33 @@ bool ScriptReturnString(ExecutionContext *context, const void *data, size_t byte
 	return true;
 }
 
-bool ScriptReturnHandle(ExecutionContext *context, void *handleData, void (*close)(void *)) {
+bool ScriptCreateHandle(ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle) {
+	if (handleData) {
+		intptr_t index = *handle = HeapAllocate(context); // TODO Handle memory allocation failures here.
+		context->heap[index].type = T_HANDLETYPE;
+		context->heap[index].close = close;
+		context->heap[index].handleData = handleData;
+		context->heap[index].externalReferenceCount = 1;
+	} else {
+		*handle = 0;
+	}
+
+	return true;
+}
+
+bool ScriptReturnHandle(ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close) {
 	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
 	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
-	int64_t index = context->c->returnValue.i = HeapAllocate(context); // TODO Handle memory allocation failures here.
-	context->heap[index].type = T_HANDLETYPE;
-	context->heap[index].close = close;
-	context->heap[index].handleData = handleData;
+
+	if (handleData) {
+		int64_t index = context->c->returnValue.i = HeapAllocate(context); // TODO Handle memory allocation failures here.
+		context->heap[index].type = T_HANDLETYPE;
+		context->heap[index].close = close;
+		context->heap[index].handleData = handleData;
+	} else {
+		context->c->returnValue.i = 0;
+	}
+
 	return true;
 }
 
@@ -7073,10 +7118,13 @@ bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int6
 }
 
 const ScriptNativeInterface _scriptNativeInterface = {
+	.CreateHandle = ScriptCreateHandle,
+	.HeapRefClose = ScriptHeapRefClose,
 	.ParameterBool = ScriptParameterBool,
 	.ParameterCString = ScriptParameterCString,
 	.ParameterDouble = ScriptParameterDouble,
 	.ParameterHandle = ScriptParameterHandle,
+	.ParameterHeapRef = ScriptParameterHeapRef,
 	.ParameterInt32 = ScriptParameterInt32,
 	.ParameterInt64 = ScriptParameterInt64,
 	.ParameterString = ScriptParameterString,
@@ -7086,9 +7134,11 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnDouble = ScriptReturnDouble,
 	.ReturnError = ScriptReturnError,
 	.ReturnHandle = ScriptReturnHandle,
+	.ReturnHeapRef = ScriptReturnHeapRef,
 	.ReturnInt = ScriptReturnInt,
 	.ReturnString = ScriptReturnString,
 	.RunCallback = ScriptRunCallback,
+	.StructReadInt32 = ScriptStructReadInt32,
 };
 
 void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
