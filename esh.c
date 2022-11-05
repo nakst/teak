@@ -7197,7 +7197,8 @@ bool ScriptReturnError(ExecutionContext *context, const char *message) {
 	return true;
 }
 
-bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount) {
+bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, 
+		int64_t *parameters, bool *managedParameters, size_t parameterCount, int64_t *returnValue, bool managedReturnValue) {
 	// TODO Do this in a separate coroutine?
 
 	for (intptr_t i = parameterCount - 1; i >= -1; i--) {
@@ -7217,11 +7218,22 @@ bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer, int6
 		context->c->stackPointer++;
 	}
 
+	uintptr_t previousParameterCount = context->c->parameterCount;
+	int previousReturnValueType = context->c->returnValueType;
+
 	int result = ScriptExecuteFunction(2, context);
 
-	if (result == -1) {
+	context->c->parameterCount = previousParameterCount;
+	context->c->returnValueType = previousReturnValueType;
+
+	if (result == -1 || (returnValue && (context->c->stackPointer == 0 
+					|| context->c->stackIsManaged[context->c->stackPointer - 1] != managedReturnValue))) {
 		PrintError3("The script was malformed.\n");
 		wantCompletionConfirmation = false;
+	}
+
+	if (returnValue) {
+		*returnValue = context->c->stack[--context->c->stackPointer].i;
 	}
 
 	return result > 0;

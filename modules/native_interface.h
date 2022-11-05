@@ -31,7 +31,7 @@ typedef struct ScriptNativeInterface {
 	bool (*ReturnString)(struct ExecutionContext *context, const void *input, size_t inputBytes);
 	bool (*ReturnStruct)(struct ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount);
 	bool (*ReturnStructInl)(struct ExecutionContext *context, size_t fieldCount, ...);
-	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount);
+	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount, int64_t *returnValue, bool managedReturnValue);
 	bool (*StructReadInt32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, int32_t *output);
 } ScriptNativeInterface;
 

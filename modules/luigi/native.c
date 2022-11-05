@@ -52,6 +52,8 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 		return 0;
 	}
 
+	int64_t returnValue = 0;
+
 	if (wrapper->messageUser) {
 		intptr_t elementHandle = -1;
 		bool success = WrapperOpen(contextForCallback, wrapper, &elementHandle);
@@ -67,7 +69,7 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 
 		bool managedParameters[4] = { true, false, false, true };
 		// TODO Modify this so that it actually works!
-		success = ScriptRunCallback(contextForCallback, wrapper->messageUser, parameters, managedParameters, 4);
+		success = ScriptRunCallback(contextForCallback, wrapper->messageUser, parameters, managedParameters, 4, &returnValue, false);
 		// TODO How to handle failure?
 
 		ScriptHeapRefClose(contextForCallback, elementHandle);
@@ -77,9 +79,10 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 		WrapperClose(contextForCallback, wrapper);
 		element->cp = NULL;
 		wrapper->element = NULL;
+		returnValue = 0;
 	}
 
-	return 0;
+	return returnValue;
 }
 
 ElementWrapper *WrapperCreate(UIElement *element) {
@@ -104,8 +107,14 @@ bool ScriptExtInitialise(struct ExecutionContext *context) {
 }
 
 bool ScriptExtMessageLoop(struct ExecutionContext *context) {
+	if (contextForCallback) {
+		fprintf(stderr, "Error: Already running the message loop!\n");
+		return false;
+	}
+
 	contextForCallback = context;
 	ScriptReturnInt(context, UIMessageLoop());
+	contextForCallback = NULL;
 	return true;
 }
 
