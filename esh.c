@@ -7099,13 +7099,28 @@ bool ScriptParameterScan(struct ExecutionContext *context, const char *cFormat, 
 				return false;
 			}
 
-			while (success && *cFormat != ')') {
-				if (*cFormat == 'i') { success = ScriptStructReadInt32(context, structIndex, fieldIndex, va_arg(arguments, int32_t *)); }
-				else if (*cFormat == '-') {}
-				else { success = false; }
+			if (structIndex == 0) {
+				// TODO If 'n' is not found, then the null value should be an error.
 
-				cFormat++;
-				fieldIndex++;
+				while (success && *cFormat != ')') {
+					if (*cFormat == 'i') { int32_t *i = va_arg(arguments, int32_t *); *i = 0; }
+					else if (*cFormat == 'n') { bool *b = va_arg(arguments, bool *); if (b) *b = true; }
+					else if (*cFormat == '-') {}
+					else { success = false; }
+
+					cFormat++;
+					fieldIndex++;
+				}
+			} else {
+				while (success && *cFormat != ')') {
+					if (*cFormat == 'i') { success = ScriptStructReadInt32(context, structIndex, fieldIndex, va_arg(arguments, int32_t *)); }
+					else if (*cFormat == 'n') { bool *b = va_arg(arguments, bool *); *b = false; }
+					else if (*cFormat == '-') {}
+					else { success = false; }
+
+					cFormat++;
+					fieldIndex++;
+				}
 			}
 
 			ScriptHeapRefClose(context, structIndex);

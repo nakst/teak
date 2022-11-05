@@ -132,6 +132,25 @@ bool ScriptExtWindowCreate(struct ExecutionContext *context) {
 	return success;
 }
 
+#define SCRIPT_EXT_GET_FIELD(name, type, field, fieldType) \
+bool ScriptExt##name(struct ExecutionContext *context) { \
+	ElementWrapper *element; \
+	return ScriptParameterScan(context, "h", (void **) &element) && ScriptReturn##fieldType(context, ((type *) element->element)->field); \
+}
+SCRIPT_EXT_GET_FIELD(WindowGetCursorX, UIWindow, cursorX, Int);
+SCRIPT_EXT_GET_FIELD(WindowGetCursorY, UIWindow, cursorY, Int);
+SCRIPT_EXT_GET_FIELD(WindowGetPressedMouseButton, UIWindow, pressedButton, Int);
+SCRIPT_EXT_GET_FIELD(WindowGetScale, UIWindow, scale, Double);
+SCRIPT_EXT_GET_FIELD(WindowGetTextboxModifiedFlag, UIWindow, textboxModifiedFlag, Int);
+SCRIPT_EXT_GET_FIELD(WindowIsAltHeld, UIWindow, alt, Int);
+SCRIPT_EXT_GET_FIELD(WindowIsCtrlHeld, UIWindow, ctrl, Int);
+SCRIPT_EXT_GET_FIELD(WindowIsShiftHeld, UIWindow, shift, Int);
+SCRIPT_EXT_GET_FIELD(ElementGetFlags, UIElement, flags, Int);
+SCRIPT_EXT_GET_FIELD(TextboxGetSelectionFrom, UITextbox, carets[0], Int);
+SCRIPT_EXT_GET_FIELD(TextboxGetSelectionTo, UITextbox, carets[1], Int);
+SCRIPT_EXT_GET_FIELD(SliderGetPosition, UISlider, position, Double);
+SCRIPT_EXT_GET_FIELD(CheckboxGetCheck, UICheckbox, check, Int);
+
 #define SCRIPT_EXT_LABELLED_ELEMENT_CREATE(name) \
 bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 	ElementWrapper *parent; \
@@ -257,11 +276,6 @@ bool ScriptExtElementGetParent(struct ExecutionContext *context) {
 	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(element->element->parent), WrapperClose);
 }
 
-bool ScriptExtElementGetFlags(struct ExecutionContext *context) {
-	ElementWrapper *element;
-	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnInt(context, element->element->flags);
-}
-
 bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	uint32_t flags;
@@ -350,6 +364,42 @@ bool ScriptExtElementGetContext(struct ExecutionContext *context) {
 	return ScriptReturnHeapRef(context, element->cp);
 }
 
+bool ScriptExtElementScreenBounds(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterHandle(context, (void **) &element)) return false;
+	return ReturnRectangle(context, UIElementScreenBounds(element->element));
+}
+
+bool ScriptExtElementWindowBounds(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterHandle(context, (void **) &element)) return false;
+	return ReturnRectangle(context, element->element->bounds);
+}
+
+bool ScriptExtElementGetClip(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterHandle(context, (void **) &element)) return false;
+	return ReturnRectangle(context, element->element->clip);
+}
+
+bool ScriptExtElementMove(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	UIRectangle rect;
+	bool alwaysLayout;
+	if (!ScriptParameterScan(context, "h(iiii)b", (void **) &element, &rect.l, &rect.r, &rect.t, &rect.b, &alwaysLayout)) return false;
+	UIElementMove(element->element, rect, alwaysLayout);
+	return true;
+}
+
+bool ScriptExtElementRepaint(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	UIRectangle rect;
+	bool isRectNull;
+	if (!ScriptParameterScan(context, "h(niiii)", (void **) &element, &isRectNull, &rect.l, &rect.r, &rect.t, &rect.b)) return false;
+	UIElementRepaint(element->element, isRectNull ? NULL : &rect);
+	return true;
+}
+
 bool ScriptExtButtonSetLabel(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	const char *label; size_t labelBytes;
@@ -422,18 +472,6 @@ bool ScriptExtTextboxRejectNextKey(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxGetSelectionFrom(struct ExecutionContext *context) {
-	ElementWrapper *element;
-	return ScriptParameterScan(context, "h", (void **) &element)
-		&& ScriptReturnInt(context, ((UITextbox *) element->element)->carets[0]);
-}
-
-bool ScriptExtTextboxGetSelectionTo(struct ExecutionContext *context) {
-	ElementWrapper *element;
-	return ScriptParameterScan(context, "h", (void **) &element)
-		&& ScriptReturnInt(context, ((UITextbox *) element->element)->carets[1]);
-}
-
 bool ScriptExtTextboxSetSelectionFrom(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t index;
@@ -479,9 +517,13 @@ bool ScriptExtSliderSetPosition(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtSliderGetPosition(struct ExecutionContext *context) {
+bool ScriptExtCheckboxSetCheck(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	return ScriptParameterScan(context, "h", (void **) &element) && ScriptReturnDouble(context, ((UISlider *) element->element)->position);
+	int check;
+	if (!ScriptParameterScan(context, "hi", (void **) &element, &check)) return false;
+	((UICheckbox *) element->element)->check = check;
+	UIElementRefresh(element->element);
+	return true;
 }
 
 bool ScriptExtRectangleContains(struct ExecutionContext *context) {

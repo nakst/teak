@@ -280,12 +280,12 @@ WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
 // Element ElementCreate(Element parent, uint32_t flags, MessageCallback messageClass, str className) #extcall;
 
-// Rectangle ElementScreenBounds(Element element) #extcall;
+Rectangle ElementScreenBounds(Element element) #extcall;
 // int ElementMessage(Element element, Message message, int di, MessageData dp) #extcall;
-// void ElementMove(Element element, Rectangle bounds, bool alwaysLayout) #extcall;
-// void ElementRepaint(Element element, Rectangle region) #extcall;
-// Rectangle ElementWindowBounds(Element element) #extcall;
-// Rectangle ElementGetClip(Element element) #extcall;
+void ElementMove(Element element, Rectangle bounds, bool alwaysLayout) #extcall;
+void ElementRepaint(Element element, Rectangle region) #extcall;
+Rectangle ElementWindowBounds(Element element) #extcall;
+Rectangle ElementGetClip(Element element) #extcall;
 bool ElementAnimate(Element element, bool stop) #extcall;
 Element ElementChangeParent(Element element, Element newParent, Element insertBefore) #extcall;
 void ElementDestroy(Element element) #extcall;
@@ -304,18 +304,18 @@ void ElementSetFlags(Element element, ElementFlags flags) #extcall;
 void ElementSetMessageUser(Element element, MessageCallback callback) #extcall;
 void ElementSetContext(Element element, anytype context) #extcall;
 
-// float WindowGetScale(Window window) #extcall;
+float WindowGetScale(Window window) #extcall;
 // Element WindowGetHoveredElement(Window window) #extcall;
 // Element WindowGetPressedElement(Window window) #extcall;
 // Element WindowGetFocusedElement(Window window) #extcall;
-// int WindowGetPressedMouseButton(Window window) #extcall;
-// int WindowGetCursorX(Window window) #extcall;
-// int WindowGetCursorY(Window window) #extcall;
-// bool WindowGetTextboxModifiedFlag(Window window) #extcall;
+int WindowGetPressedMouseButton(Window window) #extcall;
+int WindowGetCursorX(Window window) #extcall;
+int WindowGetCursorY(Window window) #extcall;
+bool WindowGetTextboxModifiedFlag(Window window) #extcall;
 // void WindowSetTextboxModifiedFlag(Window window, bool flag) #extcall;
-// bool WindowIsCtrlHeld(Window window) #extcall;
-// bool WindowIsShiftHeld(Window window) #extcall;
-// bool WindowIsAltHeld(Window window) #extcall;
+bool WindowIsCtrlHeld(Window window) #extcall;
+bool WindowIsShiftHeld(Window window) #extcall;
+bool WindowIsAltHeld(Window window) #extcall;
 // void WindowRegisterShortcut(Window window, Shortcut shortcut) #extcall;
 // void WindowPack(Window window, int width) #extcall;
 
@@ -331,8 +331,8 @@ void LabelSetContent(Label label, str string) #extcall;
 void PanelSetSpacing(Panel panel, Rectangle border, int gap) #extcall;
 
 inttype CheckState { CHECK_UNCHECKED = 0; CHECK_CHECKED = 1; CHECK_INDETERMINATE = 2; };
-// void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;
-// int CheckboxGetCheck(Checkbox checkbox) #extcall;
+void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;
+CheckState CheckboxGetCheck(Checkbox checkbox) #extcall;
 // void CheckboxSetInvoke(Checkbox checkbox, InvokeCallback invoke) #extcall;
 
 // void SplitPaneSetWeight(SplitPane pane, float weight) #extcall;
