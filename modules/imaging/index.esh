@@ -1,16 +1,21 @@
 #library "module_imaging";
 
 handletype Bitmap;
+handletype Animation;
 
 Bitmap Create(int width, int height) #extcall;
 
 int Width(Bitmap bitmap) #extcall;
 int Height(Bitmap bitmap) #extcall;
 void Crop(Bitmap bitmap, int left, int right, int top, int bottom) #extcall;
+
 void Blit(Bitmap destination, int source, int x, int y) #extcall;
+void DrawBlock(Bitmap destination, int left, int right, int top, int bottom, int color) #extcall;
 
 err[Bitmap] Load(str data) #extcall;
 err[Bitmap] LoadFromPath(str path) { err[str] data = FileReadAll(path); reterr data; return Load(data:assert()); }
+err[str] Save(Bitmap bitmap, str format) #extcall; // Currently, only format == "png" is supported.
 
-// Currently, only format == "png" is supported.
-err[str] Save(Bitmap bitmap, str format) #extcall;
+Animation AnimationCreate(int width, int height) #extcall;
+void AnimationAddFrame(Animation animation, Bitmap frame, float time) #extcall;
+err[str] AnimationSave(Animation animation, str format) #extcall; // // Currently, only format == "gif" is supported.
