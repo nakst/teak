@@ -9143,8 +9143,9 @@ const char *PathToAbsolute(const char *path) {
 	wchar_t *wide = WideStringFromUTF8(path, strlen(path));
 	wchar_t *result = (wchar_t *) calloc(1, sizeof(wchar_t) * (MAX_PATH + 1));
 	GetFullPathNameW(wide, MAX_PATH, result, NULL);
-	n = WideStringToUTF8(wide);
+	n = WideStringToUTF8(result);
 	free(wide);
+	free(result);
 #else
 	n = realpath(path, NULL);
 #endif
