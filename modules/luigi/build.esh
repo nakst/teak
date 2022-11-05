@@ -1,17 +1,16 @@
 str compilerTemplate #option;
 
 void Start() {
-	str platformDefine;
+	str platformFlags = "";
 
 	if SystemGetHostName() == "Windows" {
-		platformDefine = "-DUI_WINDOWS";
 	} else if SystemGetHostName() == "Linux" {
-		platformDefine = "-DUI_LINUX -Wno-unused-parameter -lX11";
+		platformFlags = "-Wno-unused-parameter -lX11";
 	} else {
 		return;
 	}
 
 	assert compilerTemplate != "";
 	SystemShellExecute(StringReplaceFirst(StringReplaceFirst(compilerTemplate, "[SRC]", "modules/luigi/native.c"), "[DST]", "module_luigi")
-			+ " %platformDefine%");
+			+ " %platformFlags%");
 }

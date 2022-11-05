@@ -3,6 +3,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+#define UI_WINDOWS
+#else
+#define UI_LINUX 
+#endif
+
 #define UI_IMPLEMENTATION
 #include "luigi2.h"
 
@@ -101,12 +107,12 @@ ElementWrapper *WrapperCreate(UIElement *element) {
 	}
 }
 
-bool ScriptExtInitialise(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtInitialise(struct ExecutionContext *context) {
 	UIInitialise();
 	return true;
 }
 
-bool ScriptExtMessageLoop(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtMessageLoop(struct ExecutionContext *context) {
 	if (contextForCallback) {
 		fprintf(stderr, "Error: Already running the message loop!\n");
 		return false;
@@ -118,7 +124,7 @@ bool ScriptExtMessageLoop(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtWindowCreate(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtWindowCreate(struct ExecutionContext *context) {
 	ElementWrapper *owner;
 	uint32_t flags;
 	char *title = NULL;
@@ -142,7 +148,7 @@ bool ScriptExtWindowCreate(struct ExecutionContext *context) {
 }
 
 #define SCRIPT_EXT_GET_FIELD(name, type, field, fieldType) \
-bool ScriptExt##name(struct ExecutionContext *context) { \
+LIBRARY_EXPORT bool ScriptExt##name(struct ExecutionContext *context) { \
 	ElementWrapper *element; \
 	return ScriptParameterScan(context, "h", (void **) &element) && ScriptReturn##fieldType(context, ((type *) element->element)->field); \
 }
@@ -161,7 +167,7 @@ SCRIPT_EXT_GET_FIELD(SliderGetPosition, UISlider, position, Double);
 SCRIPT_EXT_GET_FIELD(CheckboxGetCheck, UICheckbox, check, Int);
 
 #define SCRIPT_EXT_LABELLED_ELEMENT_CREATE(name) \
-bool ScriptExt##name##Create(struct ExecutionContext *context) { \
+LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 	ElementWrapper *parent; \
 	uint32_t flags; \
 	const char *string; \
@@ -181,7 +187,7 @@ SCRIPT_EXT_LABELLED_ELEMENT_CREATE(Checkbox);
 SCRIPT_EXT_LABELLED_ELEMENT_CREATE(Label);
 
 #define SCRIPT_EXT_CSTRING_ELEMENT_CREATE(name) \
-bool ScriptExt##name##Create(struct ExecutionContext *context) { \
+LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 	ElementWrapper *parent; \
 	uint32_t flags; \
 	char *tabs; \
@@ -201,7 +207,7 @@ SCRIPT_EXT_CSTRING_ELEMENT_CREATE(TabPane);
 SCRIPT_EXT_CSTRING_ELEMENT_CREATE(Table);
 
 #define SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(name) \
-bool ScriptExt##name##Create(struct ExecutionContext *context) { \
+LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 	ElementWrapper *parent; \
 	uint32_t flags; \
 	bool success = ScriptParameterHandle(context, (void **) &parent) \
@@ -223,7 +229,7 @@ SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(Switcher);
 SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(Textbox);
 SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(WrapPanel);
 
-bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent;
 	uint32_t flags;
 	int32_t width, height;
@@ -231,7 +237,7 @@ bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
 		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent->element, flags, width, height)->e), WrapperClose);
 }
 
-bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent;
 	uint32_t flags;
 	double weight;
@@ -239,7 +245,7 @@ bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), WrapperClose);
 }
 
-bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent;
 	uint32_t flags, panelFlags;
 	const char *label;
@@ -248,7 +254,7 @@ bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
 		&& ScriptReturnHandle(context, WrapperCreate(&UIExpandPaneCreate(parent->element, flags, label, labelBytes, panelFlags)->e), WrapperClose);
 }
 
-bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	intptr_t messageCallback = 0;
 
@@ -270,22 +276,22 @@ bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
 	return success;
 }
 
-bool ScriptExtElementGetClassName(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementGetClassName(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	return ScriptParameterHandle(context, (void **) &element) && ReturnCString(context, element->element->cClassName);
 }
 
-bool ScriptExtElementGetWindow(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementGetWindow(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(&element->element->window->e), WrapperClose);
 }
 
-bool ScriptExtElementGetParent(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementGetParent(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(element->element->parent), WrapperClose);
 }
 
-bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	uint32_t flags;
 	if (!ScriptParameterScan(context, "hu", (void **) &element, &flags)) return false;
@@ -293,7 +299,7 @@ bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtElementAnimate(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementAnimate(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	bool stop;
 	if (!ScriptParameterScan(context, "hb", (void **) &element, &stop)) return false;
@@ -301,48 +307,48 @@ bool ScriptExtElementAnimate(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtElementChangeParent(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementChangeParent(struct ExecutionContext *context) {
 	ElementWrapper *element, *newParent, *insertBefore;
 	return ScriptParameterScan(context, "hhh", &element, &newParent, &insertBefore) && ScriptReturnHandle(context, WrapperCreate(
 				UIElementChangeParent(element->element, newParent->element, insertBefore ? insertBefore->element : NULL)), WrapperClose);
 }
 
-bool ScriptExtElementDestroy(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementDestroy(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	UIElementDestroy(element->element);
 	return true;
 }
 
-bool ScriptExtElementDestroyDescendents(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementDestroyDescendents(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	UIElementDestroyDescendents(element->element);
 	return true;
 }
 
-bool ScriptExtElementFocus(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementFocus(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	UIElementFocus(element->element);
 	return true;
 }
 
-bool ScriptExtElementRefresh(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementRefresh(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	UIElementRefresh(element->element);
 	return true;
 }
 
-bool ScriptExtElementRelayout(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementRelayout(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	UIElementRelayout(element->element);
 	return true;
 }
 
-bool ScriptExtElementMeasurementsChanged(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementMeasurementsChanged(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t which;
 	if (!ScriptParameterScan(context, "hi", &element, &which)) return false;
@@ -350,14 +356,14 @@ bool ScriptExtElementMeasurementsChanged(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtElementFindByPoint(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementFindByPoint(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t x, y;
 	return ScriptParameterScan(context, "hii", &element, &x, &y)
 		&& ScriptReturnHandle(context, WrapperCreate(UIElementFindByPoint(element->element, x, y)), WrapperClose);
 }
 
-bool ScriptExtElementSetContext(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementSetContext(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	intptr_t cp;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
@@ -367,31 +373,31 @@ bool ScriptExtElementSetContext(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtElementGetContext(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementGetContext(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	return ScriptReturnHeapRef(context, element->cp);
 }
 
-bool ScriptExtElementScreenBounds(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementScreenBounds(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	return ReturnRectangle(context, UIElementScreenBounds(element->element));
 }
 
-bool ScriptExtElementWindowBounds(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementWindowBounds(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	return ReturnRectangle(context, element->element->bounds);
 }
 
-bool ScriptExtElementGetClip(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementGetClip(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	return ReturnRectangle(context, element->element->clip);
 }
 
-bool ScriptExtElementMove(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementMove(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	UIRectangle rect;
 	bool alwaysLayout;
@@ -400,7 +406,7 @@ bool ScriptExtElementMove(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtElementRepaint(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementRepaint(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	UIRectangle rect;
 	bool isRectNull;
@@ -409,7 +415,7 @@ bool ScriptExtElementRepaint(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtButtonSetLabel(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtButtonSetLabel(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	const char *label; size_t labelBytes;
 	if (!ScriptParameterScan(context, "hS", (void **) &element, &label, &labelBytes)) return false;
@@ -417,7 +423,7 @@ bool ScriptExtButtonSetLabel(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtLabelSetContent(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtLabelSetContent(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	const char *label; size_t labelBytes;
 	if (!ScriptParameterScan(context, "hS", (void **) &element, &label, &labelBytes)) return false;
@@ -425,7 +431,7 @@ bool ScriptExtLabelSetContent(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtPanelSetSpacing(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtPanelSetSpacing(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	UIRectangle border; int gap;
 	if (!ScriptParameterScan(context, "h(iiii)i", (void **) &element, &border.l, &border.r, &border.t, &border.b, &gap)) return false;
@@ -436,7 +442,7 @@ bool ScriptExtPanelSetSpacing(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtGaugeSetPosition(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtGaugeSetPosition(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	double value;
 	if (!ScriptParameterScan(context, "hF", (void **) &element, &value)) return false;
@@ -444,7 +450,7 @@ bool ScriptExtGaugeSetPosition(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxReplace(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxReplace(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	const char *text; size_t textBytes; bool sendChangedMessage;
 	if (!ScriptParameterScan(context, "hSb", (void **) &element, &text, &textBytes, &sendChangedMessage)) return false;
@@ -452,7 +458,7 @@ bool ScriptExtTextboxReplace(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxClear(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxClear(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	bool sendChangedMessage;
 	if (!ScriptParameterScan(context, "hb", (void **) &element, &sendChangedMessage)) return false;
@@ -460,7 +466,7 @@ bool ScriptExtTextboxClear(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxMoveCaret(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxMoveCaret(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	bool backward, word;
 	if (!ScriptParameterScan(context, "hbb", (void **) &element, &backward, &word)) return false;
@@ -468,20 +474,20 @@ bool ScriptExtTextboxMoveCaret(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxGetContents(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxGetContents(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	return ScriptParameterScan(context, "h", (void **) &element)
 		&& ScriptReturnString(context, ((UITextbox *) element->element)->string, ((UITextbox *) element->element)->bytes);
 }
 
-bool ScriptExtTextboxRejectNextKey(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxRejectNextKey(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterScan(context, "h", (void **) &element)) return false;
 	((UITextbox *) element->element)->rejectNextKey = true;
 	return true;
 }
 
-bool ScriptExtTextboxSetSelectionFrom(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxSetSelectionFrom(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t index;
 	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
@@ -490,7 +496,7 @@ bool ScriptExtTextboxSetSelectionFrom(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxSetSelectionTo(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxSetSelectionTo(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t index;
 	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
@@ -499,7 +505,7 @@ bool ScriptExtTextboxSetSelectionTo(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtTextboxSetCaretPosition(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtTextboxSetCaretPosition(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t index;
 	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
@@ -509,7 +515,7 @@ bool ScriptExtTextboxSetCaretPosition(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtSliderSetSteps(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtSliderSetSteps(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t steps;
 	if (!ScriptParameterScan(context, "hi", (void **) &element, &steps)) return false;
@@ -518,7 +524,7 @@ bool ScriptExtSliderSetSteps(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtSliderSetPosition(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtSliderSetPosition(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	double position; bool sendChangedMessage;
 	if (!ScriptParameterScan(context, "hFb", (void **) &element, &position, &sendChangedMessage)) return false;
@@ -526,7 +532,7 @@ bool ScriptExtSliderSetPosition(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtCheckboxSetCheck(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtCheckboxSetCheck(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int check;
 	if (!ScriptParameterScan(context, "hi", (void **) &element, &check)) return false;
@@ -535,21 +541,21 @@ bool ScriptExtCheckboxSetCheck(struct ExecutionContext *context) {
 	return true;
 }
 
-bool ScriptExtRectangleContains(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtRectangleContains(struct ExecutionContext *context) {
 	UIRectangle rect;
 	int32_t x, y;
 	return ScriptParameterScan(context, "(iiii)ii", &rect.l, &rect.r, &rect.t, &rect.b, &x, &y)
 		&& ScriptReturnInt(context, UIRectangleContains(rect, x, y));
 }
 
-bool ScriptExtRectangleEquals(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtRectangleEquals(struct ExecutionContext *context) {
 	UIRectangle rect1, rect2;
 	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b)
 		&& ScriptReturnInt(context, UIRectangleEquals(rect1, rect2));
 }
 
 #define SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(name) \
-bool ScriptExtRectangle##name(struct ExecutionContext *context) { \
+LIBRARY_EXPORT bool ScriptExtRectangle##name(struct ExecutionContext *context) { \
 	UIRectangle rect1, rect2; \
 	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b) \
 		&& ReturnRectangle(context, UIRectangle##name(rect1, rect2)); \
@@ -560,38 +566,38 @@ SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Bounding);
 SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Translate);
 SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Center);
 
-bool ScriptExtRectangleFit(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtRectangleFit(struct ExecutionContext *context) {
 	UIRectangle rect1, rect2;
 	bool allowScalingUp;
 	return ScriptParameterScan(context, "(iiii)(iiii)b", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b, &allowScalingUp)
 		&& ReturnRectangle(context, UIRectangleFit(rect1, rect2, allowScalingUp));
 }
 
-bool ScriptExtKeycodeBackspace(struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_BACKSPACE); }
-bool ScriptExtKeycodeDelete   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DELETE   ); }
-bool ScriptExtKeycodeDown     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DOWN     ); }
-bool ScriptExtKeycodeEnd      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_END      ); }
-bool ScriptExtKeycodeEnter    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ENTER    ); }
-bool ScriptExtKeycodeEscape   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ESCAPE   ); }
-bool ScriptExtKeycodeHome     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_HOME     ); }
-bool ScriptExtKeycodeInsert   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_INSERT   ); }
-bool ScriptExtKeycodeLeft     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_LEFT     ); }
-bool ScriptExtKeycodeRight    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_RIGHT    ); }
-bool ScriptExtKeycodeSpace    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_SPACE    ); }
-bool ScriptExtKeycodeTab      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_TAB      ); }
-bool ScriptExtKeycodeUp       (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_UP       ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeBackspace(struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_BACKSPACE); }
+LIBRARY_EXPORT bool ScriptExtKeycodeDelete   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DELETE   ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeDown     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DOWN     ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeEnd      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_END      ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeEnter    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ENTER    ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeEscape   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ESCAPE   ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeHome     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_HOME     ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeInsert   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_INSERT   ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeLeft     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_LEFT     ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeRight    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_RIGHT    ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeSpace    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_SPACE    ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeTab      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_TAB      ); }
+LIBRARY_EXPORT bool ScriptExtKeycodeUp       (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_UP       ); }
 
-bool ScriptExtKeycodeFKey(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtKeycodeFKey(struct ExecutionContext *context) {
 	int32_t n;
 	return ScriptParameterInt32(context, &n) && ScriptReturnInt(context, UI_KEYCODE_FKEY(n)); 
 }
 
-bool ScriptExtKeycodeDigit(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtKeycodeDigit(struct ExecutionContext *context) {
 	const char *s; size_t b;
 	return ScriptParameterString(context, (const void **) &s, &b) && ScriptReturnInt(context, b ? UI_KEYCODE_DIGIT(s[0]) : 0); 
 }
 
-bool ScriptExtKeycodeLetter(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtKeycodeLetter(struct ExecutionContext *context) {
 	const char *s; size_t b;
 	return ScriptParameterString(context, (const void **) &s, &b) && ScriptReturnInt(context, b ? UI_KEYCODE_LETTER(s[0]) : 0); 
 }
