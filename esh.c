@@ -1,40 +1,40 @@
-// TODO Basic missing features:
+// TODO New language features:
 // 	- Maps: T[int], T[str].
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
 // 	- Allow :assert() on err[void].
+// 	- struct inheritance.
+
+// TODO Possible language changes?
+// 	- Variant of lists where the variable is constant but initialized to an empty list?
 // 	- Remove implicitely casting to anytype and instead use ":any()"?
-
-// TODO Implement logging for:
-//		w     write file, append file, create directory, copy file, move file/directory
-//		s     get file/directory type/existence/size
-//		v     get environment variable, set environment variable
-//		x     execute/evaluate shell command
-//	And document the engine flags.
-
-// TODO Syntax sugar: (ideas)
+// 	- :ignore(string, valueToUse) for error types.
+// 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
 // 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
 // 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
 // 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
 
-// TODO Larger missing features:
+// TODO Tooling and infrastructure:
 // 	- Importing installed modules from a common location?
 // 	- Serialization.
 // 	- Debugging.
-// 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
-// 	- Win32: use the Unicode APIs for file system access. Path separator differences?
 
-// TODO Other missing features:
-// 	- For the native interface, perhaps a scanf-like function for reading data?
-// 	- struct inheritance.
+// TODO Scripting engine features:
+// 	- Implement logging for:
+//			w     write file, append file, create directory, copy file, move file/directory
+//			s     get file/directory type/existence/size
+//			v     get environment variable, set environment variable
+//			x     execute/evaluate shell command
+//		And document the engine flags.
 // 	- Set expectedType for T_RETURN_TUPLE.
-// 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
-// 	- :ignore(string, valueToUse) for error types.
-// 	- Variant of lists where the variable is constant but initialized to an empty list?
+// 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
+// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
+// 	- Win32: use the Unicode APIs for file system access. 
 
 // TODO Standard library:
+// 	- Accounting for path separator differences?
 // 	- Versions of copy/move that refuse to overwrite; versions of path create/delete that ignore if the item already (doesn't) exist(s).
 // 	- Floats: 
 // 		- FloatInfinity, FloatNaN, FloatPi, FloatE
@@ -62,19 +62,14 @@
 // 	- Audio.
 // 	- Convert CharacterToByte, StringFromByte, StringSlice to :ops?
 
-// TODO Miscellaneous:
-// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
-// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte).
-// 	- Better handling of memory allocation failures.
-// 	- Shrink lists during garbage collection.
-
-// TODO Cleanup:
+// TODO Improvement of the scripting engine internals:
 // 	- Cleanup the code in External- functions and ScriptExecuteFunction using macros for common stack and heap operations.
 // 	- Cleanup the ImportData/ExecutionContext/FunctionBuilder structures and their relationships.
 // 	- Cleanup the variables/stack arrays.
 // 	- Cleanup the platform layer.
-
-// TODO Safety:
+// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte).
+// 	- Better handling of memory allocation failures.
+// 	- Shrink lists during garbage collection.
 // 	- Safety against extremely large scripts?
 // 	- Loading untrusted bytecode files?
 
@@ -6728,7 +6723,10 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				// PrintDebug("== unblocked by %ld\n", context->c->unblockedBy);
 			} else {
 				// PrintDebug("== just started\n");
-				instructionPointer = 1; // There is a T_AWAIT command at address 1.
+				// There is a T_AWAIT command at address 1. It'll be executed when the coroutine finishes.
+				// The creator should have pushed a -1 at the very start of the stack, which indicates
+				// to us that the coroutine has finished.
+				instructionPointer = 1; 
 				goto callCommand;
 			}
 		} else if (command == T_REPL_RESULT) {

@@ -461,6 +461,8 @@ void Part6() {
 	int finished = await [id1, id2];
 	Log("finished coroutine %finished%");
 	finished = await [id1, id2]; // Tasks previously returned from await will be ignored.
+	// If all the tasks in the list have finished, the first ID in the list is returned.
+	// If the list is empty, -1 is returned.
 	Log("finished coroutine %finished%");
 
 	// The coroutine that is currently executing can only change at an await statement.
