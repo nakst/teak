@@ -201,6 +201,52 @@ str StringReplaceAll(str haystack, str needle, str with) {
 
 str StringRepeat(str s, int n) { assert n >= 0; str t = ""; for int i = 0; i < n; i += 1 { t += s; } return t; }
 
+err[float] StringParseFloat(str s) {
+	// TODO Overflow checking.
+
+	bool first = true;
+	bool negate = false;
+	bool dot = false;
+	float f = 0.0;
+	float m = 0.1;
+
+	for str c in s {
+		if c == "-" {
+			if first {
+				negate = true;
+			} else {
+				return new err[float] "INVALID_FORMAT";
+			}
+		} else if c == "." {
+			if dot {
+				return new err[float] "INVALID_FORMAT";
+			} else {
+				dot = true;
+			}
+		} else if c == "_" {
+		} else if dot {
+			if CharacterIsDigit(c) {
+				f += (CharacterToByte(c) - CharacterToByte("0")):float() * m;
+				m *= 0.1;
+			} else {
+				return new err[float] "INVALID_FORMAT";
+			}
+		} else {
+			if CharacterIsDigit(c) {
+				f *= 10.0;
+				f += (CharacterToByte(c) - CharacterToByte("0")):float();
+			} else {
+				return new err[float] "INVALID_FORMAT";
+			}
+		}
+
+		first = false;
+	}
+
+	return -f if negate else f;
+}
+
+
 // Miscellaneous:
 
 int SystemGetProcessorCount() #extcall;

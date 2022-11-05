@@ -1,0 +1,39 @@
+#import "../modules/luigi/index.esh" ui;
+
+ui.Textbox textboxRate;
+ui.Textbox textboxAmount;
+ui.Label labelResult;
+
+int ConvertButtonMessage(ui.Element element, ui.Message message, int di, ui.MessageData dp) {
+	if message == ui.MSG_CLICKED {
+		float rate   = FloatMaximum(0.0, StringParseFloat(ui.TextboxGetContents(textboxRate  )):default(1.0));
+		float amount = FloatMaximum(0.0, StringParseFloat(ui.TextboxGetContents(textboxAmount)):default(0.0));
+		ui.LabelSetContent(labelResult, "Result: $%(rate * amount + 0.5):truncate()%");
+	}
+
+	return 0;
+}
+
+void Start() {
+	ui.Initialise();
+
+	ui.Window window = ui.WindowCreate(null, 0, "Currency Converter", 640, 480);
+	ui.Panel panel = ui.PanelCreate(window, ui.PANEL_COLOR_1 | ui.PANEL_LARGE_SPACING);
+
+	ui.Panel row1 = ui.PanelCreate(panel, ui.PANEL_HORIZONTAL);
+	ui.LabelCreate(row1, 0, "   Amount per dollar:");
+	ui.SpacerCreate(row1, 0, 10, 0);
+	textboxRate = ui.TextboxCreate(row1, 0);
+	ui.ElementFocus(textboxRate);
+
+	ui.Panel row2 = ui.PanelCreate(panel, ui.PANEL_HORIZONTAL);
+	ui.LabelCreate(row2, 0, "Value to convert ($):");
+	ui.SpacerCreate(row2, 0, 10, 0);
+	textboxAmount = ui.TextboxCreate(row2, 0);
+
+	ui.ElementSetMessageUser(ui.ButtonCreate(panel, 0, "Convert"), ConvertButtonMessage);
+	ui.SpacerCreate(panel, ui.ELEMENT_BORDER, 300, 1);
+	labelResult = ui.LabelCreate(panel, 0, "Press 'Convert' to update the result.");
+
+	ui.MessageLoop();
+}

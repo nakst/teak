@@ -22,7 +22,11 @@ str StringToUpperRaw(str s);
 
 // Remove whitespace characters from the start and end of the string.
 // The whitespace characters are: space, tab, carriage return and newline (ASCII).
-str StringTrim(str string);
+str StringTrim(str s);
+
+// Parse the string as a floating point number.
+// The error string "INVALID_FORMAT" indicates it was not a floating point number.
+err[float] StringParseFloat(str s);
 ```
 
 ## Strings and characters — UTF-8
