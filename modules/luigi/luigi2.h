@@ -643,13 +643,6 @@ typedef struct UIMDIChild {
 	UIRectangle dragOffset;
 } UIMDIChild;
 
-typedef struct UIExpandPane {
-	UIElement e;
-	UIButton *button;
-	UIPanel *panel;
-	bool expanded;
-} UIExpandPane;
-
 typedef struct UIImageDisplay {
 #define UI_IMAGE_DISPLAY_INTERACTIVE (1 << 0)
 #define _UI_IMAGE_DISPLAY_ZOOM_FIT (1 << 1)
@@ -681,7 +674,6 @@ UIElement *UIElementCreate(size_t bytes, UIElement *parent, uint32_t flags,
 
 UICheckbox *UICheckboxCreate(UIElement *parent, uint32_t flags, const char *label, ptrdiff_t labelBytes);
 UIColorPicker *UIColorPickerCreate(UIElement *parent, uint32_t flags);
-UIExpandPane *UIExpandPaneCreate(UIElement *parent, uint32_t flags, const char *label, ptrdiff_t labelBytes, uint32_t panelFlags);
 UIMDIClient *UIMDIClientCreate(UIElement *parent, uint32_t flags);
 UIMDIChild *UIMDIChildCreate(UIElement *parent, uint32_t flags, UIRectangle initialBounds, const char *title, ptrdiff_t titleBytes);
 UIPanel *UIPanelCreate(UIElement *parent, uint32_t flags);

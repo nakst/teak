@@ -245,15 +245,6 @@ LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), WrapperClose);
 }
 
-LIBRARY_EXPORT bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
-	ElementWrapper *parent;
-	uint32_t flags, panelFlags;
-	const char *label;
-	size_t labelBytes;
-	return ScriptParameterScan(context, "huSu", &parent, &flags, &label, &labelBytes, &panelFlags)
-		&& ScriptReturnHandle(context, WrapperCreate(&UIExpandPaneCreate(parent->element, flags, label, labelBytes, panelFlags)->e), WrapperClose);
-}
-
 LIBRARY_EXPORT bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	intptr_t messageCallback = 0;

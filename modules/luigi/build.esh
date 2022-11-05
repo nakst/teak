@@ -4,6 +4,7 @@ void Start() {
 	str platformFlags = "";
 
 	if SystemGetHostName() == "Windows" {
+		platformFlags = "user32.dll gdi32.dll";
 	} else if SystemGetHostName() == "Linux" {
 		platformFlags = "-Wno-unused-parameter -lX11";
 	} else {
