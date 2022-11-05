@@ -6,7 +6,6 @@ handletype Checkbox     : Element;
 handletype Code         : Element;
 handletype ExpandPane   : Element;
 handletype Gauge        : Element;
-handletype ImageDisplay : Element;
 handletype Label        : Element;
 handletype MDIChild     : Element;
 handletype MDIClient    : Element;
@@ -25,6 +24,7 @@ handletype WrapPanel    : Element;
 
 handletype MessageData;
 handletype Painter;
+handletype Font;
 
 functype int MessageCallback(Element element, Message message, int di, MessageData dp);
 functype void InvokeCallback(anytype cp);
@@ -38,6 +38,8 @@ inttype ElementFlags {
 	ELEMENT_NON_CLIENT  = 1 << 21;
 	ELEMENT_DISABLED    = 1 << 22;
 	ELEMENT_BORDER      = 1 << 23;
+
+	ELEMENT_FILL = (1 << 16) | (1 << 17);
 };
 
 inttype WindowFlags : ElementFlags {
@@ -94,6 +96,11 @@ inttype SplitPaneFlags : ElementFlags {
 	SPLIT_PANE_VERTICAL = 1 << 0;
 };
 
+inttype MenuFlags {
+	MENU_PLACE_ABOVE = 1 << 0;
+	MENU_NO_SCROLL = 1 << 1;
+};
+
 inttype Message {
 	// General messages.
 	MSG_PAINT = 0;
@@ -147,6 +154,37 @@ inttype Message {
 	MSG_USER = 40;
 };
 
+inttype Cursor {
+	CURSOR_ARROW = 0;
+	CURSOR_TEXT = 1;
+	CURSOR_SPLIT_V = 2;
+	CURSOR_SPLIT_H = 3;
+	CURSOR_FLIPPED_ARROW = 4;
+	CURSOR_CROSS_HAIR = 5;
+	CURSOR_HAND = 6;
+	CURSOR_RESIZE_UP = 7;
+	CURSOR_RESIZE_LEFT = 8;
+	CURSOR_RESIZE_UP_RIGHT = 9;
+	CURSOR_RESIZE_UP_LEFT = 10;
+	CURSOR_RESIZE_DOWN = 11;
+	CURSOR_RESIZE_RIGHT = 12;
+	CURSOR_RESIZE_DOWN_RIGHT = 13;
+	CURSOR_RESIZE_DOWN_LEFT = 14;
+};
+
+inttype Align {
+	ALIGN_LEFT = 1;
+	ALIGN_RIGHT = 2;
+	ALIGN_CENTER = 3;
+};
+
+inttype UpdateCode {
+	UPDATE_HOVERED = 1;
+	UPDATE_PRESSED = 2;
+	UPDATE_FOCUSED = 3;
+	UPDATE_DISABLED = 4;
+};
+
 struct Rectangle {
 	int l;
 	int r;
@@ -183,6 +221,16 @@ struct CodeDecorateLine {
 	Painter painter;
 };
 
+struct TableGetItem {
+	// Inputs.
+	int index;
+	int column;
+
+	// Outputs.
+	str text;
+	bool isSelected;
+};
+
 struct Theme {
 	int panel1;
 	int panel2;
@@ -210,14 +258,13 @@ struct Theme {
 void Initialise() #extcall;
 int MessageLoop() #extcall;
 
-// ImageDisplay ImageDisplayCreate(Element parent, ElementFlags flags, uint32_t *bits, size_t width, size_t height, size_t stride) #extcall;
-// MDIChild MDIChildCreate(Element parent, ElementFlags flags, UIRectangle initialBounds, str title) #extcall;
 Button ButtonCreate(Element parent, ButtonFlags flags, str label) #extcall;
 Checkbox CheckboxCreate(Element parent, CheckboxFlags flags, str label) #extcall;
 Code CodeCreate(Element parent, CodeFlags flags) #extcall;
 ExpandPane ExpandPaneCreate(Element parent, ElementFlags flags, str label, PanelFlags panelFlags) #extcall;
 Gauge GaugeCreate(Element parent, GaugeFlags flags) #extcall;
 Label LabelCreate(Element parent, ElementFlags flags, str label) #extcall;
+// MDIChild MDIChildCreate(Element parent, ElementFlags flags, Rectangle initialBounds, str title) #extcall;
 MDIClient MDIClientCreate(Element parent, MDIClientFlags flags) #extcall;
 Panel PanelCreate(Element parent, PanelFlags flags) #extcall;
 ScrollBar ScrollBarCreate(Element parent, ScrollBarFlags flags) #extcall;
@@ -228,13 +275,17 @@ Switcher SwitcherCreate(Element parent, ElementFlags flags) #extcall;
 TabPane TabPaneCreate(Element parent, ElementFlags flags, str tabs) #extcall;
 Table TableCreate(Element parent, ElementFlags flags, str columns) #extcall;
 Textbox TextboxCreate(Element parent, ElementFlags flags) #extcall;
-Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
 WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 
-// UIRectangle UIElementScreenBounds(UIElement *element) #extcall;
-// int UIElementMessage(UIElement *element, UIMessage message, int di, void *dp) #extcall;
-// void UIElementMove(UIElement *element, UIRectangle bounds, bool alwaysLayout) #extcall;
-// void UIElementRepaint(UIElement *element, UIRectangle *region) #extcall;
+Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
+// Element ElementCreate(Element parent, uint32_t flags, MessageCallback messageClass, str className) #extcall;
+
+// Rectangle ElementScreenBounds(Element element) #extcall;
+// int ElementMessage(Element element, Message message, int di, MessageData dp) #extcall;
+// void ElementMove(Element element, Rectangle bounds, bool alwaysLayout) #extcall;
+// void ElementRepaint(Element element, Rectangle region) #extcall;
+// Rectangle ElementWindowBounds(Element element) #extcall;
+// Rectangle ElementGetClip(Element element) #extcall;
 bool ElementAnimate(Element element, bool stop) #extcall;
 Element ElementChangeParent(Element element, Element newParent, Element insertBefore) #extcall;
 void ElementDestroy(Element element) #extcall;
@@ -252,6 +303,84 @@ void ElementRelayout(Element element) #extcall;
 void ElementSetFlags(Element element, ElementFlags flags) #extcall;
 void ElementSetMessageUser(Element element, MessageCallback callback) #extcall;
 void ElementSetContext(Element element, anytype context) #extcall;
+
+// float WindowGetScale(Window window) #extcall;
+// Element WindowGetHoveredElement(Window window) #extcall;
+// Element WindowGetPressedElement(Window window) #extcall;
+// Element WindowGetFocusedElement(Window window) #extcall;
+// int WindowGetPressedMouseButton(Window window) #extcall;
+// int WindowGetCursorX(Window window) #extcall;
+// int WindowGetCursorY(Window window) #extcall;
+// bool WindowGetTextboxModifiedFlag(Window window) #extcall;
+// void WindowSetTextboxModifiedFlag(Window window, bool flag) #extcall;
+// bool WindowIsCtrlHeld(Window window) #extcall;
+// bool WindowIsShiftHeld(Window window) #extcall;
+// bool WindowIsAltHeld(Window window) #extcall;
+// void WindowRegisterShortcut(Window window, Shortcut shortcut) #extcall;
+// void WindowPack(Window window, int width) #extcall;
+
+void GaugeSetPosition(Gauge gauge, float value) #extcall;
+
+void ButtonSetLabel(Button button, str string) #extcall;
+// void ButtonSetInvoke(Button button, InvokeCallback invoke) #extcall;
+
+void LabelSetContent(Label label, str string) #extcall;
+
+// void SwitcherSwitchTo(Switcher switcher, Element child) #extcall;
+
+void PanelSetSpacing(Panel panel, Rectangle border, int gap) #extcall;
+
+inttype CheckState { CHECK_UNCHECKED = 0; CHECK_CHECKED = 1; CHECK_INDETERMINATE = 2; };
+// void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;
+// int CheckboxGetCheck(Checkbox checkbox) #extcall;
+// void CheckboxSetInvoke(Checkbox checkbox, InvokeCallback invoke) #extcall;
+
+// void SplitPaneSetWeight(SplitPane pane, float weight) #extcall;
+// float SplitPaneGetWeight(SplitPane pane) #extcall;
+
+// void TabPaneSetActive(TabPane pane, int index) #extcall;
+// int TabPaneGetActive(TabPane pane) #extcall;
+
+// void TableSetHighlightedColumn(Table table, int index) #extcall;
+// void TableSetItemCount(Table table, int count) #extcall;
+// int TableHitTest(Table table, int x, int y) #extcall; // Returns item index. Returns -1 if not on an item.
+// int TableHeaderHitTest(Table table, int x, int y) #extcall; // Returns column index or -1.
+// bool TableEnsureVisible(Table table, int index) #extcall; // Returns false if the item was already visible.
+// void TableResizeColumns(Table table) #extcall;
+
+float SliderGetPosition(Slider slider) #extcall;
+void SliderSetPosition(Slider slider, float position, bool sendChangedMessage) #extcall;
+void SliderSetSteps(Slider slider, int steps) #extcall;
+
+void TextboxReplace(Textbox textbox, str replacement, bool sendChangedMessage) #extcall;
+void TextboxClear(Textbox textbox, bool sendChangedMessage) #extcall;
+void TextboxMoveCaret(Textbox textbox, bool backward, bool word) #extcall;
+str TextboxGetContents(Textbox textbox) #extcall;
+void TextboxRejectNextKey(Textbox textbox) #extcall;
+int TextboxGetSelectionFrom(Textbox textbox) #extcall;
+int TextboxGetSelectionTo(Textbox textbox) #extcall;
+void TextboxSetSelectionFrom(Textbox textbox, int index) #extcall;
+void TextboxSetSelectionTo(Textbox textbox, int index) #extcall;
+void TextboxSetCaretPosition(Textbox textbox, int index) #extcall;
+
+// void CodeFocusLine(Code code, int index) #extcall; // Line numbers are 1-indexed!!
+// int CodeHitTest(Code code, int x, int y) #extcall; // Returns line number; negates if in margin. Returns 0 if not on a line.
+// void CodeInsertContent(Code code, str content, bool #extcall replace);
+// void CodeSetTabSize(Code code, int tabSize) #extcall;
+// int CodeGetLineCount(Code code) #extcall;
+// str CodeGetLineContent(Code code, int index) #extcall; // Line numbers are 1-indexed!!
+// void CodeSetFont(Code code, Font font) #extcall;
+
+// MDIChild MDIClientGetActiveChild(MDIClient cli #extcallent);
+// void MDIClientSetActiveChild(MDIClient client, MDIChil #extcalld child);
+// Rectangle MDIChildGetBounds(MDIChild child) #extcall;
+// void MDIChildSetBounds(MDIChild child, Rectangle bo #extcallunds);
+// void MDIChildSetTitle(MDIChild child, str title) #extcall;
+
+// void ScrollBarSetMaximumPosition(ScrollBar bar, int maximum) #extcall;
+// void ScrollBarSetPageSize(ScrollBar bar, int page) #extcall;
+// void ScrollBarSetPosition(ScrollBar bar, float position) #extcall;
+// float ScrollBarGetPosition(ScrollBar bar) #extcall;
 
 Rectangle RECT_1(int x) { return [ l = x, r = x, t = x, b = x ]; }
 Rectangle RECT_1I(int x) { return [ l = x, r = -x, t = x, b = -x ]; }
@@ -273,3 +402,66 @@ Rectangle RectangleBounding(Rectangle a, Rectangle b) #extcall;
 Rectangle RectangleTranslate(Rectangle a, Rectangle b) #extcall;
 Rectangle RectangleCenter(Rectangle parent, Rectangle child) #extcall;
 Rectangle RectangleFit(Rectangle parent, Rectangle child, bool allowScalingUp) #extcall;
+
+int KeycodeBackspace() #extcall;
+int KeycodeDelete() #extcall;
+int KeycodeDown() #extcall;
+int KeycodeEnd() #extcall;
+int KeycodeEnter() #extcall;
+int KeycodeEscape() #extcall;
+int KeycodeHome() #extcall;
+int KeycodeInsert() #extcall;
+int KeycodeLeft() #extcall;
+int KeycodeRight() #extcall;
+int KeycodeSpace() #extcall;
+int KeycodeTab() #extcall;
+int KeycodeUp() #extcall;
+int KeycodeLetter(str x) #extcall;
+int KeycodeDigit(str x) #extcall;
+int KeycodeFKey(int x) #extcall;
+
+// tuple[bool, float, float, float] ColorToHSV(int rgb); // Returns: is hue guessed, hue, saturation, value.
+// int ColorToRGB(float hue, float saturation, float value);
+float ColorGetAlpha01(int argb) { return ((argb >> 24) & 0xFF):float() / 255.0; }
+float ColorGetRed01(int argb) { return ((argb >> 16) & 0xFF):float() / 255.0; }
+float ColorGetGreen01(int argb) { return ((argb >> 8) & 0xFF):float() / 255.0; }
+float ColorGetBlue01(int argb) { return ((argb >> 0) & 0xFF):float() / 255.0; }
+int ColorGetAlpha(int argb) { return ((argb >> 24) & 0xFF); }
+int ColorGetRed(int argb) { return ((argb >> 16) & 0xFF); }
+int ColorGetGreen(int argb) { return ((argb >> 8) & 0xFF); }
+int ColorGetBlue(int argb) { return ((argb >> 0) & 0xFF); }
+int ColorFromFloat01(float a, float r, float g, float b) { return ((a * 255.0):truncate() << 24) | ((r * 255.0):truncate() << 16) | ((g * 255.0):truncate() << 8) | ((b * 255.0):truncate() << 0); }
+
+// int PainterGetWidth(Painter painter) #extcall;
+// int PainterGetHeight(Painter painter) #extcall;
+// Rectange PainterGetClip(Painter painter) #extcall;
+
+// Font FontCreate(str path, int size) #extcall;
+// Font FontActivate(Font font) #extcall; // Returns the previously active font.
+// int FontGetGlyphWidth(Font font) #extcall;
+// int FontGetGlyphHeight(Font font) #extcall;
+
+// void DrawBlock(Painter painter, Rectangle rectangle, int color) #extcall;
+// void DrawCircle(Painter painter, int centerX, int centerY, int radius, int fillColor, int outlineColor, bool hollow) #extcall;
+// void DrawInvert(Painter painter, Rectangle rectangle) #extcall;
+// bool DrawLine(Painter painter, int x0, int y0, int x1, int y1, int color) #extcall; // Returns false if the line was not visible.
+// void DrawTriangle(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
+// void DrawTriangleOutline(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
+// void DrawGlyph(Painter painter, int x, int y, int c, int color) #extcall;
+// void DrawRectangle(Painter painter, Rectangle r, int mainColor, int borderColor, Rectangle borderSize) #extcall;
+// void DrawBorder(Painter painter, Rectangle r, int borderColor, Rectangle borderSize) #extcall;
+// void DrawString(Painter painter, Rectangle r, str string, int color, int align, StringSelection selection) #extcall;
+// int  DrawStringHighlighted(Painter painter, Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
+
+// int MeasureStringWidth(str string) #extcall;
+// int MeasureStringHeight() #extcall;
+
+// int AnimateClock() #extcall; // In ms.
+
+// Element ParentPush(Element element) #extcall;
+// Element ParentPop() #extcall;
+
+// Menu MenuCreate(Element parent, MenuFlags flags) #extcall;
+// void MenuAddItem(Menu menu, ButtonFlags flags, str label, InvokeCallback invoke, anytype cp) #extcall;
+// void MenuShow(Menu menu) #extcall;
+// bool MenuIsOpen() #extcall;

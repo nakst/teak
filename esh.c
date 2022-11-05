@@ -80,6 +80,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <stdbool.h>
 
 #define SCRIPT_ENGINE
@@ -7066,6 +7067,79 @@ bool ScriptReturnStruct(ExecutionContext *context, int64_t *fields, bool *manage
 	return true;
 }
 
+bool ScriptReturnStructInl(struct ExecutionContext *context, size_t fieldCount, ...) {
+	va_list arguments;
+	va_start(arguments, fieldCount);
+
+	Assert(fieldCount < FUNCTION_MAX_ARGUMENTS);
+	int64_t fields[FUNCTION_MAX_ARGUMENTS];
+	bool managedFields[FUNCTION_MAX_ARGUMENTS];
+
+	for (uintptr_t i = 0; i < fieldCount; i++) {
+		fields[i] = va_arg(arguments, int64_t);
+		managedFields[i] = va_arg(arguments, int);
+	}
+
+	va_end(arguments);
+	return ScriptReturnStruct(context, fields, managedFields, fieldCount);
+}
+
+bool ScriptParameterScan(struct ExecutionContext *context, const char *cFormat, ...) {
+	va_list arguments;
+	va_start(arguments, cFormat);
+
+	while (*cFormat) {
+		if (*cFormat == '(') {
+			cFormat++;
+			uintptr_t fieldIndex = 0;
+			intptr_t structIndex;
+			bool success = true;
+
+			if (!ScriptParameterHeapRef(context, &structIndex)) {
+				return false;
+			}
+
+			while (success && *cFormat != ')') {
+				if (*cFormat == 'i') { success = ScriptStructReadInt32(context, structIndex, fieldIndex, va_arg(arguments, int32_t *)); }
+				else if (*cFormat == '-') {}
+				else { success = false; }
+
+				cFormat++;
+				fieldIndex++;
+			}
+
+			ScriptHeapRefClose(context, structIndex);
+
+			if (!success) {
+				return false;
+			}
+		}
+
+		else if (*cFormat == 'S') { 
+			const void **output = va_arg(arguments, const void **);
+			size_t *outputBytes = va_arg(arguments, size_t *);
+
+			if (!ScriptParameterString(context, output, outputBytes)) {
+				return false; 
+			}
+		}
+
+		else if (*cFormat == 'b') { if (!ScriptParameterBool(context, va_arg(arguments, bool *))) return false; }
+		else if (*cFormat == 'i') { if (!ScriptParameterInt32(context, va_arg(arguments, int32_t *))) return false; }
+		else if (*cFormat == 'I') { if (!ScriptParameterInt64(context, va_arg(arguments, int64_t *))) return false; }
+		else if (*cFormat == 'u') { if (!ScriptParameterUint32(context, va_arg(arguments, uint32_t *))) return false; }
+		else if (*cFormat == 'U') { if (!ScriptParameterUint64(context, va_arg(arguments, uint64_t *))) return false; }
+		else if (*cFormat == 'F') { if (!ScriptParameterDouble(context, va_arg(arguments, double *))) return false; }
+		else if (*cFormat == 'h') { if (!ScriptParameterHandle(context, va_arg(arguments, void **))) return false; }
+		else { return false; }
+
+		cFormat++;
+	}
+
+	va_end(arguments);
+	return true;
+}
+
 bool ScriptCreateHandle(ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle) {
 	if (handleData) {
 		intptr_t index = *handle = HeapAllocate(context); // TODO Handle memory allocation failures here.
@@ -7150,6 +7224,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ParameterHeapRef = ScriptParameterHeapRef,
 	.ParameterInt32 = ScriptParameterInt32,
 	.ParameterInt64 = ScriptParameterInt64,
+	.ParameterScan = ScriptParameterScan,
 	.ParameterString = ScriptParameterString,
 	.ParameterUint32 = ScriptParameterUint32,
 	.ParameterUint64 = ScriptParameterUint64,
@@ -7161,6 +7236,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnInt = ScriptReturnInt,
 	.ReturnString = ScriptReturnString,
 	.ReturnStruct = ScriptReturnStruct,
+	.ReturnStructInl = ScriptReturnStructInl,
 	.RunCallback = ScriptRunCallback,
 	.StructReadInt32 = ScriptStructReadInt32,
 };
@@ -7615,7 +7691,6 @@ int ExternalRandomInt(ExecutionContext *context, Value *returnValue) {
 #include <semaphore.h>
 #endif
 #include <errno.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

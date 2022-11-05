@@ -206,3 +206,9 @@ bool ScriptReturnHeapRef(struct ExecutionContext *context, intptr_t index);
 bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int32_t *output);
 ```
 
+## An quicker way to read parameters
+
+```c
+// TODO Document this.
+bool ScriptParameterScan(struct ExecutionContext *context, const char *cFormat, ...);
+```

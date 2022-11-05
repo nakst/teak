@@ -18,6 +18,14 @@ typedef struct ElementWrapper {
 // TODO How should this be done properly?
 struct ExecutionContext *contextForCallback;
 
+bool ReturnRectangle(struct ExecutionContext *context, UIRectangle rect) {
+	return ScriptReturnStructInl(context, 4, rect.l, false, rect.r, false, rect.t, false, rect.b, false);
+}
+
+bool ReturnCString(struct ExecutionContext *context, const char *cString) {
+	return ScriptReturnString(context, cString, strlen(cString));
+}
+
 void WrapperClose(struct ExecutionContext *context, void *_wrapper) {
 	ElementWrapper *wrapper = (ElementWrapper *) _wrapper;
 
@@ -115,9 +123,9 @@ bool ScriptExtWindowCreate(struct ExecutionContext *context) {
 
 	if (success) {
 		UIWindow *window = UIWindowCreate(owner ? (UIWindow *) owner->element : NULL, flags, title, width, height);
-		ScriptReturnHandle(context, WrapperCreate(&window->e), WrapperClose);
+		success = ScriptReturnHandle(context, WrapperCreate(&window->e), WrapperClose);
 	} else {
-		ScriptReturnHandle(context, NULL, NULL);
+		success = ScriptReturnHandle(context, NULL, NULL);
 	}
 
 	free(title);
@@ -135,11 +143,10 @@ bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 		&& ScriptParameterString(context, (const void **) &string, &stringBytes); \
 	if (success) { \
 		UI##name *element = UI##name##Create(parent->element, flags, string, stringBytes); \
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		return ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
 	} else { \
-		ScriptReturnHandle(context, NULL, NULL); \
+		return ScriptReturnHandle(context, NULL, NULL); \
 	} \
-	return success; \
 }
 SCRIPT_EXT_LABELLED_ELEMENT_CREATE(Button);
 SCRIPT_EXT_LABELLED_ELEMENT_CREATE(Checkbox);
@@ -155,9 +162,9 @@ bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 		&& ScriptParameterCString(context, &tabs); \
 	if (success) { \
 		UI##name *element = UI##name##Create(parent->element, flags, tabs); \
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		success = ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
 	} else { \
-		ScriptReturnHandle(context, NULL, NULL); \
+		success = ScriptReturnHandle(context, NULL, NULL); \
 	} \
 	free(tabs); \
 	return success; \
@@ -173,11 +180,10 @@ bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 		&& ScriptParameterUint32(context, &flags); \
 	if (success) { \
 		UI##name *element = UI##name##Create(parent->element, flags); \
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		return ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
 	} else { \
-		ScriptReturnHandle(context, NULL, NULL); \
+		return ScriptReturnHandle(context, NULL, NULL); \
 	} \
-	return success; \
 }
 SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(Code);
 SCRIPT_EXT_SIMPLE_ELEMENT_CREATE(Gauge);
@@ -193,39 +199,16 @@ bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent;
 	uint32_t flags;
 	int32_t width, height;
-
-	bool success = ScriptParameterHandle(context, (void **) &parent)
-		&& ScriptParameterUint32(context, &flags)
-		&& ScriptParameterInt32(context, &width)
-		&& ScriptParameterInt32(context, &height);
-
-	if (success) {
-		UISpacer *element = UISpacerCreate(parent->element, flags, width, height);
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose);
-	} else {
-		ScriptReturnHandle(context, NULL, NULL);
-	}
-
-	return success;
+	return ScriptParameterScan(context, "huii", &parent, &flags, &width, &height)
+		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent->element, flags, width, height)->e), WrapperClose);
 }
 
 bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent;
 	uint32_t flags;
 	double weight;
-
-	bool success = ScriptParameterHandle(context, (void **) &parent)
-		&& ScriptParameterUint32(context, &flags)
-		&& ScriptParameterDouble(context, &weight);
-
-	if (success) {
-		UISplitPane *element = UISplitPaneCreate(parent->element, flags, weight);
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose);
-	} else {
-		ScriptReturnHandle(context, NULL, NULL);
-	}
-
-	return success;
+	return ScriptParameterScan(context, "huF", &parent, &flags, &weight)
+		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), WrapperClose);
 }
 
 bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
@@ -233,20 +216,8 @@ bool ScriptExtExpandPaneCreate(struct ExecutionContext *context) {
 	uint32_t flags, panelFlags;
 	const char *label;
 	size_t labelBytes;
-
-	bool success = ScriptParameterHandle(context, (void **) &parent)
-		&& ScriptParameterUint32(context, &flags)
-		&& ScriptParameterString(context, (const void **) &label, &labelBytes)
-		&& ScriptParameterUint32(context, &panelFlags);
-
-	if (success) {
-		UIExpandPane *element = UIExpandPaneCreate(parent->element, flags, label, labelBytes, panelFlags);
-		ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose);
-	} else {
-		ScriptReturnHandle(context, NULL, NULL);
-	}
-
-	return success;
+	return ScriptParameterScan(context, "huSu", &parent, &flags, &label, &labelBytes, &panelFlags)
+		&& ScriptReturnHandle(context, WrapperCreate(&UIExpandPaneCreate(parent->element, flags, label, labelBytes, panelFlags)->e), WrapperClose);
 }
 
 bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
@@ -273,33 +244,28 @@ bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
 
 bool ScriptExtElementGetClassName(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	return ScriptReturnString(context, element->element->cClassName, strlen(element->element->cClassName));
+	return ScriptParameterHandle(context, (void **) &element) && ReturnCString(context, element->element->cClassName);
 }
 
 bool ScriptExtElementGetWindow(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	return ScriptReturnHandle(context, WrapperCreate(&element->element->window->e), WrapperClose);
+	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(&element->element->window->e), WrapperClose);
 }
 
 bool ScriptExtElementGetParent(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	return ScriptReturnHandle(context, WrapperCreate(element->element->parent), WrapperClose);
+	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(element->element->parent), WrapperClose);
 }
 
 bool ScriptExtElementGetFlags(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	return ScriptReturnInt(context, element->element->flags);
+	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnInt(context, element->element->flags);
 }
 
 bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	uint32_t flags;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	if (!ScriptParameterUint32(context, &flags)) return false;
+	if (!ScriptParameterScan(context, "hu", (void **) &element, &flags)) return false;
 	element->element->flags = flags;
 	return true;
 }
@@ -307,21 +273,15 @@ bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
 bool ScriptExtElementAnimate(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	bool stop;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	if (!ScriptParameterBool(context, &stop)) return false;
+	if (!ScriptParameterScan(context, "hb", (void **) &element, &stop)) return false;
 	UIElementAnimate(element->element, stop);
 	return true;
 }
 
 bool ScriptExtElementChangeParent(struct ExecutionContext *context) {
-	ElementWrapper *element;
-	ElementWrapper *newParent;
-	ElementWrapper *insertBefore;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	if (!ScriptParameterHandle(context, (void **) &newParent)) return false;
-	if (!ScriptParameterHandle(context, (void **) &insertBefore)) return false;
-	UIElement *result = UIElementChangeParent(element->element, newParent->element, insertBefore ? insertBefore->element : NULL);
-	return ScriptReturnHandle(context, WrapperCreate(result), WrapperClose);
+	ElementWrapper *element, *newParent, *insertBefore;
+	return ScriptParameterScan(context, "hhh", &element, &newParent, &insertBefore) && ScriptReturnHandle(context, WrapperCreate(
+				UIElementChangeParent(element->element, newParent->element, insertBefore ? insertBefore->element : NULL)), WrapperClose);
 }
 
 bool ScriptExtElementDestroy(struct ExecutionContext *context) {
@@ -362,8 +322,7 @@ bool ScriptExtElementRelayout(struct ExecutionContext *context) {
 bool ScriptExtElementMeasurementsChanged(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t which;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	if (!ScriptParameterInt32(context, &which)) return false;
+	if (!ScriptParameterScan(context, "hi", &element, &which)) return false;
 	UIElementMeasurementsChanged(element->element, which);
 	return true;
 }
@@ -371,11 +330,8 @@ bool ScriptExtElementMeasurementsChanged(struct ExecutionContext *context) {
 bool ScriptExtElementFindByPoint(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	int32_t x, y;
-	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	if (!ScriptParameterInt32(context, &x)) return false;
-	if (!ScriptParameterInt32(context, &y)) return false;
-	UIElement *result = UIElementFindByPoint(element->element, x, y);
-	return ScriptReturnHandle(context, WrapperCreate(result), WrapperClose);
+	return ScriptParameterScan(context, "hii", &element, &x, &y)
+		&& ScriptReturnHandle(context, WrapperCreate(UIElementFindByPoint(element->element, x, y)), WrapperClose);
 }
 
 bool ScriptExtElementSetContext(struct ExecutionContext *context) {
@@ -394,71 +350,158 @@ bool ScriptExtElementGetContext(struct ExecutionContext *context) {
 	return ScriptReturnHeapRef(context, element->cp);
 }
 
+bool ScriptExtButtonSetLabel(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	const char *label; size_t labelBytes;
+	if (!ScriptParameterScan(context, "hS", (void **) &element, &label, &labelBytes)) return false;
+	UIButtonSetLabel((UIButton *) element->element, label, labelBytes);
+	return true;
+}
+
+bool ScriptExtLabelSetContent(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	const char *label; size_t labelBytes;
+	if (!ScriptParameterScan(context, "hS", (void **) &element, &label, &labelBytes)) return false;
+	UILabelSetContent((UILabel *) element->element, label, labelBytes);
+	return true;
+}
+
+bool ScriptExtPanelSetSpacing(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	UIRectangle border; int gap;
+	if (!ScriptParameterScan(context, "h(iiii)i", (void **) &element, &border.l, &border.r, &border.t, &border.b, &gap)) return false;
+	UIPanel *panel = (UIPanel *) element->element;
+	panel->border = border;
+	panel->gap = gap;
+	UIElementMeasurementsChanged(element->element, 3);
+	return true;
+}
+
+bool ScriptExtGaugeSetPosition(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	double value;
+	if (!ScriptParameterScan(context, "hF", (void **) &element, &value)) return false;
+	UIGaugeSetPosition((UIGauge *) element->element, value);
+	return true;
+}
+
+bool ScriptExtTextboxReplace(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	const char *text; size_t textBytes; bool sendChangedMessage;
+	if (!ScriptParameterScan(context, "hSb", (void **) &element, &text, &textBytes, &sendChangedMessage)) return false;
+	UITextboxReplace((UITextbox *) element->element, text, textBytes, sendChangedMessage);
+	return true;
+}
+
+bool ScriptExtTextboxClear(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	bool sendChangedMessage;
+	if (!ScriptParameterScan(context, "hb", (void **) &element, &sendChangedMessage)) return false;
+	UITextboxClear((UITextbox *) element->element, sendChangedMessage);
+	return true;
+}
+
+bool ScriptExtTextboxMoveCaret(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	bool backward, word;
+	if (!ScriptParameterScan(context, "hbb", (void **) &element, &backward, &word)) return false;
+	UITextboxMoveCaret((UITextbox *) element->element, backward, word);
+	return true;
+}
+
+bool ScriptExtTextboxGetContents(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	return ScriptParameterScan(context, "h", (void **) &element)
+		&& ScriptReturnString(context, ((UITextbox *) element->element)->string, ((UITextbox *) element->element)->bytes);
+}
+
+bool ScriptExtTextboxRejectNextKey(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", (void **) &element)) return false;
+	((UITextbox *) element->element)->rejectNextKey = true;
+	return true;
+}
+
+bool ScriptExtTextboxGetSelectionFrom(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	return ScriptParameterScan(context, "h", (void **) &element)
+		&& ScriptReturnInt(context, ((UITextbox *) element->element)->carets[0]);
+}
+
+bool ScriptExtTextboxGetSelectionTo(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	return ScriptParameterScan(context, "h", (void **) &element)
+		&& ScriptReturnInt(context, ((UITextbox *) element->element)->carets[1]);
+}
+
+bool ScriptExtTextboxSetSelectionFrom(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	int32_t index;
+	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
+	((UITextbox *) element->element)->carets[0] = index;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+bool ScriptExtTextboxSetSelectionTo(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	int32_t index;
+	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
+	((UITextbox *) element->element)->carets[1] = index;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+bool ScriptExtTextboxSetCaretPosition(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	int32_t index;
+	if (!ScriptParameterScan(context, "hi", (void **) &element, &index)) return false;
+	((UITextbox *) element->element)->carets[0] = index;
+	((UITextbox *) element->element)->carets[1] = index;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+bool ScriptExtSliderSetSteps(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	int32_t steps;
+	if (!ScriptParameterScan(context, "hi", (void **) &element, &steps)) return false;
+	((UISlider *) element->element)->steps = steps;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+bool ScriptExtSliderSetPosition(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	double position; bool sendChangedMessage;
+	if (!ScriptParameterScan(context, "hFb", (void **) &element, &position, &sendChangedMessage)) return false;
+	UISliderSetPosition((UISlider *) element->element, position, sendChangedMessage);
+	return true;
+}
+
+bool ScriptExtSliderGetPosition(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	return ScriptParameterScan(context, "h", (void **) &element) && ScriptReturnDouble(context, ((UISlider *) element->element)->position);
+}
+
 bool ScriptExtRectangleContains(struct ExecutionContext *context) {
-	bool success = false;
-	intptr_t index = -1;
+	UIRectangle rect;
 	int32_t x, y;
-	UIRectangle rectangle;
-	if (!ScriptParameterHeapRef(context, &index)) goto error;
-	if (!ScriptParameterInt32(context, &x)) goto error;
-	if (!ScriptParameterInt32(context, &y)) goto error;
-	if (!ScriptStructReadInt32(context, index, 0, &rectangle.l)) goto error;
-	if (!ScriptStructReadInt32(context, index, 1, &rectangle.r)) goto error;
-	if (!ScriptStructReadInt32(context, index, 2, &rectangle.t)) goto error;
-	if (!ScriptStructReadInt32(context, index, 3, &rectangle.b)) goto error;
-	if (!ScriptReturnInt(context, UIRectangleContains(rectangle, x, y))) goto error;
-	success = true;
-	error:;
-	if (index != -1) ScriptHeapRefClose(context, index);
-	return success;
+	return ScriptParameterScan(context, "(iiii)ii", &rect.l, &rect.r, &rect.t, &rect.b, &x, &y)
+		&& ScriptReturnInt(context, UIRectangleContains(rect, x, y));
 }
 
 bool ScriptExtRectangleEquals(struct ExecutionContext *context) {
-	bool success = false;
-	intptr_t index1 = -1, index2 = -1;
-	UIRectangle rectangle1, rectangle2;
-	if (!ScriptParameterHeapRef(context, &index1)) goto error;
-	if (!ScriptParameterHeapRef(context, &index2)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 0, &rectangle1.l)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 1, &rectangle1.r)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 2, &rectangle1.t)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 3, &rectangle1.b)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 0, &rectangle2.l)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 1, &rectangle2.r)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 2, &rectangle2.t)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 3, &rectangle2.b)) goto error;
-	if (!ScriptReturnInt(context, UIRectangleEquals(rectangle1, rectangle2))) goto error;
-	success = true;
-	error:;
-	if (index1 != -1) ScriptHeapRefClose(context, index1);
-	if (index2 != -1) ScriptHeapRefClose(context, index2);
-	return success;
+	UIRectangle rect1, rect2;
+	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b)
+		&& ScriptReturnInt(context, UIRectangleEquals(rect1, rect2));
 }
 
 #define SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(name) \
 bool ScriptExtRectangle##name(struct ExecutionContext *context) { \
-	bool success = false; \
-	intptr_t index1 = -1, index2 = -1; \
-	UIRectangle rectangle1, rectangle2; \
-	if (!ScriptParameterHeapRef(context, &index1)) goto error; \
-	if (!ScriptParameterHeapRef(context, &index2)) goto error; \
-	if (!ScriptStructReadInt32(context, index1, 0, &rectangle1.l)) goto error; \
-	if (!ScriptStructReadInt32(context, index1, 1, &rectangle1.r)) goto error; \
-	if (!ScriptStructReadInt32(context, index1, 2, &rectangle1.t)) goto error; \
-	if (!ScriptStructReadInt32(context, index1, 3, &rectangle1.b)) goto error; \
-	if (!ScriptStructReadInt32(context, index2, 0, &rectangle2.l)) goto error; \
-	if (!ScriptStructReadInt32(context, index2, 1, &rectangle2.r)) goto error; \
-	if (!ScriptStructReadInt32(context, index2, 2, &rectangle2.t)) goto error; \
-	if (!ScriptStructReadInt32(context, index2, 3, &rectangle2.b)) goto error; \
-	UIRectangle result = UIRectangle##name(rectangle1, rectangle2); \
-	int64_t fields[4] = { result.l, result.r, result.t, result.b }; \
-	bool managedFields[4] = { false, false, false, false }; \
-	if (!ScriptReturnStruct(context, fields, managedFields, 4)) goto error; \
-	success = true; \
-	error:; \
-	if (index1 != -1) ScriptHeapRefClose(context, index1); \
-	if (index2 != -1) ScriptHeapRefClose(context, index2); \
-	return success; \
+	UIRectangle rect1, rect2; \
+	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b) \
+		&& ReturnRectangle(context, UIRectangle##name(rect1, rect2)); \
 }
 SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Add);
 SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Intersection);
@@ -467,28 +510,37 @@ SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Translate);
 SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Center);
 
 bool ScriptExtRectangleFit(struct ExecutionContext *context) {
-	bool success = false;
-	intptr_t index1 = -1, index2 = -1;
+	UIRectangle rect1, rect2;
 	bool allowScalingUp;
-	UIRectangle rectangle1, rectangle2;
-	if (!ScriptParameterHeapRef(context, &index1)) goto error;
-	if (!ScriptParameterHeapRef(context, &index2)) goto error;
-	if (!ScriptParameterBool(context, &allowScalingUp)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 0, &rectangle1.l)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 1, &rectangle1.r)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 2, &rectangle1.t)) goto error;
-	if (!ScriptStructReadInt32(context, index1, 3, &rectangle1.b)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 0, &rectangle2.l)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 1, &rectangle2.r)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 2, &rectangle2.t)) goto error;
-	if (!ScriptStructReadInt32(context, index2, 3, &rectangle2.b)) goto error;
-	UIRectangle result = UIRectangleFit(rectangle1, rectangle2, allowScalingUp);
-	int64_t fields[4] = { result.l, result.r, result.t, result.b };
-	bool managedFields[4] = { false, false, false, false };
-	if (!ScriptReturnStruct(context, fields, managedFields, 4)) goto error;
-	success = true;
-	error:;
-	if (index1 != -1) ScriptHeapRefClose(context, index1);
-	if (index2 != -1) ScriptHeapRefClose(context, index2);
-	return success; \
+	return ScriptParameterScan(context, "(iiii)(iiii)b", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b, &allowScalingUp)
+		&& ReturnRectangle(context, UIRectangleFit(rect1, rect2, allowScalingUp));
+}
+
+bool ScriptExtKeycodeBackspace(struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_BACKSPACE); }
+bool ScriptExtKeycodeDelete   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DELETE   ); }
+bool ScriptExtKeycodeDown     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DOWN     ); }
+bool ScriptExtKeycodeEnd      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_END      ); }
+bool ScriptExtKeycodeEnter    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ENTER    ); }
+bool ScriptExtKeycodeEscape   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_ESCAPE   ); }
+bool ScriptExtKeycodeHome     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_HOME     ); }
+bool ScriptExtKeycodeInsert   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_INSERT   ); }
+bool ScriptExtKeycodeLeft     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_LEFT     ); }
+bool ScriptExtKeycodeRight    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_RIGHT    ); }
+bool ScriptExtKeycodeSpace    (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_SPACE    ); }
+bool ScriptExtKeycodeTab      (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_TAB      ); }
+bool ScriptExtKeycodeUp       (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_UP       ); }
+
+bool ScriptExtKeycodeFKey(struct ExecutionContext *context) {
+	int32_t n;
+	return ScriptParameterInt32(context, &n) && ScriptReturnInt(context, UI_KEYCODE_FKEY(n)); 
+}
+
+bool ScriptExtKeycodeDigit(struct ExecutionContext *context) {
+	const char *s; size_t b;
+	return ScriptParameterString(context, (const void **) &s, &b) && ScriptReturnInt(context, b ? UI_KEYCODE_DIGIT(s[0]) : 0); 
+}
+
+bool ScriptExtKeycodeLetter(struct ExecutionContext *context) {
+	const char *s; size_t b;
+	return ScriptParameterString(context, (const void **) &s, &b) && ScriptReturnInt(context, b ? UI_KEYCODE_LETTER(s[0]) : 0); 
 }
