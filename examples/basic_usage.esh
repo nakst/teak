@@ -264,6 +264,56 @@ void Part3() {
 	// won't compile, since the type of the structure is not present
 	// either implicitly or explicitly.
 
+//////////////////////////////// MAPS ////////////////////////////////
+
+	// Map types are made by putting [int] or [str] after the element type.
+	// [int] uses integer keys, and [str] uses string keys.
+	float[str] map;
+
+	// You can create an empty map using the new operator.
+	map = new float[str];
+
+	// You can then put items into the map using the square bracket syntax.
+	map["hello"] = 3.0;
+	map["world"] = 5.0;
+	// And read them back similarly.
+	assert map["hello"] == 3.0;
+	assert map["world"] == 5.0;
+
+	// You can get the number of key-value pairs in the map with :len().
+	assert map:len() == 2;
+
+	// You can test if a key is in the map with :has().
+	assert map:has("hello");
+	assert map:has("world");
+	assert !map:has("what");
+
+	// You can delete items with :delete() or :delete_all().
+	map:delete("hello");
+	map:delete_all();
+	// If you try to get the value of a key that's not in the map,
+	// the default uninitialized value for that type is returned.
+	assert map["world"] == 0.0;
+
+	// You can use map initializers to quickly construct maps.
+	map = [ "a" = 1.0, "b" = 2.0 ];
+	assert map["a"] == 1.0;
+	assert map["b"] == 2.0;
+	// Keys in the initializer don't need to be constants.
+	map = [ StringToLowerRaw("HELLO") = 1.0, StringToUpperRaw("hello") = 2.0 ];
+	assert map["hello"] == 1.0;
+	assert map["HELLO"] == 2.0;
+
+	// You can get an item from a map wrapped in an error type
+	// (see the later section on these) using :get().
+	err[float] wrapped;
+	wrapped = map:get("hello");
+	assert wrapped:success(); // Key is in the map; success.
+	assert wrapped:default(-1.0) == 1.0;
+	wrapped = map:get("world");
+	assert !wrapped:success(); // Key is not in the map; failure.
+	assert wrapped:default(-1.0) == -1.0;
+
 //////////////////////////////// TUPLES ////////////////////////////////
 
 	// Functions can return multiple values via tuples.
