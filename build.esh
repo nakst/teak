@@ -1,5 +1,6 @@
 bool debug #option;
 bool runTests #option;
+bool skipLibraries #option;
 
 void RunTests(str executable) {
 	// TODO Timeout.
@@ -89,8 +90,10 @@ void Start() {
 		assert false;
 	}
 
-	for str buildModule in DirectoryEnumerateFiltered("modules", ["*", "build.esh"], -1, true):assert() {
-		assert SystemShellExecute("%executable% %buildModule% compilerTemplate=\"%moduleCompilerTemplate%\"");
+	if !skipLibraries {
+		for str buildModule in DirectoryEnumerateFiltered("modules", ["*", "build.esh"], -1, true):assert() {
+			assert SystemShellExecute("%executable% %buildModule% compilerTemplate=\"%moduleCompilerTemplate%\"");
+		}
 	}
 
 	if runTests {

@@ -1,3 +1,5 @@
+struct V2 { float x; float y; };
+
 void Start() {
 	str[int] map;
 	map = new str[int];
@@ -6,6 +8,11 @@ void Start() {
 	assert map[4] == "world";
 	assert map[3] == "";
 	assert map[2] == "hello";
+	assert map:get(2):success();
+	assert !map:get(3):success();
+	assert map:get(4):success();
+	assert map:get(2):assert() == "hello";
+	assert map:get(4):assert() == "world";
 	assert map:has(2);
 	assert !map:has(3);
 	assert map:has(4);
@@ -21,5 +28,16 @@ void Start() {
 	assert map[3] == "";
 	assert map[2] == "";
 	assert map:len() == 0;
+	map = [ -1 = "what", 3 + 2 - 1 = "okay" ];
+	assert map[0] == "";
+	assert map[2] == "";
+	assert map[-1] == "what";
+	assert map[4] == "okay";
+	int[][int][int] map2 = [ 1 = [ 3 = [ 1, 2, 3 ], 4 = null, 5 = [ 4, 5, 6 ] ], 5 = [ 6 = [ 5 ] ], 2 = [ 3 = [ 3 ] ], 9 = null ];
+	assert map2[1][5][1] == 5;
+	V2[int] map3 = [ 1 = [ x = 4.0 ] ];
+	assert map3[1].x == 4.0;
+	assert map3[1].y == 0.0;
+	assert map3[0] == null;
 	Log("cool!");
 }

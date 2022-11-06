@@ -1,0 +1,7 @@
+inttype X {
+	Y = 1;
+};
+
+void Start() {
+	int[] x = [ 0, Y ];
+}
