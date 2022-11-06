@@ -1,0 +1,4 @@
+void Start() {
+	str x = "hello";
+	x[3] = "what";
+}

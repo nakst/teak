@@ -1,0 +1,25 @@
+void Start() {
+	str[int] map;
+	map = new str[int];
+	map[2] = "hello";
+	map[4] = "world";
+	assert map[4] == "world";
+	assert map[3] == "";
+	assert map[2] == "hello";
+	assert map:has(2);
+	assert !map:has(3);
+	assert map:has(4);
+	assert map:len() == 2;
+	assert map:delete(2);
+	assert !map:delete(3);
+	assert map[4] == "world";
+	assert map[3] == "";
+	assert map[2] == "";
+	assert map:len() == 1;
+	map:delete_all();
+	assert map[4] == "";
+	assert map[3] == "";
+	assert map[2] == "";
+	assert map:len() == 0;
+	Log("cool!");
+}

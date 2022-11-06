@@ -1,10 +1,12 @@
 // TODO New language features:
-// 	- Maps: T[int], T[str].
+// 	- Maps: T_FOR_EACH support. Initializers. :has, :get (returns err[T]), :prior_key, :next_key, :first_key, :last_key. 
+// 	- Strings maps: T_EQUALS_MAP_STR, T_INDEX_MAP_STR, T_OP_DELETE_MAP_STR, T_OP_HAS_STR.
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
 // 	- struct inheritance.
+// 	- for x in y #reverse
 
 // TODO Possible language changes?
 // 	- Variant of lists where the variable is constant but initialized to an empty list?
@@ -61,6 +63,7 @@
 // 	- Convert CharacterToByte, StringFromByte, StringSlice to :ops?
 
 // TODO Improvement of the scripting engine internals:
+// 	- Faster maps.
 // 	- Cleanup the code in External- functions and ScriptExecuteFunction using macros for common stack and heap operations.
 // 	- Cleanup the ImportData/ExecutionContext/FunctionBuilder structures and their relationships.
 // 	- Cleanup the variables/stack arrays.
@@ -186,6 +189,8 @@
 #define T_INITIALIZER_ENTRY   (89)
 #define T_MAP_INITIALIZER     (90)
 #define T_IMPORTED_TYPE       (91)
+#define T_MAP_INT             (92)
+#define T_MAP_STR             (93)
 
 // Instructions only.
 #define T_EXIT_SCOPE          (100)
@@ -220,7 +225,11 @@
 #define T_STR_NOT_EQUALS      (132)
 #define T_EQUALS_DOT          (133)
 #define T_EQUALS_LIST         (134)
-#define T_INDEX_LIST          (135)
+#define T_EQUALS_MAP_INT      (135)
+#define T_EQUALS_MAP_STR      (136)
+#define T_INDEX_LIST          (137)
+#define T_INDEX_MAP_INT       (138)
+#define T_INDEX_MAP_STR       (139)
 
 // :ops.
 #define T_OP_RESIZE           (140)
@@ -249,6 +258,10 @@
 #define T_OP_INT_TO_FLOAT     (163)
 #define T_OP_FLOAT_TRUNCATE   (164)
 #define T_OP_CAST             (165)
+#define T_OP_DELETE_MAP_INT   (166)
+#define T_OP_DELETE_MAP_STR   (167)
+#define T_OP_HAS_INT          (168)
+#define T_OP_HAS_STR          (169)
 
 // Keywords.
 #define T_IF                  (170)
@@ -381,7 +394,8 @@ typedef struct FunctionBuilder {
 	size_t lineNumberCount;
 	size_t lineNumbersAllocated;
 	int32_t scopeIndex;
-	bool isPersistentVariable, isDotAssignment, isListAssignment;
+	uint8_t assignmentType;
+	bool isPersistentVariable;
 	uintptr_t globalVariableOffset;
 	struct ImportData *importData; // Only valid during script loading.
 	Node *replResultType;
@@ -393,6 +407,10 @@ typedef struct BackTraceItem {
 		 assertResult : 1;
 	int32_t variableBase : 30;
 } BackTraceItem;
+
+typedef struct MapEntry {
+	Value key, value;
+} MapEntry;
 
 typedef struct HeapEntry {
 	uint8_t type;
@@ -414,6 +432,11 @@ typedef struct HeapEntry {
 		struct { // T_LIST
 			uint32_t length, allocated;
 			Value *list;
+		};
+
+		struct { // T_MAP_INT, T_MAP_STR
+			uint32_t mapLength;
+			MapEntry *mapEntries;
 		};
 
 		struct { // Unused entry.
@@ -1083,13 +1106,26 @@ Node *ParseType(Tokenizer *tokenizer, bool maybe, bool allowVoid, bool allowTupl
 					end->firstChild = list;
 				}
 
+				token = TokenPeek(tokenizer);
+
+				if (token.type == T_ERROR) {
+					return NULL;
+				} else if (token.type == T_INT) {
+					TokenNext(tokenizer);
+					list->type = T_MAP_INT;
+				} else if (token.type == T_STR) {
+					TokenNext(tokenizer);
+					list->type = T_MAP_STR;
+				}
+
 				token = TokenNext(tokenizer);
 
 				if (token.type == T_ERROR) {
 					return NULL;
 				} else if (token.type != T_RIGHT_SQUARE) {
 					if (!maybe) {
-						PrintError2(tokenizer, node, "Expected a ']' after the '[' in an list type.\n");
+						PrintError2(tokenizer, node, "Expected a ']' after the '[' in an %s type.\n", 
+								list->type == T_LIST ? "list" : "map");
 					}
 
 					return NULL;
@@ -2655,14 +2691,28 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 
 // --------------------------------- Type checking.
 
+bool ASTIsIntType(Node *node) {
+	return node && node->type == T_INTTYPE;
+}
+
+bool ASTIsTypeNullable(uint8_t type) {
+	return type == T_STRUCT || type == T_LIST || type == T_FUNCPTR || type == T_HANDLETYPE
+		|| type == T_MAP_INT || type == T_MAP_STR;
+}
+
+bool ASTIsManagedType(Node *node) {
+	return node->type == T_STR || node->type == T_FUNCPTR || node->type == T_ERR || node->type == T_ANYTYPE
+		|| ASTIsTypeNullable(node->type);
+}
+
 bool ASTMatching(Node *left, Node *right) {
 	if (!left && !right) {
 		return true;
 	} else if (!left || !right) {
 		return false;
-	} else if (left->type == T_NULL && (right->type == T_STRUCT || right->type == T_LIST || right->type == T_FUNCPTR || right->type == T_HANDLETYPE)) {
+	} else if (left->type == T_NULL && ASTIsTypeNullable(right->type)) {
 		return true;
-	} else if (right->type == T_NULL && (left->type == T_STRUCT || left->type == T_LIST || left->type == T_FUNCPTR || left->type == T_HANDLETYPE)) {
+	} else if (right->type == T_NULL && ASTIsTypeNullable(left->type)) {
 		return true;
 	} else if (left->type == T_ZERO && (right->type == T_INT || right->type == T_INTTYPE)) {
 		return true;
@@ -2690,15 +2740,6 @@ bool ASTMatching(Node *left, Node *right) {
 			}
 		}
 	}
-}
-
-bool ASTIsIntType(Node *node) {
-	return node && node->type == T_INTTYPE;
-}
-
-bool ASTIsManagedType(Node *node) {
-	return node->type == T_STR || node->type == T_LIST || node->type == T_STRUCT || node->type == T_HANDLETYPE
-		|| node->type == T_FUNCPTR || node->type == T_FUNCPTR || node->type == T_ERR || node->type == T_ANYTYPE;
 }
 
 int ASTGetTypePopCount(Node *node) {
@@ -2755,7 +2796,8 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 		}
 	}
 
-	if (node->type == T_DECLARE || node->type == T_ARGUMENT || node->type == T_NEW || node->type == T_LIST 
+	if (node->type == T_DECLARE || node->type == T_ARGUMENT || node->type == T_NEW 
+			|| node->type == T_LIST || node->type == T_MAP_INT || node->type == T_MAP_STR
 			|| node->type == T_ERR || node->type == T_CAST_TYPE_WRAPPER || node->hasTypeInheritanceParent) {
 		Node *type = node->firstChild;
 
@@ -3144,8 +3186,10 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		bool isInt = expressionType->type == T_INT;
 		bool isFloat = expressionType->type == T_FLOAT;
 		bool isAnyType = expressionType->type == T_ANYTYPE;
+		bool isMap = expressionType->type == T_MAP_INT || expressionType->type == T_MAP_STR;
+		bool isMapStr = expressionType->type == T_MAP_STR;
 
-		if (!isList && !isStr & !isFuncPtr && !isErr && !isInt && !isFloat && !isAnyType) {
+		if (!isList && !isStr & !isFuncPtr && !isErr && !isInt && !isFloat && !isAnyType && !isMap) {
 			PrintError2(tokenizer, node, "This type does not have any ':' operations.\n");
 			return false;
 		}
@@ -3159,15 +3203,16 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		else if (isList && KEYWORD("add")) arguments[0] = expressionType->firstChild, op = T_OP_ADD;
 		else if (isList && KEYWORD("insert")) arguments[0] = expressionType->firstChild, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT;
 		else if (isList && KEYWORD("insert_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_INSERT_MANY;
-		else if (isList && KEYWORD("delete")) arguments[0] = &globalExpressionTypeInt, op = T_OP_DELETE;
+		else if ((isList || isMap) && KEYWORD("delete")) arguments[0] = isMapStr ? &globalExpressionTypeStr : &globalExpressionTypeInt, op = isMapStr ? T_OP_DELETE_MAP_STR : isMap ? T_OP_DELETE_MAP_INT : T_OP_DELETE, returnsBool = isMap;
 		else if (isList && KEYWORD("find_and_delete")) arguments[0] = expressionType->firstChild, op = T_OP_FIND_AND_DELETE, returnsBool = true;
 		else if (isList && KEYWORD("find")) arguments[0] = expressionType->firstChild, op = T_OP_FIND, returnsInt = true;
 		else if (isList && KEYWORD("delete_many")) arguments[0] = &globalExpressionTypeInt, arguments[1] = &globalExpressionTypeInt, op = T_OP_DELETE_MANY;
 		else if (isList && KEYWORD("delete_last")) op = T_OP_DELETE_LAST;
-		else if (isList && KEYWORD("delete_all")) op = T_OP_DELETE_ALL;
+		else if ((isList || isMap) && KEYWORD("delete_all")) op = T_OP_DELETE_ALL;
 		else if (isList && KEYWORD("first")) returnsItem = true, op = T_OP_FIRST;
 		else if (isList && KEYWORD("last")) returnsItem = true, op = T_OP_LAST;
-		else if ((isList || isStr) && KEYWORD("len")) returnsInt = true, op = T_OP_LEN;
+		else if ((isList || isStr || isMap) && KEYWORD("len")) returnsInt = true, op = T_OP_LEN;
+		else if (isMap && KEYWORD("has")) arguments[0] = isMapStr ? &globalExpressionTypeStr : &globalExpressionTypeInt, returnsBool = true, op = isMapStr ? T_OP_HAS_STR : T_OP_HAS_INT;
 		else if (isInt && KEYWORD("float")) returnsFloat = true, op = T_OP_INT_TO_FLOAT;
 		else if (isFloat && KEYWORD("truncate")) returnsInt = true, op = T_OP_FLOAT_TRUNCATE;
 		else if (isErr && KEYWORD("success")) returnsBool = true, op = T_OP_SUCCESS;
@@ -3347,6 +3392,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 	if (node->type == T_ROOT || node->type == T_BLOCK
 			|| node->type == T_INT || node->type == T_FLOAT || node->type == T_STR 
 			|| node->type == T_LIST || node->type == T_TUPLE || node->type == T_ERR || node->type == T_ANYTYPE
+			|| node->type == T_MAP_INT || node->type == T_MAP_STR
 			|| node->type == T_BOOL || node->type == T_VOID || node->type == T_IDENTIFIER
 			|| node->type == T_ARGUMENTS || node->type == T_ARGUMENT
 			|| node->type == T_STRUCT || node->type == T_FUNCTYPE || node->type == T_IMPORT 
@@ -3474,10 +3520,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 					&& !ASTMatching(leftType, &globalExpressionTypeStr)
 					&& !ASTMatching(leftType, &globalExpressionTypeBool)
 					&& !ASTIsIntType(leftType)
-					&& (!leftType || leftType->type != T_LIST)
-					&& (!leftType || leftType->type != T_STRUCT)
-					&& (!leftType || leftType->type != T_HANDLETYPE)
-					&& (!leftType || leftType->type != T_FUNCPTR)) {
+					&& (!leftType || !ASTIsTypeNullable(leftType->type))) {
 				PrintError5(tokenizer, node, leftType, NULL, "These types cannot be compared.\n");
 				return false;
 			}
@@ -3737,14 +3780,18 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		node->scope->entries[1]->expressionType = listType;
 		node->scope->entries[2]->expressionType = &globalExpressionTypeInt;
 	} else if (node->type == T_INDEX) {
+		bool keyIsString = node->firstChild->expressionType->type == T_MAP_STR;
+
 		if (!ASTMatching(node->firstChild->expressionType, &globalExpressionTypeStr)
-				&& node->firstChild->expressionType->type != T_LIST) {
-			PrintError2(tokenizer, node, "The expression being indexed must be a string or list.\n");
+				&& node->firstChild->expressionType->type != T_LIST
+				&& node->firstChild->expressionType->type != T_MAP_INT
+				&& node->firstChild->expressionType->type != T_MAP_STR) {
+			PrintError2(tokenizer, node, "The expression being indexed must be a string, list or map.\n");
 			return false;
 		}
 
-		if (!ASTMatching(node->firstChild->sibling->expressionType, &globalExpressionTypeInt)) {
-			PrintError2(tokenizer, node, "The index must be a integer.\n");
+		if (!ASTMatching(node->firstChild->sibling->expressionType, keyIsString ? &globalExpressionTypeStr : &globalExpressionTypeInt)) {
+			PrintError2(tokenizer, node, "The index must be a %s.\n", keyIsString ? "string" : "integer");
 			return false;
 		}
 
@@ -3754,8 +3801,10 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			node->expressionType = node->firstChild->expressionType->firstChild;
 		}
 	} else if (node->type == T_NEW) {
-		if (node->firstChild->type != T_STRUCT && node->firstChild->type != T_LIST && node->firstChild->type != T_ERR) {
-			PrintError2(tokenizer, node, "This type is not a struct, list or error. 'new' is used to create new instances of structs, lists and errors.\n");
+		if (node->firstChild->type != T_STRUCT && node->firstChild->type != T_LIST && node->firstChild->type != T_ERR
+				&& node->firstChild->type != T_MAP_INT && node->firstChild->type != T_MAP_STR) {
+			PrintError2(tokenizer, node, "This type is not a struct, map, list or error. "
+					"'new' is used to create new instances of structs, maps, lists and errors.\n");
 			return false;
 		}
 
@@ -4126,8 +4175,7 @@ bool FunctionBuilderVariable(Tokenizer *tokenizer, FunctionBuilder *builder, Nod
 
 		if (forAssignment) {
 			builder->scopeIndex = index;
-			builder->isDotAssignment = false;
-			builder->isListAssignment = false;
+			builder->assignmentType = T_EQUALS;
 		} else {
 			FunctionBuilderAppend(builder, &node->type, sizeof(node->type));
 			FunctionBuilderAppend(builder, &index, sizeof(index));
@@ -4193,8 +4241,7 @@ void FunctionBuilderStructDot(FunctionBuilder *builder, bool forAssignment, Node
 
 	if (forAssignment) {
 		builder->scopeIndex = fieldIndex;
-		builder->isDotAssignment = true;
-		builder->isListAssignment = false;
+		builder->assignmentType = T_EQUALS_DOT;
 	} else {
 		uint8_t b = T_DOT;
 		FunctionBuilderAppend(builder, &b, sizeof(b));
@@ -4251,6 +4298,7 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 			while (variableCount) {
 				Node *child = variables[--variableCount];
 				builder->isPersistentVariable = false;
+				builder->assignmentType = T_ERROR;
 
 				if (node->type == T_DECLARE || node->type == T_DECL_GROUP_AND_SET) {
 					if (!FunctionBuilderVariable(tokenizer, builder, node->type == T_DECL_GROUP_AND_SET ? child : node, true)) {
@@ -4260,16 +4308,16 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 					return false;
 				}
 
+				Assert(builder->assignmentType);
 				FunctionBuilderAddLineNumber(builder, node);
-				uint8_t b = builder->isListAssignment ? T_EQUALS_LIST : builder->isDotAssignment ? T_EQUALS_DOT : T_EQUALS;
-				FunctionBuilderAppend(builder, &b, sizeof(b));
+				FunctionBuilderAppend(builder, &builder->assignmentType, sizeof(builder->assignmentType));
 
-				if (!builder->isListAssignment) {
+				if (builder->assignmentType == T_EQUALS || builder->assignmentType == T_EQUALS_DOT) {
 					FunctionBuilderAppend(builder, &builder->scopeIndex, sizeof(builder->scopeIndex));
 				}
 
 				if (builder->isPersistentVariable) {
-					b = T_PERSIST;
+					uint8_t b = T_PERSIST;
 					FunctionBuilderAppend(builder, &b, sizeof(b));
 				}
 
@@ -4752,8 +4800,14 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 			fieldCount = ASTIsManagedType(node->firstChild->firstChild) ? -2 : -1;
 		} else if (node->firstChild->type == T_ERR) {
 			fieldCount = ASTIsManagedType(node->firstChild->firstChild) ? -4 : -3;
-		} else {
+		} else if (node->firstChild->type == T_MAP_INT) {
+			fieldCount = ASTIsManagedType(node->firstChild->firstChild) ? -6 : -5;
+		} else if (node->firstChild->type == T_MAP_STR) {
+			fieldCount = ASTIsManagedType(node->firstChild->firstChild) ? -8 : -7;
+		} else if (node->firstChild->type == T_STRUCT) {
 			fieldCount = FunctionBuilderCountStructureFields(tokenizer, node->firstChild);
+		} else {
+			Assert(false);
 		}
 
 		FunctionBuilderAppend(builder, &fieldCount, sizeof(fieldCount));
@@ -4949,11 +5003,17 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 				PrintError2(tokenizer, node->firstChild, "Strings cannot be modified.\n");
 				return false;
 			} else {
-				builder->isListAssignment = true;
-				builder->isDotAssignment = false;
+				builder->assignmentType = node->firstChild->expressionType->type == T_LIST ? T_EQUALS_LIST
+					: node->firstChild->expressionType->type == T_MAP_INT ? T_EQUALS_MAP_INT
+					: node->firstChild->expressionType->type == T_MAP_STR ? T_EQUALS_MAP_STR : 0;
+				Assert(builder->assignmentType);
 			}
 		} else {
-			uint8_t b = node->firstChild->expressionType->type == T_STR ? T_INDEX : T_INDEX_LIST;
+			uint8_t b = node->firstChild->expressionType->type == T_STR ? T_INDEX 
+				: node->firstChild->expressionType->type == T_LIST ? T_INDEX_LIST
+				: node->firstChild->expressionType->type == T_MAP_INT ? T_INDEX_MAP_INT
+				: node->firstChild->expressionType->type == T_MAP_STR ? T_INDEX_MAP_STR : 0;
+			Assert(b);
 			FunctionBuilderAddLineNumber(builder, node);
 			FunctionBuilderAppend(builder, &b, sizeof(b));
 		}
@@ -5147,6 +5207,16 @@ void HeapGarbageCollectMark(ExecutionContext *context, uintptr_t index) {
 				HeapGarbageCollectMark(context, context->heap[index].list[i].i);
 			}
 		}
+	} else if (context->heap[index].type == T_MAP_INT || context->heap[index].type == T_MAP_STR) {
+		for (uintptr_t i = 0; i < context->heap[index].length; i++) {
+			if (context->heap[index].type == T_MAP_STR) {
+				HeapGarbageCollectMark(context, context->heap[index].mapEntries[i].key.i);
+			}
+
+			if (context->heap[index].internalValuesAreManaged) {
+				HeapGarbageCollectMark(context, context->heap[index].mapEntries[i].value.i);
+			}
+		}
 	} else if (context->heap[index].type == T_CONCAT) {
 		uintptr_t index1 = context->heap[index].concat1;
 		uintptr_t index2 = context->heap[index].concat2;
@@ -5188,6 +5258,8 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 		AllocateResize((uint8_t *) context->heap[i].fields - ((context->heap[i].fieldCount + 7) & ~7), 0);
 	} else if (context->heap[i].type == T_LIST) {
 		AllocateResize(context->heap[i].list, 0);
+	} else if (context->heap[i].type == T_MAP_INT || context->heap[i].type == T_MAP_STR) {
+		AllocateResize(context->heap[i].mapEntries, 0);
 	} else if (context->heap[i].type == T_HANDLETYPE) {
 		context->heap[i].close(context, context->heap[i].handleData);
 	} else if (context->heap[i].type == T_OP_DISCARD || context->heap[i].type == T_OP_ASSERT 
@@ -5657,6 +5729,104 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			((uint8_t *) entry->fields - 1)[-fieldIndex] = isManaged;
 
 			context->c->stackPointer -= 2;
+		} else if (command == T_EQUALS_MAP_INT) {
+			if (context->c->stackPointer < 3) return -1;
+			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+
+			uint64_t index = context->c->stack[context->c->stackPointer - 2].i;
+
+			if (!index) {
+				PrintError4(context, instructionPointer - 1, "The map is null.\n");
+				return 0;
+			}
+
+			if (context->heapEntriesAllocated <= index) return -1;
+			HeapEntry *entry = &context->heap[index];
+			if (entry->type != T_MAP_INT) return -1;
+
+			Value key = context->c->stack[context->c->stackPointer - 1];
+			Value value = context->c->stack[context->c->stackPointer - 3];
+			if (entry->internalValuesAreManaged != context->c->stackIsManaged[context->c->stackPointer - 3]) return -1;
+
+			uintptr_t resultIndex = 0;
+
+			 // TODO Handling allocation failure.
+
+			if (!entry->mapLength) {
+				entry->mapLength = 1;
+				entry->mapEntries = (MapEntry *) AllocateResize(NULL, sizeof(MapEntry));
+			} else {
+				intptr_t low = 0;
+				intptr_t high = entry->mapLength - 1;
+
+				while (low <= high) {
+					uintptr_t average = ((high - low) >> 1) + low;
+
+					if (entry->mapEntries[average].key.i < key.i) {
+						high = average - 1;
+					} else if (entry->mapEntries[average].key.i > key.i) {
+						low = average + 1;
+					} else {
+						resultIndex = average;
+						break;
+					}
+				}
+
+				if (high < low) {
+					resultIndex = low;
+					entry->mapLength++;
+					entry->mapEntries = (MapEntry *) AllocateResize(entry->mapEntries, sizeof(MapEntry) * entry->mapLength);
+
+					for (uintptr_t i = entry->mapLength - 1; i > resultIndex; i--) {
+						entry->mapEntries[i] = entry->mapEntries[i - 1];
+					}
+				}
+			}
+
+			entry->mapEntries[resultIndex].key = key;
+			entry->mapEntries[resultIndex].value = value;
+			context->c->stackPointer -= 3;
+		} else if (command == T_INDEX_MAP_INT) {
+			if (context->c->stackPointer < 2) return -1;
+			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+
+			uint64_t index = context->c->stack[context->c->stackPointer - 2].i;
+
+			if (!index) {
+				PrintError4(context, instructionPointer - 1, "The map is null.\n");
+				return 0;
+			}
+
+			if (context->heapEntriesAllocated <= index) return -1;
+			HeapEntry *entry = &context->heap[index];
+			if (entry->type != T_MAP_INT) return -1;
+
+			Value key = context->c->stack[context->c->stackPointer - 1];
+			Value value = { 0 };
+
+			if (entry->mapLength) {
+				intptr_t low = 0;
+				intptr_t high = entry->mapLength - 1;
+
+				while (low <= high) {
+					uintptr_t average = ((high - low) >> 1) + low;
+
+					if (entry->mapEntries[average].key.i < key.i) {
+						high = average - 1;
+					} else if (entry->mapEntries[average].key.i > key.i) {
+						low = average + 1;
+					} else {
+						value = entry->mapEntries[average].value;
+						break;
+					}
+				}
+			}
+
+			context->c->stack[context->c->stackPointer - 2] = value;
+			context->c->stackIsManaged[context->c->stackPointer - 2] = entry->internalValuesAreManaged;
+			context->c->stackPointer--;
 		} else if (command == T_EQUALS_LIST) {
 			if (context->c->stackPointer < 3) return -1;
 			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
@@ -5893,6 +6063,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 
 			if (entry->type == T_LIST) {
 				context->c->stack[context->c->stackPointer - 1].i = entry->length;
+			} else if (entry->type == T_MAP_INT || entry->type == T_MAP_STR) {
+				context->c->stack[context->c->stackPointer - 1].i = entry->mapLength;
 			} else {
 				STACK_READ_STRING(stringText, stringBytes, 1);
 				context->c->stack[context->c->stackPointer - 1].i = stringBytes;
@@ -6200,9 +6372,13 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			int16_t fieldCount = functionData[instructionPointer + 0] + (functionData[instructionPointer + 1] << 8); 
 			instructionPointer += 2;
 			uintptr_t index = HeapAllocate(context);
-			context->heap[index].type = fieldCount >= 0 ? T_STRUCT : fieldCount >= -2 ? T_LIST : T_ERR;
+			uint8_t type = context->heap[index].type = fieldCount >= 0 ? T_STRUCT 
+				: fieldCount >= -2 ? T_LIST 
+				: fieldCount >= -4 ? T_ERR
+				: fieldCount >= -6 ? T_MAP_INT
+				: fieldCount >= -8 ? T_MAP_STR : T_ERROR;
 
-			if (fieldCount >= 0) {
+			if (type == T_STRUCT) {
 				size_t fieldCountAligned = (fieldCount + 7) & ~7;
 				context->heap[index].fields = (Value *) ((uint8_t *) AllocateResize(NULL, 
 							fieldCountAligned + fieldCount * sizeof(Value)) + fieldCountAligned);
@@ -6215,11 +6391,19 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 					// The first type they are set this will be updated.
 					((uint8_t *) context->heap[index].fields)[-1 - i] = false;
 				}
-			} else if (fieldCount >= -2) {
+			} else if (type == T_LIST) {
 				context->heap[index].internalValuesAreManaged = fieldCount == -2;
 				context->heap[index].length = context->heap[index].allocated = 0;
 				context->heap[index].list = NULL;
-			} else {
+			} else if (type == T_MAP_INT) {
+				context->heap[index].internalValuesAreManaged = fieldCount == -6;
+				context->heap[index].mapLength = 0;
+				context->heap[index].mapEntries = NULL;
+			} else if (type == T_MAP_STR) {
+				context->heap[index].internalValuesAreManaged = fieldCount == -8;
+				context->heap[index].mapLength = 0;
+				context->heap[index].mapEntries = NULL;
+			} else if (type == T_ERR) {
 				context->heap[index].internalValuesAreManaged = true;
 				context->heap[index].success = false;
 
@@ -6227,6 +6411,8 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				if (!context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
 				context->heap[index].errorValue = context->c->stack[context->c->stackPointer - 1];
 				context->c->stackPointer--;
+			} else {
+				return -1;
 			}
 
 			Value v;
@@ -6461,16 +6647,23 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			uint64_t index = context->c->stack[context->c->stackPointer - 1].i;
 
 			if (!index) {
-				PrintError4(context, instructionPointer - 1, "The list is null.\n");
+				PrintError4(context, instructionPointer - 1, "The object is null.\n");
 				return 0;
 			}
 
 			if (context->heapEntriesAllocated <= index) return -1;
 			HeapEntry *entry = &context->heap[index];
-			if (entry->type != T_LIST) return -1;
 
-			context->heap[index].length = context->heap[index].allocated = 0;
-			context->heap[index].list = (Value *) AllocateResize(context->heap[index].list, 0);
+			if (entry->type == T_LIST) {
+				context->heap[index].length = context->heap[index].allocated = 0;
+				context->heap[index].list = (Value *) AllocateResize(context->heap[index].list, 0);
+			} else if (entry->type == T_MAP_INT || entry->type == T_MAP_STR) {
+				context->heap[index].mapLength = 0;
+				context->heap[index].mapEntries = (MapEntry *) AllocateResize(context->heap[index].mapEntries, 0);
+			} else {
+				return -1;
+			}
+
 			context->c->stackPointer--;
 		} else if (command == T_OP_DELETE_LAST) {
 			if (context->c->stackPointer < 1) return -1;
@@ -6536,6 +6729,53 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			}
 
 			context->c->stackIsManaged[context->c->stackPointer - 2] = false;
+			context->c->stackPointer--;
+		} else if (command == T_OP_DELETE_MAP_INT || command == T_OP_HAS_INT) {
+			if (context->c->stackPointer < (uintptr_t) 2) return -1;
+			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
+			uint64_t index = context->c->stack[context->c->stackPointer - 2].i;
+
+			if (!index) {
+				PrintError4(context, instructionPointer - 1, "The map is null.\n");
+				return 0;
+			}
+
+			if (context->heapEntriesAllocated <= index) return -1;
+			HeapEntry *entry = &context->heap[index];
+			if (entry->type != T_MAP_INT) return -1;
+
+			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
+			Value key = context->c->stack[context->c->stackPointer - 1];
+			bool found = false;
+
+			if (entry->mapLength) {
+				intptr_t low = 0;
+				intptr_t high = entry->mapLength - 1;
+
+				while (low <= high) {
+					uintptr_t average = ((high - low) >> 1) + low;
+
+					if (entry->mapEntries[average].key.i < key.i) {
+						high = average - 1;
+					} else if (entry->mapEntries[average].key.i > key.i) {
+						low = average + 1;
+					} else {
+						if (command == T_OP_DELETE_MAP_INT) {
+							entry->mapLength--;
+
+							for (uintptr_t i = average; i < entry->mapLength; i++) {
+								entry->mapEntries[i] = entry->mapEntries[i + 1];
+							}
+						}
+
+						found = true;
+						break;
+					}
+				}
+			}
+
+			context->c->stackIsManaged[context->c->stackPointer - 2] = false;
+			context->c->stack[context->c->stackPointer - 2].i = found ? 1 : 0;
 			context->c->stackPointer--;
 		} else if (command == T_OP_DISCARD || command == T_OP_ASSERT) {
 			if (context->c->stackPointer < 1) return -1;
