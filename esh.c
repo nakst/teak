@@ -30,7 +30,6 @@
 //		And document the engine flags.
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
-// 	- Using the coloredOutput variable for error messages. Override flag for coloredOutput.
 // 	- Win32: use the Unicode APIs for file system access. 
 
 // TODO Standard library:
@@ -7843,11 +7842,13 @@ bool ActionBefore(ExecutionContext *context, int category, const char *name, con
 		size_t parameter1Bytes, const char *parameter2, size_t parameter2Bytes) {
 	if (actionBefore[category] != BEFORE_SILENT) {
 		if (parameter2) {
-			PrintDebug("\033[0;32m%s: \"%.*s\" --> \"%.*s\"\033[0m\n", name, parameter1Bytes, parameter1, parameter2Bytes, parameter2);
+			PrintDebug("%s%s: \"%.*s\" --> \"%.*s\"%s\n", coloredOutput ? "\033[0;32m" : "", 
+					name, parameter1Bytes, parameter1, parameter2Bytes, parameter2, coloredOutput ? "\033[0m" : "");
 		} else if (parameter1) {
-			PrintDebug("\033[0;32m%s: \"%.*s\"\033[0m\n", name, parameter1Bytes, parameter1);
+			PrintDebug("%s%s: \"%.*s\"%s\n", coloredOutput ? "\033[0;32m" : "", 
+					name, parameter1Bytes, parameter1, coloredOutput ? "\033[0m" : "");
 		} else {
-			PrintDebug("\033[0;32m%s\033[0m\n", name);
+			PrintDebug("%s%s%s\n", coloredOutput ? "\033[0;32m" : "", name, coloredOutput ? "\033[0m" : "");
 		}
 
 		if (actionBefore[category] == BEFORE_TRACE) {
@@ -7877,11 +7878,13 @@ bool ActionFailure(ExecutionContext *context, int category, const char *name, co
 		size_t parameter1Bytes, const char *parameter2, size_t parameter2Bytes) {
 	if (actionFailure[category] != FAILURE_PROPAGATE) {
 		if (parameter2) {
-			PrintDebug("\033[0;31m%s: \"%.*s\" --> \"%.*s\", error \"%s\"\033[0m\n", name, parameter1Bytes, parameter1, parameter2Bytes, parameter2, error);
+			PrintDebug("%s%s: \"%.*s\" --> \"%.*s\", error \"%s\"%s\n", coloredOutput ? "\033[0;31m" : "", 
+					name, parameter1Bytes, parameter1, parameter2Bytes, parameter2, error, coloredOutput ? "\033[0m" : "");
 		} else if (parameter1) {
-			PrintDebug("\033[0;31m%s: \"%.*s\", error \"%s\"\033[0m\n", name, parameter1Bytes, parameter1, error);
+			PrintDebug("%s%s: \"%.*s\", error \"%s\"%s\n", coloredOutput ? "\033[0;31m" : "", 
+					name, parameter1Bytes, parameter1, error, coloredOutput ? "\033[0m" : "");
 		} else {
-			PrintDebug("\033[0;31m%s, error \"%s\"\033[0m\n", name, error);
+			PrintDebug("%s%s, error \"%s\"%s\n", coloredOutput ? "\033[0;31m" : "", name, error, coloredOutput ? "\033[0m" : "");
 		}
 
 		PrintBackTrace(context, 0, context->c, "");
@@ -7940,7 +7943,7 @@ int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue) {
 	char *temporary = StringZeroTerminate(text, bytes);
 
 	if (temporary) {
-		if (systemShellLoggingEnabled) PrintDebug("\033[0;32m%s\033[0m\n", temporary);
+		if (systemShellLoggingEnabled) PrintDebug("%s%s%s\n", coloredOutput ? "\033[0;32m" : "", temporary, coloredOutput ? "\033[0m" : "");
 		context->c->externalCoroutineData2 = temporary;
 #ifdef __linux__
 		pthread_t thread;
@@ -7991,7 +7994,7 @@ int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Va
 	char *temporary2 = StringZeroTerminate(entry2Text, entry2Bytes);
 	if (!temporary2) return EXTCALL_RETURN_MANAGED;
 
-	if (systemShellLoggingEnabled) PrintDebug("\033[0;32m(%s) %s\033[0m\n", temporary, temporary2);
+	if (systemShellLoggingEnabled) PrintDebug("%s(%s) %s\n", coloredOutput ? "\033[0;32m" : "", temporary, temporary2, coloredOutput ? "\033[0m" : "");
 	
 #ifdef __linux__
 	pid_t pid = fork();
@@ -8602,7 +8605,8 @@ int ExternalPersistWrite(ExecutionContext *context, Value *returnValue) {
 	FILE *f = fopen(context->scriptPersistFile, "wb");
 
 	if (!f) {
-		PrintDebug("\033[0;32mWarning: Persistent variables could not written. The file could not be opened.\033[0m\n");
+		PrintDebug("%sWarning: Persistent variables could not written. The file could not be opened.%s\n",
+				coloredOutput ? "\033[0;32m" : "", coloredOutput ? "\033[0m" : "");
 		return EXTCALL_NO_RETURN;
 	}
 
@@ -8640,8 +8644,8 @@ int ExternalPersistWrite(ExecutionContext *context, Value *returnValue) {
 				uint8_t b = context->globalVariables[k].i == 1;
 				fwrite(&b, 1, sizeof(uint8_t), f);
 			} else {
-				PrintDebug("\033[0;32mWarning: The persistent variable %.*s could not be written, because it had an unsupported type.\033[0m\n",
-						scope->entries[j]->token.textBytes, scope->entries[j]->token.text);
+				PrintDebug("%sWarning: The persistent variable %.*s could not be written, because it had an unsupported type.%s\n",
+						coloredOutput ? "\033[0;32m" : "", scope->entries[j]->token.textBytes, scope->entries[j]->token.text, coloredOutput ? "\033[0m" : "");
 			}
 		}
 
@@ -9020,7 +9024,7 @@ void PrintOutputType(Node *node) {
 }
 
 void PrintError(Tokenizer *tokenizer, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) tokenizer->line, tokenizer->module->prettyName);
+	fprintf(stderr, "%sError on line %d of '%s':%s\n", coloredOutput ? "\033[0;33m" : "", (int) tokenizer->line, tokenizer->module->prettyName, coloredOutput ? "\033[0m" : "");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -9029,7 +9033,7 @@ void PrintError(Tokenizer *tokenizer, const char *format, ...) {
 }
 
 void PrintError2(Tokenizer *tokenizer, Node *node, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->prettyName);
+	fprintf(stderr, "%sError on line %d of '%s':%s\n", coloredOutput ? "\033[0;33m" : "", (int) node->token.line, tokenizer->module->prettyName, coloredOutput ? "\033[0m" : "");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -9038,7 +9042,7 @@ void PrintError2(Tokenizer *tokenizer, Node *node, const char *format, ...) {
 }
 
 void PrintError3(const char *format, ...) {
-	fprintf(stderr, "\033[0;33mGeneral error:\033[0m\n");
+	fprintf(stderr, "%sGeneral error:%s\n", coloredOutput ? "\033[0;33m" : "", coloredOutput ? "\033[0m" : "");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -9048,8 +9052,8 @@ void PrintError3(const char *format, ...) {
 void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const char *format, ...) {
 	LineNumber lineNumber = { 0 };
 	LineNumberLookup(context, instructionPointer, &lineNumber);
-	fprintf(stderr, "\033[0;33mRuntime error on line %d of '%s'\033[0m:\n", lineNumber.lineNumber, 
-			lineNumber.importData ? lineNumber.importData->prettyName : "??");
+	fprintf(stderr, "%sRuntime error on line %d of '%s':%s\n", coloredOutput ? "\033[0;33m" : "", lineNumber.lineNumber, 
+			lineNumber.importData ? lineNumber.importData->prettyName : "??", coloredOutput ? "\033[0m" : "");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -9060,7 +9064,7 @@ void PrintError4(ExecutionContext *context, uint32_t instructionPointer, const c
 }
 
 void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, const char *format, ...) {
-	fprintf(stderr, "\033[0;33mError on line %d of '%s':\033[0m\n", (int) node->token.line, tokenizer->module->prettyName);
+	fprintf(stderr, "%sError on line %d of '%s':%s\n", coloredOutput ? "\033[0;33m" : "", (int) node->token.line, tokenizer->module->prettyName, coloredOutput ? "\033[0m" : "");
 	va_list arguments;
 	va_start(arguments, format);
 	vfprintf(stderr, format, arguments);
@@ -9250,6 +9254,10 @@ int main(int argc, char **argv) {
 			noBaseModule = true;
 		} else if (0 == strcmp(argv[i], "--output-overview")) {
 			outputOverview = true;
+		} else if (0 == strcmp(argv[i], "--no-colored-output")) {
+			coloredOutput = false;
+		} else if (0 == strcmp(argv[i], "--colored-output")) {
+			coloredOutput = true;
 		} else if (0 == strcmp(argv[i], "--want-completion-confirmation")) {
 			wantCompletionConfirmation = true;
 		} else if ((strlen(argv[i]) > 6 && 0 == memcmp(argv[i], "--log=", 6))
