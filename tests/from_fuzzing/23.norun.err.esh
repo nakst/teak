@@ -1,0 +1,2 @@
+void Start() {await#persist("Hello, world!");
+}

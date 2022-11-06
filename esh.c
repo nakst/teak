@@ -1317,6 +1317,7 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 	} else if (node->token.type == T_AWAIT) {
 		node->type = T_AWAIT;
 		node->firstChild = ParseExpression(tokenizer, false, TokenLookupPrecedence(node->token.type));
+		if (!node->firstChild) return NULL;
 	} else {
 		PrintError2(tokenizer, node, "Expected an expression. "
 				"Expressions can start with a variable identifier, a string literal, a number, 'await', 'new', '-', '!', '[' or '('.\n");
@@ -2084,7 +2085,7 @@ Node *ParseRoot(Tokenizer *tokenizer) {
 			Token semicolon = TokenNext(tokenizer);
 
 			if (semicolon.type != T_SEMICOLON) {
-				PrintError2(tokenizer, node->firstChild->sibling, "Expected a semicolon after the argument list.\n");
+				PrintError2(tokenizer, node, "Expected a semicolon after the argument list.\n");
 				return NULL;
 			}
 		} else if (token.type == T_HANDLETYPE) {

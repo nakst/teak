@@ -1,0 +1,3 @@
+void Start() {await
+void("Hello, world!");
+}

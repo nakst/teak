@@ -1,0 +1,3 @@
+functype oid Start() {
+	Log("Hello, world!");
+}
