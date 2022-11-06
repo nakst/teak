@@ -1,6 +1,5 @@
 // TODO New language features:
 // 	- Maps: T_FOR_EACH support. :prior_key, :next_key, :first_key, :last_key. 
-// 	- Strings maps: T_EQUALS_MAP_STR, T_INDEX_MAP_STR, T_OP_DELETE_MAP_STR, T_OP_HAS_STR, T_OP_GET_STR.
 // 	- Setting the initial values of global variables (including options).
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
@@ -581,6 +580,7 @@ void ScriptPrintNode(Node *node, int indent);
 bool ScriptLoad(Tokenizer tokenizer, ExecutionContext *context, ImportData *importData, bool replMode);
 void ScriptFreeCoroutine(CoroutineState *c);
 uintptr_t HeapAllocate(ExecutionContext *context);
+int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t length2);
 
 // --------------------------------- Platform layer definitions.
 
@@ -4976,6 +4976,8 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 
 		if (node->type == T_BLOCK && child->expressionType && child->expressionType->type != T_VOID) {
 			if (child->type == T_CALL || child->type == T_AWAIT 
+					|| (child->type == T_COLON && child->operationType == T_OP_DELETE_MAP_INT)
+					|| (child->type == T_COLON && child->operationType == T_OP_DELETE_MAP_STR)
 					|| (child->type == T_COLON && child->operationType == T_OP_FIND_AND_DELETE)
 					|| (child->type == T_COLON && child->operationType == T_OP_FIND_AND_DEL_STR)) {
 				uint8_t b = T_POP;
@@ -5806,64 +5808,6 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			((uint8_t *) entry->fields - 1)[-fieldIndex] = isManaged;
 
 			context->c->stackPointer -= 2;
-		} else if (command == T_EQUALS_MAP_INT) {
-			if (context->c->stackPointer < 3) return -1;
-			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
-			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
-
-			uint64_t index = context->c->stack[context->c->stackPointer - 2].i;
-
-			if (!index) {
-				PrintError4(context, instructionPointer - 1, "The map is null.\n");
-				return 0;
-			}
-
-			if (context->heapEntriesAllocated <= index) return -1;
-			HeapEntry *entry = &context->heap[index];
-			if (entry->type != T_MAP_INT) return -1;
-
-			Value key = context->c->stack[context->c->stackPointer - 1];
-			Value value = context->c->stack[context->c->stackPointer - 3];
-			if (entry->internalValuesAreManaged != context->c->stackIsManaged[context->c->stackPointer - 3]) return -1;
-
-			uintptr_t resultIndex = 0;
-
-			 // TODO Handling allocation failure.
-
-			if (!entry->mapLength) {
-				entry->mapLength = 1;
-				entry->mapEntries = (MapEntry *) AllocateResize(NULL, sizeof(MapEntry));
-			} else {
-				intptr_t low = 0;
-				intptr_t high = entry->mapLength - 1;
-
-				while (low <= high) {
-					uintptr_t average = ((high - low) >> 1) + low;
-
-					if (entry->mapEntries[average].key.i < key.i) {
-						high = average - 1;
-					} else if (entry->mapEntries[average].key.i > key.i) {
-						low = average + 1;
-					} else {
-						resultIndex = average;
-						break;
-					}
-				}
-
-				if (high < low) {
-					resultIndex = low;
-					entry->mapLength++;
-					entry->mapEntries = (MapEntry *) AllocateResize(entry->mapEntries, sizeof(MapEntry) * entry->mapLength);
-
-					for (uintptr_t i = entry->mapLength - 1; i > resultIndex; i--) {
-						entry->mapEntries[i] = entry->mapEntries[i - 1];
-					}
-				}
-			}
-
-			entry->mapEntries[resultIndex].key = key;
-			entry->mapEntries[resultIndex].value = value;
-			context->c->stackPointer -= 3;
 		} else if (command == T_EQUALS_LIST) {
 			if (context->c->stackPointer < 3) return -1;
 			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
@@ -6767,73 +6711,104 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 
 			context->c->stackIsManaged[context->c->stackPointer - 2] = false;
 			context->c->stackPointer--;
-		} else if (command == T_OP_DELETE_MAP_INT || command == T_OP_HAS_INT || command == T_INDEX_MAP_INT || command == T_OP_GET_INT) {
-			if (context->c->stackPointer < (uintptr_t) 2) return -1;
-			if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
-			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1;
-			uint64_t index = context->c->stack[context->c->stackPointer - 2].i;
-
-			if (!index) {
-				PrintError4(context, instructionPointer - 1, "The map is null.\n");
-				return 0;
-			}
-
-			if (context->heapEntriesAllocated <= index) return -1;
-			HeapEntry *entry = &context->heap[index];
-			if (entry->type != T_MAP_INT) return -1;
-
-			Value key = context->c->stack[context->c->stackPointer - 1];
-			Value value = { 0 };
-			bool found = false;
-
-			if (entry->mapLength) {
-				intptr_t low = 0;
-				intptr_t high = entry->mapLength - 1;
-
-				while (low <= high) {
-					uintptr_t average = ((high - low) >> 1) + low;
-
-					if (entry->mapEntries[average].key.i < key.i) {
-						high = average - 1;
-					} else if (entry->mapEntries[average].key.i > key.i) {
-						low = average + 1;
-					} else {
-						if (command == T_OP_DELETE_MAP_INT) {
-							entry->mapLength--;
-
-							for (uintptr_t i = average; i < entry->mapLength; i++) {
-								entry->mapEntries[i] = entry->mapEntries[i + 1];
-							}
-						} else {
-							value = entry->mapEntries[average].value;
-						}
-
-						found = true;
-						break;
-					}
-				}
-			}
-
-			if (command == T_INDEX_MAP_INT) {
-				context->c->stackIsManaged[context->c->stackPointer - 2] = entry->internalValuesAreManaged;
-				context->c->stack[context->c->stackPointer - 2] = value;
-			} else if (command == T_OP_GET_INT) {
-				// TODO Handle memory allocation failures here.
-				uintptr_t index = HeapAllocate(context);
-				context->heap[index].type = T_ERR;
-				context->heap[index].success = found;
-				context->heap[index].internalValuesAreManaged = entry->internalValuesAreManaged || !found;
-				if (found) context->heap[index].errorValue = value;
-				else context->heap[index].errorValue.i = 0; // TODO Allocate a message string; be careful with GC.
-
-				context->c->stackIsManaged[context->c->stackPointer - 2] = true;
-				context->c->stack[context->c->stackPointer - 2].i = index;
-			} else {
-				context->c->stackIsManaged[context->c->stackPointer - 2] = false;
-				context->c->stack[context->c->stackPointer - 2].i = found ? 1 : 0;
-			}
-
-			context->c->stackPointer--;
+#define HANDLE_MAP_BYTECODES(keyType, keyPrep, keyCompare) \
+		} else if (command == T_OP_DELETE_MAP_##keyType || command == T_OP_HAS_##keyType || command == T_EQUALS_MAP_##keyType \
+				|| command == T_INDEX_MAP_##keyType || command == T_OP_GET_##keyType) { \
+			if (context->c->stackPointer < (command == T_EQUALS_MAP_##keyType ? 3 : 2)) return -1; \
+			if (!context->c->stackIsManaged[context->c->stackPointer - 2]) return -1; \
+			uint64_t index = context->c->stack[context->c->stackPointer - 2].i; \
+			\
+			if (!index) { \
+				PrintError4(context, instructionPointer - 1, "The map is null.\n"); \
+				return 0; \
+			} \
+			\
+			if (context->heapEntriesAllocated <= index) return -1; \
+			HeapEntry *entry = &context->heap[index]; \
+			if (entry->type != T_MAP_##keyType) return -1; \
+			\
+			Value key = context->c->stack[context->c->stackPointer - 1]; \
+			Value value = { 0 }; \
+			uintptr_t resultIndex = 0; \
+			bool found = false; \
+			keyPrep; \
+			\
+			if (entry->mapLength) { \
+				intptr_t low = 0; \
+				intptr_t high = entry->mapLength - 1; \
+				\
+				while (low <= high) { \
+					uintptr_t average = ((high - low) >> 1) + low; \
+					keyCompare; \
+					\
+					if (lt) { \
+						high = average - 1; \
+					} else if (gt) { \
+						low = average + 1; \
+					} else { \
+						if (command == T_OP_DELETE_MAP_##keyType) { \
+							entry->mapLength--; \
+							\
+							for (uintptr_t i = average; i < entry->mapLength; i++) { \
+								entry->mapEntries[i] = entry->mapEntries[i + 1]; \
+							} \
+						} else { \
+							value = entry->mapEntries[average].value; \
+						} \
+						\
+						found = true; \
+						resultIndex = average; \
+						break; \
+					} \
+				} \
+				\
+				if (high < low) { \
+					Assert(!found); \
+					resultIndex = low; \
+				} \
+			} \
+			\
+			if (command == T_INDEX_MAP_##keyType) { \
+				context->c->stackIsManaged[context->c->stackPointer - 2] = entry->internalValuesAreManaged; \
+				context->c->stack[context->c->stackPointer - 2] = value; \
+			} else if (command == T_OP_GET_##keyType) { \
+				/* TODO handle memory allocation failures here */ \
+				/* TODO allocate a message string; be careful with GC */ \
+				uintptr_t index = HeapAllocate(context); \
+				context->heap[index].type = T_ERR; \
+				context->heap[index].success = found; \
+				context->heap[index].internalValuesAreManaged = entry->internalValuesAreManaged || !found; \
+				if (found) context->heap[index].errorValue = value; \
+				else context->heap[index].errorValue.i = 0; \
+				context->c->stackIsManaged[context->c->stackPointer - 2] = true; \
+				context->c->stack[context->c->stackPointer - 2].i = index; \
+			} else if (command == T_EQUALS_MAP_##keyType) { \
+				if (!found) { \
+					if (!entry->mapLength) { \
+						entry->mapLength = 1; \
+						entry->mapEntries = (MapEntry *) AllocateResize(NULL, sizeof(MapEntry)); \
+					} else { \
+						entry->mapLength++; \
+						entry->mapEntries = (MapEntry *) AllocateResize(entry->mapEntries, sizeof(MapEntry) * entry->mapLength); \
+						\
+						for (uintptr_t i = entry->mapLength - 1; i > resultIndex; i--) { \
+							entry->mapEntries[i] = entry->mapEntries[i - 1]; \
+						} \
+					} \
+				} \
+				\
+				if (entry->internalValuesAreManaged != context->c->stackIsManaged[context->c->stackPointer - 3]) return -1; \
+				entry->mapEntries[resultIndex].key = key; \
+				entry->mapEntries[resultIndex].value = context->c->stack[context->c->stackPointer - 3]; \
+				context->c->stackPointer -= 2; \
+			} else { \
+				context->c->stackIsManaged[context->c->stackPointer - 2] = false; \
+				context->c->stack[context->c->stackPointer - 2].i = found ? 1 : 0; \
+			} \
+			\
+			context->c->stackPointer -= 1
+			HANDLE_MAP_BYTECODES(INT, if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1, bool lt = entry->mapEntries[average].key.i < key.i; bool gt = entry->mapEntries[average].key.i > key.i);
+			HANDLE_MAP_BYTECODES(STR, STACK_READ_STRING(keyText, keyBytes, 1), const char *entryKeyText; size_t entryKeyBytes; ScriptHeapEntryToString(context, &context->heap[entry->mapEntries[average].key.i], &entryKeyText, &entryKeyBytes); int comparisonResult = StringCompareRaw(keyText, keyBytes, entryKeyText, entryKeyBytes); bool lt = comparisonResult < 0; bool gt = comparisonResult > 0);
 		} else if (command == T_OP_DISCARD || command == T_OP_ASSERT) {
 			if (context->c->stackPointer < 1) return -1;
 			if (!context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
@@ -7990,6 +7965,29 @@ int ExternalRandomInt(ExecutionContext *context, Value *returnValue) {
 	returnValue->i = (int64_t) (RandomU64() % (uint64_t) (max - min + 1)) + min;
 	context->c->stackPointer -= 2;
 	return EXTCALL_RETURN_UNMANAGED;
+}
+
+int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t length2) {
+	if (s1 == s2 && length1 == length2) return 0;
+
+	while (length1 || length2) {
+		if (!length1) return -1;
+		if (!length2) return 1;
+
+		char c1 = *s1;
+		char c2 = *s2;
+
+		if (c1 != c2) {
+			return (int) c1 - (int) c2;
+		}
+
+		length1--;
+		length2--;
+		s1++;
+		s2++;
+	}
+
+	return 0;
 }
 
 // --------------------------------- Platform layer.
@@ -9482,6 +9480,10 @@ const char *PathToPrettyName(const char *path) {
 }
 
 const char *PathToBaseDirectory(const char *path) {
+	if (!path) {
+		return "";
+	}
+
 	size_t stop = strlen(path);
 
 	for (uintptr_t i = 0; path[i]; i++) {

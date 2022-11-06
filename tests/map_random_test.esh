@@ -1,0 +1,26 @@
+void Start() {
+	int[] list = new int[];
+	int[int] map = new int[int];
+
+	int maxIndex = 100;
+	list:resize(maxIndex);
+
+	int rounds = 100000;
+
+	for int i = 0; i < rounds; i += 1 {
+		int key = RandomInt(0, maxIndex - 1);
+		int value = RandomInt(0, 9999);
+
+		if value > 5000 {
+			list[key] = 0;
+			map:delete(key);
+		} else {
+			list[key] = value;
+			map[key] = value;
+		}
+	}
+
+	for int i = 0; i < maxIndex; i += 1 {
+		assert map[i] == list[i];
+	}
+}

@@ -1,0 +1,38 @@
+void Start() {
+	int[str] x = [
+		"Hello" = 3,
+		"World" = 5,
+		"Test" = 10,
+	];
+
+	assert x["Hello"] == 3;
+	assert x["World"] == 5;
+	assert x["Test"] == 10;
+	assert x["Nice"] == 0;
+
+	assert x:get("Hello"):assert() == 3;
+	assert x:get("World"):assert() == 5;
+	assert x:get("Test"):assert() == 10;
+	assert !x:get("Nice"):success();
+
+	assert x:has("Hello");
+	assert x:has("World");
+	assert x:has("Test");
+	assert !x:has("Nice");
+
+	x["Hello"] = 4;
+	assert x:delete("World");
+	x["Test"] = 11;
+	assert !x:delete("Nice");
+	x["Nice"] = 1;
+
+	assert x:has("Hello");
+	assert !x:has("World");
+	assert x:has("Test");
+	assert x:has("Nice");
+
+	assert x["Hello"] == 4;
+	assert x["World"] == 0;
+	assert x["Test"] == 11;
+	assert x["Nice"] == 1;
+}
