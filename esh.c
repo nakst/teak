@@ -4,7 +4,6 @@
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
-// 	- Allow :assert() on err[void].
 // 	- struct inheritance.
 
 // TODO Possible language changes?
@@ -3287,9 +3286,6 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		if (op == T_OP_DEFAULT && ASTMatching(arguments[0], &globalExpressionTypeVoid)) {
 			PrintError2(tokenizer, node, "The 'default' operation cannot be used with error values of type void.\n");
 			return false;
-		} else if (op == T_OP_ASSERT_ERR && ASTMatching(expressionType->firstChild, &globalExpressionTypeVoid)) {
-			PrintError2(tokenizer, node, "The 'assert' operation cannot be used with error values of type void.\n");
-			return false;
 		}
 
 		if (op == T_OP_FIND_AND_DELETE && ASTMatching(arguments[0], &globalExpressionTypeStr)) {
@@ -4786,6 +4782,11 @@ bool FunctionBuilderRecurse(Tokenizer *tokenizer, Node *node, FunctionBuilder *b
 
 		if (node->operationType == T_OP_CAST) {
 			FunctionBuilderAppend(builder, &node->expressionType, sizeof(node->expressionType));
+		}
+
+		if (node->operationType == T_OP_ASSERT_ERR && ASTMatching(node->expressionType, &globalExpressionTypeVoid)) {
+			uint8_t b = T_POP;
+			FunctionBuilderAppend(builder, &b, sizeof(b));
 		}
 
 		return true;

@@ -1,0 +1,7 @@
+err[void] X() {
+	return new err[void] "oh no";
+}
+
+void Start() {
+	X():assert();
+}

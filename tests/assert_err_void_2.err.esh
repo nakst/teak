@@ -1,0 +1,7 @@
+err[void] X() {
+	return #success;
+}
+
+void Start() {
+	int x = X():assert();
+}
