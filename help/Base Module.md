@@ -144,10 +144,20 @@ str StringSlice(str x, int start, int end);
 // If trailing is true, k is appended at the end, as well as between strings.
 str StringJoin(str[] strings, str k, bool trailing);
 
-// Split the strings into an list of strings.
+// Split the string into an list of strings.
 // The character string should be a single byte, giving the delimeter character.
 // If includeEmptyString is false, then empty strings are not included in the output list.
 str[] StringSplitByCharacter(str string, str character, bool includeEmptyString);
+
+// Split the string into two parts, the string before the first instance of the needle,
+// and the string after the first instance of the needle. If the needle is not found,
+// the second part will be the empty string. The needle must not be the empty string.
+// For example, StringSplitFirst("a,b,c,d", ",") returns "a" and "b,c,d".
+tuple[str, str] StringSplitFirst(str string, str needle);
+
+// Identical to StringSplitFirst except the last instance of the needle is used.
+// For example, StringSplitLast("a,b,c,d", ",") returns "a,b,c" and "d".
+tuple[str, str] StringSplitLast(str string, str needle);
 
 // If the string starts with the given prefix, it is removed. Otherwise, the original string is returned.
 str StringRemoveOptionalPrefix(str s, str prefix);

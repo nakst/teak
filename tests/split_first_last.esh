@@ -1,0 +1,18 @@
+
+void Start() {
+	str a;
+	str b;
+	a, b = StringSplitFirst("a,b,c,d", ",");
+	assert a == "a";
+	assert b == "b,c,d";
+	a, b = StringSplitLast("a,b,c,d", ",");
+	assert a == "a,b,c";
+	assert b == "d";
+	a, b = StringSplitLast("abcd", ",");
+	assert a == "abcd";
+	assert b == "";
+	a, b = StringSplitFirst("a,b,,c,,d", ",,");
+	assert a == "a,b";
+	assert b == "c,,d";
+	assert StringParseInteger("-123"):assert() == -123;
+}

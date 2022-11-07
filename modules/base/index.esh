@@ -52,6 +52,20 @@ str[] StringSplitByCharacter(str string, str character, bool includeEmptyString)
 	return list;
 }
 
+tuple[str, str] StringSplitFirst(str s, str c) {
+	assert c != "";
+	int index = StringFindFirst(s, c);
+	if index == -1 { return s, ""; }
+	return s:slice(0, index), s:slice(index + c:len(), s:len());
+}
+
+tuple[str, str] StringSplitLast(str s, str c) {
+	assert c != "";
+	int index = StringFindLast(s, c);
+	if index == -1 { return s, ""; }
+	return s:slice(0, index), s:slice(index + c:len(), s:len());
+}
+
 str StringJoin(str[] strings, str k, bool trailing) {
 	str c = "";
 	for int i = 0; i < strings:len(); i += 1 {
@@ -245,6 +259,36 @@ err[float] StringParseFloat(str s) {
 	return -f if negate else f;
 }
 
+err[int] StringParseInteger(str s) {
+	// TODO Overflow checking.
+	// TODO Hexadecimal and binary strings.
+
+	bool negate = false;
+	bool first = true;
+	int i = 0;
+
+	for str c in s {
+		if c == "-" {
+			if first {
+				negate = true;
+			} else {
+				return new err[int] "INVALID_FORMAT";
+			}
+		} else if c == "_" {
+		} else {
+			if CharacterIsDigit(c) {
+				i *= 10;
+				i += c:byte(0) - "0":byte(0);
+			} else {
+				return new err[int] "INVALID_FORMAT";
+			}
+		}
+
+		first = false;
+	}
+
+	return -i if negate else i;
+}
 
 // Miscellaneous:
 

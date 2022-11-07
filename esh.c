@@ -45,14 +45,11 @@
 // 		- MathIsInfinite, MathIsNaN
 // 	- Lists: :sort, :clone, :clone_all
 // 	- Strings:
-// 		- StringParseAsFloat, StringParseAsInteger
 // 		- StringHashCRC32, StringHashCRC64, StringHashFNV1a
 // 		- StringCompareRaw, StringCompareLocale, StringToLowerLocale, StringToUpperLocale
 // 		- StringNormalizeUnicode, StringBase64Encode, StringBase64Decode, StringEscapeEncode, StringEscapeDecode
 // 		- StringUTF8IsValid, StringUTF8MakeValid (replace bad segments with replacement characters)
-// 		- StringSplitFirstByCharacter, StringSplitLastByCharacter (e.g. "a,b,c,d" gives "a" and "b,c,d")
 // 	- Process management.
-// 	- Imaging.
 // 	- Time and date.
 // 	- Data compression.
 // 	- Cryptography.
