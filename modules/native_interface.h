@@ -10,6 +10,7 @@ typedef void (*ScriptCloseHandleFunction)(struct ExecutionContext *context, void
 
 typedef struct ScriptNativeInterface {
 	bool (*CreateHandle)(struct ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle);
+	bool (*CreateStruct)(struct ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount, intptr_t *index);
 	void (*HeapRefClose)(struct ExecutionContext *context, intptr_t index);
 	bool (*ParameterBool)(struct ExecutionContext *context, bool *output);
 	bool (*ParameterCString)(struct ExecutionContext *context, char **output);
@@ -30,9 +31,10 @@ typedef struct ScriptNativeInterface {
 	bool (*ReturnInt)(struct ExecutionContext *context, int64_t input);
 	bool (*ReturnString)(struct ExecutionContext *context, const void *input, size_t inputBytes);
 	bool (*ReturnStruct)(struct ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount);
-	bool (*ReturnStructInl)(struct ExecutionContext *context, size_t fieldCount, ...);
+	bool (*ReturnStructInl)(struct ExecutionContext *context, size_t fieldCount, ...); // TODO Remove this!
 	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount, int64_t *returnValue, bool managedReturnValue);
 	bool (*StructReadInt32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, int32_t *output);
+	bool (*StructReadString)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, const void **output, size_t *outputBytes);
 	bool (*StructReadUint32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, uint32_t *output);
 } ScriptNativeInterface;
 
@@ -44,6 +46,7 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #else
 
 #define ScriptCreateHandle(...)     (scriptNativeInterface->CreateHandle    (__VA_ARGS__))
+#define ScriptCreateStruct(...)     (scriptNativeInterface->CreateStruct    (__VA_ARGS__))
 #define ScriptHeapRefClose(...)     (scriptNativeInterface->HeapRefClose    (__VA_ARGS__))
 #define ScriptParameterBool(...)    (scriptNativeInterface->ParameterBool   (__VA_ARGS__))
 #define ScriptParameterCString(...) (scriptNativeInterface->ParameterCString(__VA_ARGS__))
@@ -67,6 +70,7 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #define ScriptReturnStructInl(...)  (scriptNativeInterface->ReturnStructInl (__VA_ARGS__))
 #define ScriptRunCallback(...)      (scriptNativeInterface->RunCallback     (__VA_ARGS__))
 #define ScriptStructReadInt32(...)  (scriptNativeInterface->StructReadInt32 (__VA_ARGS__))
+#define ScriptStructReadString(...) (scriptNativeInterface->StructReadString(__VA_ARGS__))
 #define ScriptStructReadUint32(...) (scriptNativeInterface->StructReadUint32(__VA_ARGS__))
 
 const ScriptNativeInterface *scriptNativeInterface;

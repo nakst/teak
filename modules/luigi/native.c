@@ -22,13 +22,17 @@ typedef struct ElementWrapper {
 	UIElement *element;
 	uintptr_t referenceCount;
 	intptr_t messageUser;
-	intptr_t cp;
+	intptr_t messageClass;
+	intptr_t contextUser;
+	intptr_t contextClass;
+	char *cStringStore;
 } ElementWrapper;
 
 // TODO How should this be done properly?
 struct ExecutionContext *contextForCallback;
 
 intptr_t wrapPainterInAnytype;
+intptr_t wrapTableGetItemInAnytype;
 
 bool ReturnRectangle(struct ExecutionContext *context, UIRectangle rect) {
 	return ScriptReturnStructInl(context, 4, rect.l, false, rect.r, false, rect.t, false, rect.b, false);
@@ -42,14 +46,17 @@ void PainterWrapperClose(struct ExecutionContext *context, void *wrapper) {
 	free(wrapper);
 }
 
-void WrapperClose(struct ExecutionContext *context, void *_wrapper) {
+void ElementWrapperClose(struct ExecutionContext *context, void *_wrapper) {
 	ElementWrapper *wrapper = (ElementWrapper *) _wrapper;
 
 	wrapper->referenceCount--;
 
 	if (wrapper->referenceCount == 0) {
-		ScriptHeapRefClose(context, wrapper->messageUser);
-		ScriptHeapRefClose(context, wrapper->cp);
+		if (wrapper->messageUser)  ScriptHeapRefClose(context, wrapper->messageUser);
+		if (wrapper->messageClass) ScriptHeapRefClose(context, wrapper->messageClass);
+		if (wrapper->contextUser)  ScriptHeapRefClose(context, wrapper->contextUser);
+		if (wrapper->contextClass) ScriptHeapRefClose(context, wrapper->contextClass);
+		free(wrapper->cStringStore);
 		UI_ASSERT(!wrapper->element);
 		free(wrapper);
 	}
@@ -58,7 +65,7 @@ void WrapperClose(struct ExecutionContext *context, void *_wrapper) {
 bool WrapperOpen(struct ExecutionContext *context, ElementWrapper *wrapper, intptr_t *handle) {
 	UI_ASSERT(wrapper->referenceCount);
 	wrapper->referenceCount++;
-	return ScriptCreateHandle(context, wrapper, WrapperClose, handle);
+	return ScriptCreateHandle(context, wrapper, ElementWrapperClose, handle);
 }
 
 int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
@@ -69,41 +76,62 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 	}
 
 	int64_t returnValue = 0;
+	intptr_t handlers[2] = { wrapper->messageUser, wrapper->messageClass };
 
-	if (wrapper->messageUser) {
+	for (int handler = 0; handler < 2 && !returnValue; handler++) {
 		// TODO How to handle failures in here?
+
+		if (!handlers[handler]) continue;
 		
 		intptr_t elementHandle = -1;
 		if (!WrapperOpen(contextForCallback, wrapper, &elementHandle)) exit(1);
 
-		intptr_t dataHandle = -1;
+		intptr_t rawHandle = 0;
+		intptr_t dataHandle = 0;
 		void *dataWrapper = NULL;
 
 		if (message == UI_MSG_PAINT) {
 			PainterWrapper *painterWrapper = (PainterWrapper *) calloc(1, sizeof(PainterWrapper));
 			dataWrapper = painterWrapper;
 			painterWrapper->painter = (UIPainter *) dp;
-			intptr_t painterWrapperHandle;
-			if (!ScriptCreateHandle(contextForCallback, painterWrapper, PainterWrapperClose, &painterWrapperHandle)) exit(1);
-			int64_t parameters[1] = { (int64_t) painterWrapperHandle };
+			if (!ScriptCreateHandle(contextForCallback, painterWrapper, PainterWrapperClose, &rawHandle)) exit(1);
+			int64_t parameters[1] = { (int64_t) rawHandle };
 			bool managedParameters[4] = { true };
 			if (!ScriptRunCallback(contextForCallback, wrapPainterInAnytype, parameters, managedParameters, 1, &dataHandle, true)) exit(1);
-			ScriptHeapRefClose(contextForCallback, painterWrapperHandle);
+			ScriptHeapRefClose(contextForCallback, rawHandle);
+		} else if (message == UI_MSG_TABLE_GET_ITEM) {
+			UITableGetItem *m = (UITableGetItem *) dp;
+			int64_t fields[4] = { (int64_t) m->index, (int64_t) m->column, (int64_t) 0, (int64_t) 0 };
+			bool managedFields[4] = { false, false, true, false };
+			if (!ScriptCreateStruct(contextForCallback, fields, managedFields, 4, &rawHandle)) exit(1);
+			int64_t parameters[1] = { (int64_t) rawHandle };
+			bool managedParameters[4] = { true };
+			if (!ScriptRunCallback(contextForCallback, wrapTableGetItemInAnytype, parameters, managedParameters, 1, &dataHandle, true)) exit(1);
 		}
 
 		int64_t parameters[4] = { (int64_t) elementHandle, (int64_t) message, (int64_t) di, (int64_t) dataHandle };
 		bool managedParameters[4] = { true, false, false, true };
-		if (!ScriptRunCallback(contextForCallback, wrapper->messageUser, parameters, managedParameters, 4, &returnValue, false)) exit(1);
+		if (!ScriptRunCallback(contextForCallback, handlers[handler], parameters, managedParameters, 4, &returnValue, false)) exit(1);
 
 		if (message == UI_MSG_PAINT) {
 			((PainterWrapper *) dataWrapper)->painter = NULL;
+		} else if (message == UI_MSG_TABLE_GET_ITEM) {
+			UITableGetItem *m = (UITableGetItem *) dp;
+			const char *text;
+			size_t textBytes;
+			int32_t isSelected;
+			if (!ScriptStructReadString(contextForCallback, rawHandle, 2, (const void **) &text, &textBytes)) exit(1);
+			if (!ScriptStructReadInt32(contextForCallback, rawHandle, 3, &isSelected)) exit(1);
+			ScriptHeapRefClose(contextForCallback, rawHandle);
+			returnValue = m->bufferBytes > textBytes ? textBytes : m->bufferBytes;
+			memcpy(m->buffer, text, returnValue);
 		}
 
 		ScriptHeapRefClose(contextForCallback, elementHandle);
 	}
 
 	if (message == UI_MSG_DESTROY) {
-		WrapperClose(contextForCallback, wrapper);
+		ElementWrapperClose(contextForCallback, wrapper);
 		element->cp = NULL;
 		wrapper->element = NULL;
 		returnValue = 0;
@@ -130,6 +158,7 @@ ElementWrapper *WrapperCreate(UIElement *element) {
 
 LIBRARY_EXPORT bool ScriptExt_InternalInitialise(struct ExecutionContext *context) {
 	if (!ScriptParameterHeapRef(context, &wrapPainterInAnytype)) return false;
+	if (!ScriptParameterHeapRef(context, &wrapTableGetItemInAnytype)) return false;
 	UIInitialise();
 	return true;
 }
@@ -160,13 +189,30 @@ LIBRARY_EXPORT bool ScriptExtWindowCreate(struct ExecutionContext *context) {
 
 	if (success) {
 		UIWindow *window = UIWindowCreate(owner ? (UIWindow *) owner->element : NULL, flags, title, width, height);
-		success = ScriptReturnHandle(context, WrapperCreate(&window->e), WrapperClose);
+		success = ScriptReturnHandle(context, WrapperCreate(&window->e), ElementWrapperClose);
 	} else {
 		success = ScriptReturnHandle(context, NULL, NULL);
 	}
 
 	free(title);
 	return success;
+}
+
+LIBRARY_EXPORT bool ScriptExtElementCreate(struct ExecutionContext *context) {
+	ElementWrapper *parent;
+	uint32_t flags;
+	intptr_t messageClass;
+
+	if (!ScriptParameterHandle(context, (void **) &parent)
+			|| !ScriptParameterUint32(context, &flags)
+			|| !ScriptParameterHeapRef(context, &messageClass)) {
+		return false;
+	}
+
+	UIElement *element = UIElementCreate(sizeof(UIElement), parent->element, flags, WrapperMessage, "Custom");
+	ElementWrapper *wrapper = WrapperCreate(element);
+	wrapper->messageClass = messageClass;
+	return ScriptReturnHandle(context, wrapper, ElementWrapperClose);
 }
 
 #define SCRIPT_EXT_GET_FIELD(name, type, field, fieldType) \
@@ -199,7 +245,7 @@ LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { 
 		&& ScriptParameterString(context, (const void **) &string, &stringBytes); \
 	if (success) { \
 		UI##name *element = UI##name##Create(parent->element, flags, string, stringBytes); \
-		return ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose); \
 	} else { \
 		return ScriptReturnHandle(context, NULL, NULL); \
 	} \
@@ -212,17 +258,19 @@ SCRIPT_EXT_LABELLED_ELEMENT_CREATE(Label);
 LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { \
 	ElementWrapper *parent; \
 	uint32_t flags; \
-	char *tabs; \
+	char *cString; \
 	bool success = ScriptParameterHandle(context, (void **) &parent) \
 		&& ScriptParameterUint32(context, &flags) \
-		&& ScriptParameterCString(context, &tabs); \
+		&& ScriptParameterCString(context, &cString); \
 	if (success) { \
-		UI##name *element = UI##name##Create(parent->element, flags, tabs); \
-		success = ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		UI##name *element = UI##name##Create(parent->element, flags, cString); \
+		ElementWrapper *wrapper = WrapperCreate(&element->e); \
+		wrapper->cStringStore = cString; \
+		success = ScriptReturnHandle(context, wrapper, ElementWrapperClose); \
 	} else { \
 		success = ScriptReturnHandle(context, NULL, NULL); \
+		free(cString); \
 	} \
-	free(tabs); \
 	return success; \
 }
 SCRIPT_EXT_CSTRING_ELEMENT_CREATE(TabPane);
@@ -236,7 +284,7 @@ LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { 
 		&& ScriptParameterUint32(context, &flags); \
 	if (success) { \
 		UI##name *element = UI##name##Create(parent->element, flags); \
-		return ScriptReturnHandle(context, WrapperCreate(&element->e), WrapperClose); \
+		return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose); \
 	} else { \
 		return ScriptReturnHandle(context, NULL, NULL); \
 	} \
@@ -256,7 +304,7 @@ LIBRARY_EXPORT bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
 	uint32_t flags;
 	int32_t width, height;
 	return ScriptParameterScan(context, "huii", &parent, &flags, &width, &height)
-		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent->element, flags, width, height)->e), WrapperClose);
+		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent->element, flags, width, height)->e), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
@@ -264,7 +312,7 @@ LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 	uint32_t flags;
 	double weight;
 	return ScriptParameterScan(context, "huF", &parent, &flags, &weight)
-		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), WrapperClose);
+		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
@@ -296,12 +344,12 @@ LIBRARY_EXPORT bool ScriptExtElementGetClassName(struct ExecutionContext *contex
 
 LIBRARY_EXPORT bool ScriptExtElementGetWindow(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(&element->element->window->e), WrapperClose);
+	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(&element->element->window->e), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementGetParent(struct ExecutionContext *context) {
 	ElementWrapper *element;
-	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(element->element->parent), WrapperClose);
+	return ScriptParameterHandle(context, (void **) &element) && ScriptReturnHandle(context, WrapperCreate(element->element->parent), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementSetFlags(struct ExecutionContext *context) {
@@ -323,7 +371,7 @@ LIBRARY_EXPORT bool ScriptExtElementAnimate(struct ExecutionContext *context) {
 LIBRARY_EXPORT bool ScriptExtElementChangeParent(struct ExecutionContext *context) {
 	ElementWrapper *element, *newParent, *insertBefore;
 	return ScriptParameterScan(context, "hhh", &element, &newParent, &insertBefore) && ScriptReturnHandle(context, WrapperCreate(
-				UIElementChangeParent(element->element, newParent->element, insertBefore ? insertBefore->element : NULL)), WrapperClose);
+				UIElementChangeParent(element->element, newParent->element, insertBefore ? insertBefore->element : NULL)), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementDestroy(struct ExecutionContext *context) {
@@ -373,23 +421,39 @@ LIBRARY_EXPORT bool ScriptExtElementFindByPoint(struct ExecutionContext *context
 	ElementWrapper *element;
 	int32_t x, y;
 	return ScriptParameterScan(context, "hii", &element, &x, &y)
-		&& ScriptReturnHandle(context, WrapperCreate(UIElementFindByPoint(element->element, x, y)), WrapperClose);
+		&& ScriptReturnHandle(context, WrapperCreate(UIElementFindByPoint(element->element, x, y)), ElementWrapperClose);
 }
 
-LIBRARY_EXPORT bool ScriptExtElementSetContext(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementSetContextUser(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	intptr_t cp;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
 	if (!ScriptParameterHeapRef(context, &cp)) return false;
-	if (element->cp) ScriptHeapRefClose(context, element->cp);
-	element->cp = cp;
+	if (element->contextUser) ScriptHeapRefClose(context, element->contextUser);
+	element->contextUser = cp;
 	return true;
 }
 
-LIBRARY_EXPORT bool ScriptExtElementGetContext(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExtElementSetContextClass(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	intptr_t cp;
+	if (!ScriptParameterHandle(context, (void **) &element)) return false;
+	if (!ScriptParameterHeapRef(context, &cp)) return false;
+	if (element->contextClass) ScriptHeapRefClose(context, element->contextClass);
+	element->contextClass = cp;
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtElementGetContextUser(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	if (!ScriptParameterHandle(context, (void **) &element)) return false;
-	return ScriptReturnHeapRef(context, element->cp);
+	return ScriptReturnHeapRef(context, element->contextUser);
+}
+
+LIBRARY_EXPORT bool ScriptExtElementGetContextClass(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterHandle(context, (void **) &element)) return false;
+	return ScriptReturnHeapRef(context, element->contextClass);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementScreenBounds(struct ExecutionContext *context) {
@@ -669,4 +733,76 @@ LIBRARY_EXPORT bool ScriptExtPainterGetClip(struct ExecutionContext *context) {
 	UIRectangle invalid = UI_RECT_1(-1);
 	PainterWrapper *painter; if (!ScriptParameterScan(context, "h", &painter)) return false;
 	return ReturnRectangle(context, painter->painter ? painter->painter->clip : invalid);
+}
+
+LIBRARY_EXPORT bool ScriptExtMeasureStringWidth(struct ExecutionContext *context) {
+	const char *string; size_t stringBytes;
+	if (!ScriptParameterScan(context, "S", &string, &stringBytes)) return false;
+	return ScriptReturnInt(context, UIMeasureStringWidth(string, stringBytes));
+}
+
+LIBRARY_EXPORT bool ScriptExtMeasureStringHeight(struct ExecutionContext *context) {
+	return ScriptReturnInt(context, UIMeasureStringHeight());
+}
+
+LIBRARY_EXPORT bool ScriptExtAnimateClock(struct ExecutionContext *context) {
+	return ScriptReturnInt(context, UIAnimateClock());
+}
+
+LIBRARY_EXPORT bool ScriptExtWindowPack(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t width;
+	if (!ScriptParameterScan(context, "hi", &element, &width)) return false;
+	UIWindowPack((UIWindow *) element->element, width);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtWindowSetTextboxModifiedFlag(struct ExecutionContext *context) {
+	ElementWrapper *element; bool value;
+	if (!ScriptParameterScan(context, "hb", &element, &value)) return false;
+	((UIWindow *) element->element)->textboxModifiedFlag = value;
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtTableSetHighlightedColumn(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	((UITable *) element->element)->columnHighlight = index;
+	UIElementRepaint(element->element, NULL);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtTableSetItemCount(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	((UITable *) element->element)->itemCount = index;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtTableHitTest(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t x, y;
+	if (!ScriptParameterScan(context, "hii", &element, &x, &y)) return false;
+	return ScriptReturnInt(context, UITableHitTest((UITable *) element->element, x, y));
+}
+
+LIBRARY_EXPORT bool ScriptExtTableHeaderHitTest(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t x, y;
+	if (!ScriptParameterScan(context, "hii", &element, &x, &y)) return false;
+	return ScriptReturnInt(context, UITableHeaderHitTest((UITable *) element->element, x, y));
+}
+
+LIBRARY_EXPORT bool ScriptExtTableEnsureVisible(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	return ScriptReturnInt(context, UITableEnsureVisible((UITable *) element->element, index));
+}
+
+LIBRARY_EXPORT bool ScriptExtTableResizeColumns(struct ExecutionContext *context) {
+	bool alreadyHasContext = contextForCallback != NULL;
+	if (!alreadyHasContext) contextForCallback = context;
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	UITableResizeColumns((UITable *) element->element);
+	if (!alreadyHasContext) contextForCallback = NULL;
+	return true;
 }

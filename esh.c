@@ -7270,6 +7270,26 @@ bool ScriptParameterHandle(ExecutionContext *context, void **output) {
 	return true;
 }
 
+bool ScriptStructReadString(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, const void **output, size_t *outputBytes) {
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+
+	if (context->heap[index].type == T_STRUCT) {
+		Assert(fieldIndex < context->heap[index].fieldCount);
+		Assert(((uint8_t *) context->heap[index].fields)[-1 - fieldIndex]);
+		index = context->heap[index].fields[fieldIndex].i;
+		Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+		HeapEntry *entry = &context->heap[index];
+		ScriptHeapEntryToString(context, entry, (const char **) output, outputBytes);
+		return true;
+	} else if (context->heap[index].type == T_EOF) {
+		PrintError4(context, 0, "Structure is null.");
+		return false;
+	} else {
+		PrintError3("The script was malformed.\n");
+		return false;
+	}
+}
+
 bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int32_t *output) {
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
 
@@ -7359,22 +7379,29 @@ bool ScriptReturnString(ExecutionContext *context, const void *data, size_t byte
 	return true;
 }
 
-bool ScriptReturnStruct(ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount) {
-	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
-	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
-
+bool ScriptCreateStruct(ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount, intptr_t *_index) {
 	uintptr_t index = HeapAllocate(context); // TODO Handle memory allocation failures here.
 	context->heap[index].type = T_STRUCT;
 	size_t fieldCountAligned = (fieldCount + 7) & ~7;
 	context->heap[index].fields = (Value *) ((uint8_t *) AllocateResize(NULL, fieldCountAligned + fieldCount * sizeof(Value)) + fieldCountAligned);
 	context->heap[index].fieldCount = fieldCount;
-	context->c->returnValue.i = index;
+	context->heap[index].externalReferenceCount = 1;
 
 	for (uintptr_t i = 0; i < fieldCount; i++) {
 		context->heap[index].fields[i].i = fields[i];
 		((uint8_t *) context->heap[index].fields)[-1 - i] = managedFields[i];
 	}
 
+	*_index = index;
+	return true;
+}
+
+bool ScriptReturnStruct(ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount) {
+	Assert(context->c->returnValueType == EXTCALL_NO_RETURN);
+	context->c->returnValueType = EXTCALL_RETURN_MANAGED;
+	intptr_t index;
+	if (!ScriptCreateStruct(context, fields, managedFields, fieldCount, &index)) return false;
+	context->c->returnValue.i = index;
 	return true;
 }
 
@@ -7556,6 +7583,7 @@ bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer,
 
 const ScriptNativeInterface _scriptNativeInterface = {
 	.CreateHandle = ScriptCreateHandle,
+	.CreateStruct = ScriptCreateStruct,
 	.HeapRefClose = ScriptHeapRefClose,
 	.ParameterBool = ScriptParameterBool,
 	.ParameterCString = ScriptParameterCString,
@@ -7579,6 +7607,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnStructInl = ScriptReturnStructInl,
 	.RunCallback = ScriptRunCallback,
 	.StructReadInt32 = ScriptStructReadInt32,
+	.StructReadString = ScriptStructReadString,
 	.StructReadUint32 = ScriptStructReadUint32,
 };
 

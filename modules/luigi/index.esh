@@ -102,7 +102,7 @@ inttype MenuFlags {
 
 inttype Message {
 	// General messages.
-	MSG_PAINT = 0;
+	MSG_PAINT = 0; // dp:cast(Painter)
 	MSG_PAINT_FOREGROUND = 1;
 	MSG_LAYOUT = 2;
 	MSG_DESTROY = 3;
@@ -112,7 +112,7 @@ inttype Message {
 	MSG_SCROLLED = 7;
 	MSG_GET_WIDTH = 8;
 	MSG_GET_HEIGHT = 9;
-	MSG_GET_CHILD_STABILITY = 10;
+	MSG_GET_CHILD_STABILITY = 10; // dp:cast(Element)
 
 	// Input events.
 	MSG_INPUT_EVENTS_START = 11;
@@ -122,25 +122,25 @@ inttype Message {
 	MSG_MIDDLE_UP = 15;
 	MSG_RIGHT_DOWN = 16;
 	MSG_RIGHT_UP = 17;
-	MSG_KEY_TYPED = 18;
-	MSG_KEY_RELEASED = 19;
+	MSG_KEY_TYPED = 18; // dp:cast(KeyTyped)
+	MSG_KEY_RELEASED = 19; // dp:cast(KeyTyped)
 	MSG_MOUSE_MOVE = 20;
 	MSG_MOUSE_DRAG = 21;
 	MSG_MOUSE_WHEEL = 22;
 	MSG_CLICKED = 23;
 	MSG_GET_CURSOR = 24;
-	MSG_PRESSED_DESCENDENT = 25;
+	MSG_PRESSED_DESCENDENT = 25; // dp:cast(Element)
 	MSG_INPUT_EVENTS_END = 26;
 
 	// Specific elements.
 	MSG_VALUE_CHANGED = 27;
-	MSG_TABLE_GET_ITEM = 28;
+	MSG_TABLE_GET_ITEM = 28; // dp:cast(TableGetItem)
 	MSG_CODE_GET_MARGIN_COLOR = 29;
-	MSG_CODE_DECORATE_LINE = 30;
+	MSG_CODE_DECORATE_LINE = 30; // dp:cast(CodeDecorateLine)
 	MSG_TAB_SELECTED = 31;
 
 	// Windows.
-	MSG_WINDOW_DROP_FILES = 32;
+	MSG_WINDOW_DROP_FILES = 32; // dp:cast(str[])
 	MSG_WINDOW_ACTIVATE = 33;
 	MSG_WINDOW_CLOSE = 34;
 	MSG_WINDOW_UPDATE_START = 35;
@@ -268,7 +268,7 @@ Textbox TextboxCreate(Element parent, ElementFlags flags) #extcall;
 WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 
 Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
-// Element ElementCreate(Element parent, uint32_t flags, MessageCallback messageClass, str className) #extcall;
+Element ElementCreate(Element parent, ElementFlags flags, MessageCallback messageClass) #extcall;
 
 gm.Rectangle ElementScreenBounds(Element element) #extcall;
 // int ElementMessage(Element element, Message message, int di, MessageData dp) #extcall;
@@ -283,7 +283,8 @@ void ElementDestroyDescendents(Element element) #extcall;
 Element ElementFindByPoint(Element element, int x, int y) #extcall;
 void ElementFocus(Element element) #extcall;
 str ElementGetClassName(Element element) #extcall;
-anytype ElementGetContext(Element element) #extcall;
+anytype ElementGetContextUser(Element element) #extcall;
+anytype ElementGetContextClass(Element element) #extcall;
 ElementFlags ElementGetFlags(Element element) #extcall;
 Element ElementGetParent(Element element) #extcall;
 Window ElementGetWindow(Element element) #extcall;
@@ -292,7 +293,8 @@ void ElementRefresh(Element element) #extcall;
 void ElementRelayout(Element element) #extcall;
 void ElementSetFlags(Element element, ElementFlags flags) #extcall;
 void ElementSetMessageUser(Element element, MessageCallback callback) #extcall;
-void ElementSetContext(Element element, anytype context) #extcall;
+void ElementSetContextUser(Element element, anytype context) #extcall;
+void ElementSetContextClass(Element element, anytype context) #extcall;
 
 float WindowGetScale(Window window) #extcall;
 // Element WindowGetHoveredElement(Window window) #extcall;
@@ -302,12 +304,12 @@ int WindowGetPressedMouseButton(Window window) #extcall;
 int WindowGetCursorX(Window window) #extcall;
 int WindowGetCursorY(Window window) #extcall;
 bool WindowGetTextboxModifiedFlag(Window window) #extcall;
-// void WindowSetTextboxModifiedFlag(Window window, bool flag) #extcall;
+void WindowSetTextboxModifiedFlag(Window window, bool flag) #extcall;
 bool WindowIsCtrlHeld(Window window) #extcall;
 bool WindowIsShiftHeld(Window window) #extcall;
 bool WindowIsAltHeld(Window window) #extcall;
 // void WindowRegisterShortcut(Window window, Shortcut shortcut) #extcall;
-// void WindowPack(Window window, int width) #extcall;
+void WindowPack(Window window, int width) #extcall;
 
 void GaugeSetPosition(Gauge gauge, float value) #extcall;
 
@@ -331,12 +333,12 @@ CheckState CheckboxGetCheck(Checkbox checkbox) #extcall;
 // void TabPaneSetActive(TabPane pane, int index) #extcall;
 // int TabPaneGetActive(TabPane pane) #extcall;
 
-// void TableSetHighlightedColumn(Table table, int index) #extcall;
-// void TableSetItemCount(Table table, int count) #extcall;
-// int TableHitTest(Table table, int x, int y) #extcall; // Returns item index. Returns -1 if not on an item.
-// int TableHeaderHitTest(Table table, int x, int y) #extcall; // Returns column index or -1.
-// bool TableEnsureVisible(Table table, int index) #extcall; // Returns false if the item was already visible.
-// void TableResizeColumns(Table table) #extcall;
+void TableSetHighlightedColumn(Table table, int index) #extcall;
+void TableSetItemCount(Table table, int count) #extcall;
+int TableHitTest(Table table, int x, int y) #extcall; // Returns item index. Returns -1 if not on an item.
+int TableHeaderHitTest(Table table, int x, int y) #extcall; // Returns column index or -1.
+bool TableEnsureVisible(Table table, int index) #extcall; // Returns false if the item was already visible.
+void TableResizeColumns(Table table) #extcall;
 
 float SliderGetPosition(Slider slider) #extcall;
 void SliderSetPosition(Slider slider, float position, bool sendChangedMessage) #extcall;
@@ -422,10 +424,10 @@ void DrawBorder(Painter painter, gm.Rectangle r, int borderColor, gm.Rectangle b
 void DrawString(Painter painter, gm.Rectangle r, str string, int color, Align align, StringSelection selection) #extcall;
 int  DrawStringHighlighted(Painter painter, gm.Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
 
-// int MeasureStringWidth(str string) #extcall;
-// int MeasureStringHeight() #extcall;
+int MeasureStringWidth(str string) #extcall;
+int MeasureStringHeight() #extcall;
 
-// int AnimateClock() #extcall; // In ms.
+int AnimateClock() #extcall; // In ms.
 
 // Element ParentPush(Element element) #extcall;
 // Element ParentPop() #extcall;
@@ -435,7 +437,9 @@ int  DrawStringHighlighted(Painter painter, gm.Rectangle r, str string, int tabS
 // void MenuShow(Menu menu) #extcall;
 // bool MenuIsOpen() #extcall;
 
-functype anytype _InternalWrapPainterInAnytypeFunctype(Painter painter);
-anytype _InternalWrapPainterInAnytype(Painter painter) { anytype a = painter; return a; }
-void _InternalInitialise(_InternalWrapPainterInAnytypeFunctype wrapPainterInAnytype) #extcall;
-void Initialise() { _InternalInitialise(_InternalWrapPainterInAnytype); }
+functype anytype _InternalWrapPainterInAnytypeFunctype(Painter object);
+anytype _InternalWrapPainterInAnytype(Painter object) { anytype a = object; return a; }
+functype anytype _InternalWrapTableGetItemInAnytypeFunctype(TableGetItem object);
+anytype _InternalWrapTableGetItemInAnytype(TableGetItem object) { anytype a = object; return a; }
+void _InternalInitialise(_InternalWrapPainterInAnytypeFunctype wrap0, _InternalWrapTableGetItemInAnytypeFunctype wrap1) #extcall;
+void Initialise() { _InternalInitialise(_InternalWrapPainterInAnytype, _InternalWrapTableGetItemInAnytype); }
