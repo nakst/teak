@@ -9546,7 +9546,7 @@ const char *PathScriptEngine() {
 	if (result > 0 && result < MAX_PATH) {
 		char *utf8 = WideStringToUTF8(path);
 		char *fixed = AllocateFixed(strlen(utf8) + 1);
-		memcpy(fixed, utf8);
+		strcpy(fixed, utf8);
 		free(utf8);
 		free(path);
 		return fixed;
