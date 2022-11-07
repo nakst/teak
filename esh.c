@@ -59,7 +59,6 @@
 // 	- INI file format.
 // 	- Networking.
 // 	- Audio.
-// 	- Convert CharacterToByte, StringFromByte, StringSlice to :ops?
 
 // TODO Improvement of the scripting engine internals:
 // 	- Faster maps.
@@ -263,6 +262,9 @@
 #define T_OP_HAS_STR          (169)
 #define T_OP_GET_INT          (170)
 #define T_OP_GET_STR          (171)
+#define T_OP_BYTE             (172)
+#define T_OP_SLICE            (173)
+#define T_OP_STR              (174)
 
 // Keywords.
 #define T_IF                  (190)
@@ -581,6 +583,9 @@ bool ScriptLoad(Tokenizer tokenizer, ExecutionContext *context, ImportData *impo
 void ScriptFreeCoroutine(CoroutineState *c);
 uintptr_t HeapAllocate(ExecutionContext *context);
 int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t length2);
+int ExternalOpStringSlice(ExecutionContext *context, Value *returnValue);
+int ExternalOpCharacterToByte(ExecutionContext *context, Value *returnValue);
+int ExternalOpStringFromByte(ExecutionContext *context, Value *returnValue);
 
 // --------------------------------- Platform layer definitions.
 
@@ -627,7 +632,6 @@ char baseModuleSource[] = {
 	REGISTER(Log) REGISTER(LogOpenGroup) REGISTER(LogClose) \
 	REGISTER(TextColorError) REGISTER(TextColorHighlight) REGISTER(TextWeight) REGISTER(TextMonospaced) REGISTER(TextPlain) \
 	REGISTER(ConsoleGetLine) REGISTER(ConsoleWriteStdout) REGISTER(ConsoleWriteStderr) \
-	REGISTER(StringSlice) REGISTER(CharacterToByte) REGISTER(StringFromByte) \
 	REGISTER(SystemShellExecute) REGISTER(SystemShellExecuteWithWorkingDirectory) REGISTER(SystemShellEvaluate) REGISTER(SystemShellEnableLogging) \
 	REGISTER(SystemGetProcessorCount) REGISTER(SystemGetEnvironmentVariable) REGISTER(SystemSetEnvironmentVariable) REGISTER(SystemRunningAsAdministrator) REGISTER(SystemGetHostName) REGISTER(SystemSleepMs) REGISTER(SystemExit) \
 	REGISTER(PathCreateDirectory) REGISTER(PathDelete) REGISTER(PathExists) REGISTER(PathIsFile) REGISTER(PathIsDirectory) REGISTER(PathIsLink) REGISTER(PathMove) \
@@ -1382,7 +1386,8 @@ Node *ParseExpression(Tokenizer *tokenizer, bool allowAssignment, uint8_t preced
 			TokenNext(tokenizer);
 			Token operationName = TokenNext(tokenizer);
 
-			if (operationName.type != T_IDENTIFIER && operationName.type != T_ASSERT && operationName.type != T_FLOAT) {
+			if (operationName.type != T_IDENTIFIER && operationName.type != T_ASSERT 
+					&& operationName.type != T_FLOAT && operationName.type != T_STR) {
 				PrintError2(tokenizer, node, "Expected an identifier for the operation name after ':'.\n");
 				return NULL;
 			}
@@ -3216,6 +3221,9 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 		else if (isErr && KEYWORD("assert")) returnsItem = true, op = T_OP_ASSERT_ERR;
 		else if (isErr && KEYWORD("error")) returnsStr = true, op = T_OP_ERROR;
 		else if (isErr && KEYWORD("default")) arguments[0] = expressionType->firstChild, returnsItem = true, op = T_OP_DEFAULT; // TODO Warn if the expression has side effects.
+		else if (isStr && KEYWORD("byte")) returnsInt = true, arguments[0] = &globalExpressionTypeInt, op = T_OP_BYTE;
+		else if (isStr && KEYWORD("slice")) returnsStr = true, arguments[0] = arguments[1] = &globalExpressionTypeInt, op = T_OP_SLICE;
+		else if (isInt && KEYWORD("str")) returnsStr = true, op = T_OP_STR;
 
 		else if (isFuncPtr && KEYWORD("async")) {
 			if (expressionType->firstChild->firstChild) {
@@ -6809,6 +6817,12 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			context->c->stackPointer -= 1
 			HANDLE_MAP_BYTECODES(INT, if (context->c->stackIsManaged[context->c->stackPointer - 1]) return -1, bool lt = entry->mapEntries[average].key.i < key.i; bool gt = entry->mapEntries[average].key.i > key.i);
 			HANDLE_MAP_BYTECODES(STR, STACK_READ_STRING(keyText, keyBytes, 1), const char *entryKeyText; size_t entryKeyBytes; ScriptHeapEntryToString(context, &context->heap[entry->mapEntries[average].key.i], &entryKeyText, &entryKeyBytes); int comparisonResult = StringCompareRaw(keyText, keyBytes, entryKeyText, entryKeyBytes); bool lt = comparisonResult < 0; bool gt = comparisonResult > 0);
+		} else if (command == T_OP_SLICE || command == T_OP_BYTE || command == T_OP_STR) {
+			Value returnValue;
+			int result = (command == T_OP_SLICE ? ExternalOpStringSlice 
+					: command == T_OP_BYTE ? ExternalOpCharacterToByte : ExternalOpStringFromByte)(context, &returnValue);
+			if (result <= 0) return result;
+			if (!ScriptReturnErrors(context, result, returnValue)) return -1;
 		} else if (command == T_OP_DISCARD || command == T_OP_ASSERT) {
 			if (context->c->stackPointer < 1) return -1;
 			if (!context->c->stackIsManaged[context->c->stackPointer - 1]) return -1;
@@ -7888,13 +7902,13 @@ int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes
 	return result;
 }
 
-int ExternalStringSlice(ExecutionContext *context, Value *returnValue) {
+int ExternalOpStringSlice(ExecutionContext *context, Value *returnValue) {
 	if (context->c->stackPointer < 3) return -1;
-	STACK_POP_STRING(string, bytes);
 	uint64_t start = context->c->stack[--context->c->stackPointer].i;
 	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
 	uint64_t end = context->c->stack[--context->c->stackPointer].i;
 	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
+	STACK_POP_STRING(string, bytes);
 
 	if (start > bytes || end > bytes || end < start) {
 		PrintError4(context, 0, "The slice range (%ld..%ld) is invalid for the string of length %ld.\n",
@@ -7906,13 +7920,16 @@ int ExternalStringSlice(ExecutionContext *context, Value *returnValue) {
 	return EXTCALL_RETURN_MANAGED;
 }
 
-int ExternalCharacterToByte(ExecutionContext *context, Value *returnValue) {
+int ExternalOpCharacterToByte(ExecutionContext *context, Value *returnValue) {
+	if (context->c->stackPointer < 2) return -1;
+	uint64_t index = context->c->stack[--context->c->stackPointer].i;
+	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
 	STACK_POP_STRING(entryText, entryBytes);
-	returnValue->i = entryBytes ? ((uint8_t) entryText[0]) : -1;
+	returnValue->i = index < entryBytes ? ((uint8_t) entryText[index]) : -1;
 	return EXTCALL_RETURN_UNMANAGED;
 }
 
-int ExternalStringFromByte(ExecutionContext *context, Value *returnValue) {
+int ExternalOpStringFromByte(ExecutionContext *context, Value *returnValue) {
 	if (context->c->stackPointer < 1) return -1;
 	int64_t byte = context->c->stack[--context->c->stackPointer].i;
 	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;

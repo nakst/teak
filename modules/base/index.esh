@@ -17,9 +17,9 @@ str TextBold() { return TextWeight(700); }
 
 // String operations:
 
-str StringSlice(str x, int start, int end) #extcall;
-int CharacterToByte(str x) #extcall;
-str StringFromByte(int x) #extcall;
+str StringSlice(str x, int start, int end) { return x:slice(start, end); }
+int CharacterToByte(str x) { return x:byte(0); }
+str StringFromByte(int x) { return x:str(); }
 
 bool StringContains(str haystack, str needle) {
 	for int i = 0; i <= haystack:len() - needle:len(); i += 1 {
@@ -35,7 +35,7 @@ str StringTrim(str string) {
 	int end = string:len();
 	while start != end && (string[start] == " " || string[start] == "\t" || string[start] == "\r" || string[start] == "\n") { start += 1; }
 	while start != end && (string[end - 1] == " " || string[end - 1] == "\t" || string[end - 1] == "\r" || string[end - 1] == "\n") { end -= 1; }
-	return StringSlice(string, start, end);
+	return string:slice(start, end);
 }
 
 str[] StringSplitByCharacter(str string, str character, bool includeEmptyString) {
@@ -44,11 +44,11 @@ str[] StringSplitByCharacter(str string, str character, bool includeEmptyString)
 	int x = 0;
 	for int i = 0; i < string:len(); i += 1 {
 		if string[i] == character {
-			if (includeEmptyString || x != i) { list:add(StringSlice(string, x, i)); }
+			if (includeEmptyString || x != i) { list:add(string:slice(x, i)); }
 			x = i + 1;
 		}
 	}
-	if (includeEmptyString || x != string:len()) { list:add(StringSlice(string, x, string:len())); }
+	if (includeEmptyString || x != string:len()) { list:add(string:slice(x, string:len())); }
 	return list;
 }
 
@@ -62,16 +62,15 @@ str StringJoin(str[] strings, str k, bool trailing) {
 }
 
 bool StringEndsWith(str s, str x) { 
-	return s:len() >= x:len() && StringSlice(s, s:len() - x:len(), s:len()) == x; 
+	return s:len() >= x:len() && s:slice(s:len() - x:len(), s:len()) == x; 
 }
 bool StringStartsWith(str s, str x) { 
-	return s:len() >= x:len() && StringSlice(s, 0, x:len()) == x; 
+	return s:len() >= x:len() && s:slice(0, x:len()) == x; 
 }
 
 bool CharacterIsAlnum(str c) {
-	int b = CharacterToByte(c);
-	return (b >= CharacterToByte("A") && b <= CharacterToByte("Z")) || (b >= CharacterToByte("a") && b <= CharacterToByte("z"))
-		|| (b >= CharacterToByte("0") && b <= CharacterToByte("9"));
+	int b = c:byte(0);
+	return (b >= "A":byte(0) && b <= "Z":byte(0)) || (b >= "a":byte(0) && b <= "z":byte(0)) || (b >= "0":byte(0) && b <= "9":byte(0));
 }
 
 bool CharacterIsSpace(str c) { 
@@ -79,16 +78,16 @@ bool CharacterIsSpace(str c) {
 }
 
 bool CharacterIsDigit(str c) { 
-	int b = CharacterToByte(c); 
-	return b >= CharacterToByte("0") && b <= CharacterToByte("9"); 
+	int b = c:byte(0); 
+	return b >= "0":byte(0) && b <= "9":byte(0); 
 }
 
 str CharacterToUpperRaw(str c) {
-	int b = CharacterToByte(c);
+	int b = c:byte(0);
 
-	if b >= CharacterToByte("a") && b <= CharacterToByte("z") {
+	if b >= "a":byte(0) && b <= "z":byte(0) {
 		str upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-		return upper[b - CharacterToByte("a")];
+		return upper[b - "a":byte(0)];
 	} else {
 		return c;
 	}
@@ -105,11 +104,11 @@ str StringToUpperRaw(str s) {
 }
 
 str CharacterToLowerRaw(str c) {
-	int b = CharacterToByte(c);
+	int b = c:byte(0);
 
-	if b >= CharacterToByte("A") && b <= CharacterToByte("Z") {
+	if b >= "A":byte(0) && b <= "Z":byte(0) {
 		str lower = "abcdefghijklmnopqrstuvwxyz";
-		return lower[b - CharacterToByte("A")];
+		return lower[b - "A":byte(0)];
 	} else {
 		return c;
 	}
@@ -127,7 +126,7 @@ str StringToLowerRaw(str s) {
 
 str StringRemoveOptionalPrefix(str s, str prefix) { 
 	if StringStartsWith(s, prefix) { 
-		return StringSlice(s, prefix:len(), s:len()); 
+		return s:slice(prefix:len(), s:len()); 
 	} else { 
 		return s; 
 	} 
@@ -135,7 +134,7 @@ str StringRemoveOptionalPrefix(str s, str prefix) {
 
 str StringRemoveOptionalSuffix(str s, str suffix) { 
 	if StringEndsWith(s, suffix) { 
-		return StringSlice(s, 0, s:len() - suffix:len()); 
+		return s:slice(0, s:len() - suffix:len()); 
 	} else { 
 		return s; 
 	} 
@@ -169,13 +168,13 @@ int StringFindLast(str haystack, str needle) { return StringFind(haystack, needl
 str StringReplaceFirst(str haystack, str needle, str with) {
 	int index = StringFindFirst(haystack, needle);
 	if index == -1 { return haystack; }
-	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());
+	return haystack:slice(0, index) + with + haystack:slice(index + needle:len(), haystack:len());
 }
 
 str StringReplaceLast(str haystack, str needle, str with) {
 	int index = StringFindLast(haystack, needle);
 	if index == -1 { return haystack; }
-	return StringSlice(haystack, 0, index) + with + StringSlice(haystack, index + needle:len(), haystack:len());
+	return haystack:slice(0, index) + with + haystack:slice(index + needle:len(), haystack:len());
 }
 
 tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with) {
@@ -185,10 +184,10 @@ tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with) {
 	while true {
 		int index = StringFind(haystack, needle, position, false);
 		if index == -1 {
-			result += StringSlice(haystack, position, haystack:len());
+			result += haystack:slice(position, haystack:len());
 			return result, count;
 		}
-		result += StringSlice(haystack, position, index) + with;
+		result += haystack:slice(position, index) + with;
 		position = index + needle:len();
 		count += 1;
 	}
@@ -226,7 +225,7 @@ err[float] StringParseFloat(str s) {
 		} else if c == "_" {
 		} else if dot {
 			if CharacterIsDigit(c) {
-				f += (CharacterToByte(c) - CharacterToByte("0")):float() * m;
+				f += (c:byte(0) - "0":byte(0)):float() * m;
 				m *= 0.1;
 			} else {
 				return new err[float] "INVALID_FORMAT";
@@ -234,7 +233,7 @@ err[float] StringParseFloat(str s) {
 		} else {
 			if CharacterIsDigit(c) {
 				f *= 10.0;
-				f += (CharacterToByte(c) - CharacterToByte("0")):float();
+				f += (c:byte(0) - "0":byte(0)):float();
 			} else {
 				return new err[float] "INVALID_FORMAT";
 			}
@@ -359,7 +358,7 @@ err[str[]] DirectoryEnumerateFiltered(str sourceDirectory, str[] filter, int fil
 	return filteredItems;
 }
 
-str PathTrimTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == "/" { return StringSlice(x, 0, x:len() - 1); } return x; }
+str PathTrimTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == "/" { return x:slice(0, x:len() - 1); } return x; }
 str PathEnsureTrailingSlash(str x) { if x:len() > 0 && x[x:len() - 1] == "/" { return x; } return x + "/"; }
 
 err[void] PathDeleteRecursively(str path) {
@@ -489,7 +488,7 @@ bool PathMatchesFilter(str path, str[] filterComponents, int _filterWildcard) {
 str PathGetLeadingDirectories(str path) {
 	for int i = path:len() - 1; i >= 0; i -= 1 {
 		if path[i] == "/" {
-			return StringSlice(path, 0, i);
+			return path:slice(0, i);
 		}
 	}
 
@@ -499,7 +498,7 @@ str PathGetLeadingDirectories(str path) {
 err[void] PathCreateLeadingDirectories(str path) {
 	for int i = 0; i < path:len(); i += 1 {
 		if path[i] == "/" {
-			PathCreateDirectory(StringSlice(path, 0, i));
+			PathCreateDirectory(path:slice(0, i));
 		}
 	}
 
@@ -686,7 +685,7 @@ int _StringUTF8CodepointLength(int c) {
 
 int StringUTF8Advance(str x, int i) {
 	if i == -1 { return -1; }
-	int c0 = CharacterToByte(x[i + 0]);
+	int c0 = x:byte(i);
 	int length = _StringUTF8CodepointLength(c0);
 	if length == 0 || i + length > x:len() { return -1; }
 	return i + length;
@@ -698,7 +697,7 @@ int StringUTF8Retreat(str x, int i) {
 	int j = i;
 	while j >= 1 {
 		j -= 1;
-		int k = CharacterToByte(x[j]);
+		int k = x:byte(j);
 		if (k & 0xC0) != 0x80 { return j if j + _StringUTF8CodepointLength(k) == i else -1; }
 	}
 	return -1;
@@ -717,17 +716,17 @@ int StringUTF8Count(str x) {
 
 int StringUTF8Decode(str x, int i) {
 	if i == -1 { return 0xFFFD; }
-	int c0 = CharacterToByte(x[i + 0]);
+	int c0 = x:byte(i);
 	int length = _StringUTF8CodepointLength(c0);
 	if length == 0 || i + length > x:len() { return 0xFFFD; }
 	if length == 1 { return c0; }
-	int c1 = CharacterToByte(x[i + 1]);
+	int c1 = x:byte(i + 1);
 	if (c1 & 0xC0) != 0x80 { return 0xFFFD; }
 	if length == 2 { return ((c0 & 0x1F) << 6) | (c1 & 0x3F); }
-	int c2 = CharacterToByte(x[i + 2]);
+	int c2 = x:byte(i + 2);
 	if (c2 & 0xC0) != 0x80 { return 0xFFFD; }
 	if length == 3 { return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F); }
-	int c3 = CharacterToByte(x[i + 3]);
+	int c3 = x:byte(i + 3);
 	if (c3 & 0xC0) != 0x80 { return 0xFFFD; }
 	if length == 4 { return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F); }
 	assert false;
@@ -735,14 +734,14 @@ int StringUTF8Decode(str x, int i) {
 
 str StringUTF8Encode(int value) {
 	if value < 0x80 {
-		return StringFromByte(value);
+		return value:str();
 	} else if value < 0x800 {
-		return StringFromByte(0xC0 | ((value >> 6) & 0x1F)) + StringFromByte(0x80 | (value & 0x3F));
+		return (0xC0 | ((value >> 6) & 0x1F)):str() + (0x80 | (value & 0x3F)):str();
 	} else if value < 0x10000 {
-		return StringFromByte(0xE0 | ((value >> 12) & 0x0F)) + StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));
+		return (0xE0 | ((value >> 12) & 0x0F)):str() + (0x80 | ((value >> 6) & 0x3F)):str() + (0x80 | (value & 0x3F)):str();
 	} else if value < 0x200000 {
-		return StringFromByte(0xF0 | (value >> 18)) + StringFromByte(0x80 | ((value >> 12) & 0x3F)) 
-			+ StringFromByte(0x80 | ((value >> 6) & 0x3F)) + StringFromByte(0x80 | (value & 0x3F));
+		return (0xF0 | (value >> 18)):str() + (0x80 | ((value >> 12) & 0x3F)):str() 
+			+ (0x80 | ((value >> 6) & 0x3F)):str() + (0x80 | (value & 0x3F)):str();
 	} else {
 		return StringUTF8Encode(0xFFFD);
 	}

@@ -7,14 +7,6 @@ The base module is automatically imported into all scripts. You don't need to us
 ## Strings and characters — conversions
 
 ```c
-// Extract the byte value (0-255) of the one byte string.
-// If the string is longer than a byte, the first byte is used.
-// If the string is empty, -1 is returned.
-int CharacterToByte(str x);
-
-// Convert the byte value (0-255) to a one byte string.
-str StringFromByte(int x);
-
 // Convert string to uppercase or lowercase.
 // These treat the strings as ASCII, mapping between [a-z] and [A-Z] only.
 str StringToLowerRaw(str s);
@@ -27,6 +19,16 @@ str StringTrim(str s);
 // Parse the string as a floating point number.
 // The error string "INVALID_FORMAT" indicates it was not a floating point number.
 err[float] StringParseFloat(str s);
+
+// *Deprecated* Use int str:byte(int index) instead.
+// Extract the byte value (0-255) of the one byte string.
+// If the string is longer than a byte, the first byte is used.
+// If the string is empty, -1 is returned.
+int CharacterToByte(str x);
+
+// *Deprecated* Use str int:str() instead.
+// Convert the byte value (0-255) to a one byte string.
+str StringFromByte(int x);
 ```
 
 ## Strings and characters — UTF-8
@@ -133,6 +135,7 @@ tuple[str, int] StringReplaceAllWithCount(str haystack, str needle, str with);
 ## Strings and characters — joining and splitting
 
 ```c
+// *Deprecated* Use str str:slice(int start, int end) instead.
 // Returns a range of the bytes in the string.
 str StringSlice(str x, int start, int end);
 

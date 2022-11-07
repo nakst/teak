@@ -50,12 +50,19 @@ void Start() {
 	// You can index specific byte from a string.
 	str s1 = s0[5];
 	Log("%s1%"); // Prints g.
+	// You can slice ranges from a string.
+	Log(StringSlice(s0, 1 /* start */, 3 /* end */)); // Prints tr.
 	// You can concatenate strings with the add operator.
 	str s2 = s1 + s0;
 	Log("%s2%"); // Prints gString.
 	// String equality comparison compares the individual bytes of the strings.
 	// No Unicode normalization or validating is done to either string.
 	assert "Hello" == "Hel" + "lo";
+
+	// You can get the value of a byte in the string.
+	int byteValue = s0:byte(1);
+	// And convert byte values to one-byte strings.
+	str oneByteString = byteValue:str();
 
 //////////////////////////////// LOGIC ////////////////////////////////
 

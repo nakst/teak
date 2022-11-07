@@ -223,7 +223,7 @@ Object ReadObject() {
 				inputPosition += 1;
 			}
 
-			str text = StringSlice(input, start, inputPosition);
+			str text = input:slice(start, inputPosition);
 
 			if isInteger && text != "-" {
 				// TODO Detecting overflow.
@@ -236,7 +236,7 @@ Object ReadObject() {
 						negate = true;
 					} else {
 						value *= 10;
-						value += CharacterToByte(d) - CharacterToByte("0");
+						value += d:byte(0) - "0":byte(0);
 					}
 				}
 
@@ -528,7 +528,7 @@ Object DoBuiltinSubstr(Parameters p) {
 		SystemExit(1);
 	}
 
-	return [ type = OBJ_STRING, string = StringSlice(s, a, b) ]; 
+	return [ type = OBJ_STRING, string = s:slice(a, b) ]; 
 }
 
 Object DoBuiltinAppend(Parameters p) {
