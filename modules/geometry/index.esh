@@ -1,0 +1,54 @@
+struct Rectangle {
+	int l;
+	int r;
+	int t;
+	int b;
+};
+
+Rectangle Rectangle1(int x) { return [ l = x, r = x, t = x, b = x ]; }
+Rectangle Rectangle1I(int x) { return [ l = x, r = -x, t = x, b = -x ]; }
+Rectangle Rectangle2(int x, int y) { return [ l = x, r = x, t = y, b = y ]; }
+Rectangle Rectangle2I(int x, int y) { return [ l = x, r = -x, t = y, b = -y ]; }
+Rectangle Rectangle2S(int x, int y) { return [ l = 0, r = x, t = 0, b = y ]; }
+Rectangle Rectangle4(int x, int y, int z, int w) { return [ l = x, r = y, t = z, b = w ]; }
+Rectangle Rectangle4PD(int x, int y, int w, int h) { return [ l = x, r = x + w, t = y, b = y + h ]; }
+int RectangleWidth(Rectangle r) { return r.r - r.l; }
+int RectangleHeight(Rectangle r) { return r.b - r.t; }
+int RectangleTotalH(Rectangle r) { return r.r + r.l; }
+int RectangleTotalV(Rectangle r) { return r.b + r.t; }
+bool RectangleValid(Rectangle r) { return r.l < r.r && r.t < r.b; }
+bool RectangleContains(Rectangle a, int x, int y) { return a.l <= x && a.r > x && a.t <= y && a.b > y; } 
+bool RectangleEquals(Rectangle a, Rectangle b) { return a.l == b.l && a.r == b.r && a.t == b.t && a.b == b.b; }
+Rectangle RectangleAdd(Rectangle a, Rectangle b) { return [ l = a.l + b.l, r = a.r + b.r, t = a.t + b.t, b = a.b + b.b ]; }
+Rectangle RectangleIntersection(Rectangle a, Rectangle b) { return [ l = IntegerMaximum(a.l, b.l), r = IntegerMinimum(a.r, b.r), t = IntegerMaximum(a.t, b.t), b = IntegerMinimum(a.b, b.b) ]; }
+Rectangle RectangleBounding(Rectangle a, Rectangle b) { return [ l = IntegerMinimum(a.l, b.l), r = IntegerMaximum(a.r, b.r), t = IntegerMinimum(a.t, b.t), b = IntegerMaximum(a.b, b.b) ]; }
+Rectangle RectangleTranslate(Rectangle a, Rectangle b) { return [ l = a.l + b.l, r = a.r + b.l, t = a.t + b.t, b = a.b + b.t ]; }
+
+Rectangle RectangleCenter(Rectangle parent, Rectangle child) {
+	int childWidth = RectangleWidth(child);
+	int childHeight = RectangleHeight(child);
+	int parentWidth = RectangleWidth(parent);
+	int parentHeight = RectangleHeight(parent);
+	return Rectangle4PD(parentWidth / 2 - childWidth / 2 + parent.l, parentHeight / 2 - childHeight / 2 + parent.t, childWidth, childHeight);
+}
+
+Rectangle RectangleFit(Rectangle parent, Rectangle child, bool allowScalingUp) {
+	int childWidth = RectangleWidth(child);
+	int childHeight = RectangleHeight(child);
+	int parentWidth = RectangleWidth(parent);
+	int parentHeight = RectangleHeight(parent);
+
+	if childWidth < parentWidth && childHeight < parentHeight && !allowScalingUp {
+		return RectangleCenter(parent, child);
+	}
+
+	float childAspectRatio = childWidth:float() / childHeight:float();
+	int childMaximumWidth = (parentHeight:float() * childAspectRatio):truncate();
+	int childMaximumHeight = (parentWidth:float() / childAspectRatio):truncate();
+
+	if childMaximumWidth > parentWidth {
+		return RectangleCenter(parent, Rectangle2S(parentWidth, childMaximumHeight));
+	} else {
+		return RectangleCenter(parent, Rectangle2S(childMaximumWidth, parentHeight));
+	}
+}

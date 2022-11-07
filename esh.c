@@ -27,7 +27,7 @@
 // 	- Win32: use the Unicode APIs for file system access. 
 
 // TODO Standard library:
-// 	> Rectangle type in base module. Progress on Luigi module.
+// 	> Progress on Luigi module.
 // 	- Accounting for path separator differences?
 // 	- Versions of copy/move that refuse to overwrite; versions of path create/delete that ignore if the item already (doesn't) exist(s).
 // 	- Floats: 

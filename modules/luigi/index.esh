@@ -1,4 +1,5 @@
 #library "module_luigi";
+#import "core:modules/geometry" gm;
 
 handletype Element;
 handletype Button       : Element;
@@ -184,13 +185,6 @@ inttype UpdateCode {
 	UPDATE_DISABLED = 4;
 };
 
-struct Rectangle {
-	int l;
-	int r;
-	int t;
-	int b;
-};
-
 struct Shortcut {
 	int code;
 	bool ctrl;
@@ -213,7 +207,7 @@ struct KeyTyped {
 };
 
 struct CodeDecorateLine {
-	Rectangle bounds;
+	gm.Rectangle bounds;
 	int index;
 	int x;
 	int y;
@@ -262,7 +256,7 @@ Checkbox CheckboxCreate(Element parent, CheckboxFlags flags, str label) #extcall
 Code CodeCreate(Element parent, CodeFlags flags) #extcall;
 Gauge GaugeCreate(Element parent, GaugeFlags flags) #extcall;
 Label LabelCreate(Element parent, ElementFlags flags, str label) #extcall;
-// MDIChild MDIChildCreate(Element parent, ElementFlags flags, Rectangle initialBounds, str title) #extcall;
+// MDIChild MDIChildCreate(Element parent, ElementFlags flags, gm.Rectangle initialBounds, str title) #extcall;
 MDIClient MDIClientCreate(Element parent, MDIClientFlags flags) #extcall;
 Panel PanelCreate(Element parent, PanelFlags flags) #extcall;
 ScrollBar ScrollBarCreate(Element parent, ScrollBarFlags flags) #extcall;
@@ -278,12 +272,12 @@ WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
 // Element ElementCreate(Element parent, uint32_t flags, MessageCallback messageClass, str className) #extcall;
 
-Rectangle ElementScreenBounds(Element element) #extcall;
+gm.Rectangle ElementScreenBounds(Element element) #extcall;
 // int ElementMessage(Element element, Message message, int di, MessageData dp) #extcall;
-void ElementMove(Element element, Rectangle bounds, bool alwaysLayout) #extcall;
-void ElementRepaint(Element element, Rectangle region) #extcall;
-Rectangle ElementWindowBounds(Element element) #extcall;
-Rectangle ElementGetClip(Element element) #extcall;
+void ElementMove(Element element, gm.Rectangle bounds, bool alwaysLayout) #extcall;
+void ElementRepaint(Element element, gm.Rectangle region) #extcall;
+gm.Rectangle ElementWindowBounds(Element element) #extcall;
+gm.Rectangle ElementGetClip(Element element) #extcall;
 bool ElementAnimate(Element element, bool stop) #extcall;
 Element ElementChangeParent(Element element, Element newParent, Element insertBefore) #extcall;
 void ElementDestroy(Element element) #extcall;
@@ -326,7 +320,7 @@ void LabelSetContent(Label label, str string) #extcall;
 
 // void SwitcherSwitchTo(Switcher switcher, Element child) #extcall;
 
-void PanelSetSpacing(Panel panel, Rectangle border, int gap) #extcall;
+void PanelSetSpacing(Panel panel, gm.Rectangle border, int gap) #extcall;
 
 inttype CheckState { CHECK_UNCHECKED = 0; CHECK_CHECKED = 1; CHECK_INDETERMINATE = 2; };
 void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;
@@ -371,35 +365,14 @@ void TextboxSetCaretPosition(Textbox textbox, int index) #extcall;
 
 // MDIChild MDIClientGetActiveChild(MDIClient cli #extcallent);
 // void MDIClientSetActiveChild(MDIClient client, MDIChil #extcalld child);
-// Rectangle MDIChildGetBounds(MDIChild child) #extcall;
-// void MDIChildSetBounds(MDIChild child, Rectangle bo #extcallunds);
+// gm.Rectangle MDIChildGetBounds(MDIChild child) #extcall;
+// void MDIChildSetBounds(MDIChild child, gm.Rectangle bo #extcallunds);
 // void MDIChildSetTitle(MDIChild child, str title) #extcall;
 
 // void ScrollBarSetMaximumPosition(ScrollBar bar, int maximum) #extcall;
 // void ScrollBarSetPageSize(ScrollBar bar, int page) #extcall;
 // void ScrollBarSetPosition(ScrollBar bar, float position) #extcall;
 // float ScrollBarGetPosition(ScrollBar bar) #extcall;
-
-Rectangle RECT_1(int x) { return [ l = x, r = x, t = x, b = x ]; }
-Rectangle RECT_1I(int x) { return [ l = x, r = -x, t = x, b = -x ]; }
-Rectangle RECT_2(int x, int y) { return [ l = x, r = x, t = y, b = y ]; }
-Rectangle RECT_2I(int x, int y) { return [ l = x, r = -x, t = y, b = -y ]; }
-Rectangle RECT_2S(int x, int y) { return [ l = 0, r = x, t = 0, b = y ]; }
-Rectangle RECT_4(int x, int y, int z, int w) { return [ l = x, r = y, t = z, b = w ]; }
-Rectangle RECT_4PD(int x, int y, int w, int h) { return [ l = x, r = x + w, t = y, b = y + h ]; }
-int RECT_WIDTH(Rectangle r) { return r.r - r.l; }
-int RECT_HEIGHT(Rectangle r) { return r.b - r.t; }
-int RECT_TOTAL_H(Rectangle r) { return r.r + r.l; }
-int RECT_TOTAL_V(Rectangle r) { return r.b + r.t; }
-bool RECT_VALID(Rectangle r) { return r.l < r.r && r.t < r.b; }
-bool RectangleContains(Rectangle a, int x, int y) #extcall;
-bool RectangleEquals(Rectangle a, Rectangle b) #extcall;
-Rectangle RectangleAdd(Rectangle a, Rectangle b) #extcall;
-Rectangle RectangleIntersection(Rectangle a, Rectangle b) #extcall;
-Rectangle RectangleBounding(Rectangle a, Rectangle b) #extcall;
-Rectangle RectangleTranslate(Rectangle a, Rectangle b) #extcall;
-Rectangle RectangleCenter(Rectangle parent, Rectangle child) #extcall;
-Rectangle RectangleFit(Rectangle parent, Rectangle child, bool allowScalingUp) #extcall;
 
 int KeycodeBackspace() #extcall;
 int KeycodeDelete() #extcall;
@@ -439,17 +412,17 @@ int ColorFromFloat01(float a, float r, float g, float b) { return ((a * 255.0):t
 // int FontGetGlyphWidth(Font font) #extcall;
 // int FontGetGlyphHeight(Font font) #extcall;
 
-// void DrawBlock(Painter painter, Rectangle rectangle, int color) #extcall;
+// void DrawBlock(Painter painter, gm.Rectangle rectangle, int color) #extcall;
 // void DrawCircle(Painter painter, int centerX, int centerY, int radius, int fillColor, int outlineColor, bool hollow) #extcall;
-// void DrawInvert(Painter painter, Rectangle rectangle) #extcall;
+// void DrawInvert(Painter painter, gm.Rectangle rectangle) #extcall;
 // bool DrawLine(Painter painter, int x0, int y0, int x1, int y1, int color) #extcall; // Returns false if the line was not visible.
 // void DrawTriangle(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
 // void DrawTriangleOutline(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
 // void DrawGlyph(Painter painter, int x, int y, int c, int color) #extcall;
-// void DrawRectangle(Painter painter, Rectangle r, int mainColor, int borderColor, Rectangle borderSize) #extcall;
-// void DrawBorder(Painter painter, Rectangle r, int borderColor, Rectangle borderSize) #extcall;
-// void DrawString(Painter painter, Rectangle r, str string, int color, int align, StringSelection selection) #extcall;
-// int  DrawStringHighlighted(Painter painter, Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
+// void DrawRectangle(Painter painter, gm.Rectangle r, int mainColor, int borderColor, gm.Rectangle borderSize) #extcall;
+// void DrawBorder(Painter painter, gm.Rectangle r, int borderColor, gm.Rectangle borderSize) #extcall;
+// void DrawString(Painter painter, gm.Rectangle r, str string, int color, int align, StringSelection selection) #extcall;
+// int  DrawStringHighlighted(Painter painter, gm.Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
 
 // int MeasureStringWidth(str string) #extcall;
 // int MeasureStringHeight() #extcall;

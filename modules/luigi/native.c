@@ -532,38 +532,6 @@ LIBRARY_EXPORT bool ScriptExtCheckboxSetCheck(struct ExecutionContext *context) 
 	return true;
 }
 
-LIBRARY_EXPORT bool ScriptExtRectangleContains(struct ExecutionContext *context) {
-	UIRectangle rect;
-	int32_t x, y;
-	return ScriptParameterScan(context, "(iiii)ii", &rect.l, &rect.r, &rect.t, &rect.b, &x, &y)
-		&& ScriptReturnInt(context, UIRectangleContains(rect, x, y));
-}
-
-LIBRARY_EXPORT bool ScriptExtRectangleEquals(struct ExecutionContext *context) {
-	UIRectangle rect1, rect2;
-	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b)
-		&& ScriptReturnInt(context, UIRectangleEquals(rect1, rect2));
-}
-
-#define SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(name) \
-LIBRARY_EXPORT bool ScriptExtRectangle##name(struct ExecutionContext *context) { \
-	UIRectangle rect1, rect2; \
-	return ScriptParameterScan(context, "(iiii)(iiii)", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b) \
-		&& ReturnRectangle(context, UIRectangle##name(rect1, rect2)); \
-}
-SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Add);
-SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Intersection);
-SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Bounding);
-SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Translate);
-SCRIPT_EXT_RECTANGLE_BINARY_OPERATOR(Center);
-
-LIBRARY_EXPORT bool ScriptExtRectangleFit(struct ExecutionContext *context) {
-	UIRectangle rect1, rect2;
-	bool allowScalingUp;
-	return ScriptParameterScan(context, "(iiii)(iiii)b", &rect1.l, &rect1.r, &rect1.t, &rect1.b, &rect2.l, &rect2.r, &rect2.t, &rect2.b, &allowScalingUp)
-		&& ReturnRectangle(context, UIRectangleFit(rect1, rect2, allowScalingUp));
-}
-
 LIBRARY_EXPORT bool ScriptExtKeycodeBackspace(struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_BACKSPACE); }
 LIBRARY_EXPORT bool ScriptExtKeycodeDelete   (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DELETE   ); }
 LIBRARY_EXPORT bool ScriptExtKeycodeDown     (struct ExecutionContext *context) { return ScriptReturnInt(context, UI_KEYCODE_DOWN     ); }
