@@ -21,17 +21,16 @@
 // 	- Debugging.
 
 // TODO Scripting engine features:
-// 	- Implement logging for:
-//			w     write file, append file, create directory, copy file, move file/directory
-//			s     get file/directory type/existence/size
-//			v     get environment variable, set environment variable
-//			x     execute/evaluate shell command
+// 	> Implement logging for:
+//			w     FileReadAll, FileWriteAll, FileAppend, FileCopy, PathMove, PathCreateDirectory
+//			x     SystemShellExecute, SystemShellExecuteWithWorkingDirectory, SystemShellEvaluate
 //		And document the engine flags.
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
 // 	- Win32: use the Unicode APIs for file system access. 
 
 // TODO Standard library:
+// 	> Rectangle type in base module. Progress on Luigi module.
 // 	- Accounting for path separator differences?
 // 	- Versions of copy/move that refuse to overwrite; versions of path create/delete that ignore if the item already (doesn't) exist(s).
 // 	- Floats: 
@@ -8535,6 +8534,7 @@ int ExternalPathDelete(ExecutionContext *context, Value *returnValue) {
 
 int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "does path exist", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
@@ -8547,6 +8547,7 @@ int ExternalPathExists(ExecutionContext *context, Value *returnValue) {
 
 int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "is path file", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
 #ifdef _WIN32
@@ -8567,6 +8568,7 @@ int ExternalPathIsFile(ExecutionContext *context, Value *returnValue) {
 
 int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "is path directory", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
 #ifdef _WIN32
@@ -8586,12 +8588,11 @@ int ExternalPathIsDirectory(ExecutionContext *context, Value *returnValue) {
 }
 
 int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
+	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "is path link", entryText, entryBytes, NULL, 0)) return 0;
 #ifdef _WIN32
-	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
-	return EXTCALL_RETURN_UNMANAGED;
 #else
-	STACK_POP_STRING(entryText, entryBytes);
 	returnValue->i = 0;
 	if (entryBytes == 0) return EXTCALL_RETURN_UNMANAGED;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
@@ -8599,8 +8600,8 @@ int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
 	struct stat s = { 0 };
 	returnValue->i = lstat(temporary, &s) == 0 && S_ISLNK(s.st_mode);
 	free(temporary);
-	return EXTCALL_RETURN_UNMANAGED;
 #endif
+	return EXTCALL_RETURN_UNMANAGED;
 }
 
 int ExternalPathMove(ExecutionContext *context, Value *returnValue) {
@@ -8692,12 +8693,14 @@ int ExternalSystemGetEnvironmentVariable(ExecutionContext *context, Value *retur
 	char *data = getenv(temporary);
 	free(temporary);
 	if (!data) RETURN_ERROR(-1);
+	if (!ActionBefore(context, ACTION_ENVIRONMENT, "get environment variable", entryText, entryBytes, data, data ? strlen(data) : 0)) return 0;
 	RETURN_STRING_COPY(data, data ? strlen(data) : 0);
 	return EXTCALL_RETURN_ERR_MANAGED;
 }
 
 int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
+	if (!ActionBefore(context, ACTION_ENVIRONMENT, "set environment variable", entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	char *temporary2 = StringZeroTerminate(entry2Text, entry2Bytes);
 
@@ -8706,7 +8709,9 @@ int ExternalSystemSetEnvironmentVariable(ExecutionContext *context, Value *retur
 	free(temporary2);
 
 	if (!success) {
-		if (!temporary || !temporary2) RETURN_ERROR(ENOMEM);
+		int e = (!temporary || !temporary2) ? ENOMEM : errno;
+		if (!ActionFailure(context, ACTION_ENVIRONMENT, "set environment variable", ErrorStringFromErrno(e), 
+					entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 		RETURN_ERROR(errno);
 	}
 
@@ -8789,6 +8794,7 @@ int ExternalFileReadAll(ExecutionContext *context, Value *returnValue) {
 
 int ExternalFileGetSize(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "get file size", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
@@ -8801,6 +8807,7 @@ int ExternalFileGetSize(ExecutionContext *context, Value *returnValue) {
 		fclose(file);
 		return EXTCALL_RETURN_ERR_UNMANAGED;
 	} else {
+		if (!ActionFailure(context, ACTION_PROPERTIES, "get file size", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
 		RETURN_ERROR(errno);
 	}
 }
