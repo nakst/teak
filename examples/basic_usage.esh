@@ -572,7 +572,10 @@ void Part7() {
 // You can import another module or script file using the #import statement.
 // Pass it a path relative to the current source file,
 // and the prefix (here "img") to use for the imported symbols.
-#import "../modules/imaging/index.esh" img;
+// If you prefix the path with "core:", it is interpreted relative to the
+// directory containing the scripting engine's executable, rather than the current source file.
+// If the file is not found, the engine will retry with "/index.esh" appended to the path.
+#import "core:modules/imaging" img;
 
 void Part8() {
 	// You can access the types and functions of the module using the prefix you chose.

@@ -1,5 +1,5 @@
 // Import the imaging module for loading bitmaps.
-#import "../modules/imaging/index.esh" im;
+#import "core:modules/imaging" im;
 
 // You can change the directory that will be scanned by passing "path=..." to the engine's command line.
 str path #option;

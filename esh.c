@@ -17,7 +17,6 @@
 // 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
 
 // TODO Tooling and infrastructure:
-// 	- Importing installed modules from a common location?
 // 	- Serialization.
 // 	- Debugging.
 
@@ -616,6 +615,7 @@ void *LibraryGetAddress(void *library, const char *name, const char *libraryName
 const char *PathToAbsolute(const char *path);
 const char *PathToPrettyName(const char *path);
 const char *PathToBaseDirectory(const char *path);
+const char *PathScriptEngine();
 
 // --------------------------------- Base module.
 
@@ -2549,16 +2549,31 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 	}
 
 	if (node->type == T_IMPORT) {
-		size_t parentBaseDirectoryBytes = node->firstChild->token.module ? (StringLength(node->firstChild->token.module->baseDirectory) + 1) : 0;
-		size_t pathBytes = parentBaseDirectoryBytes + node->firstChild->token.textBytes;
+		const char *relativeTo = NULL;
+		size_t relativeToBytes = 0;
+		const char *relativePath = node->firstChild->token.text;
+		size_t relativePathBytes = node->firstChild->token.textBytes;
+
+		if (relativePathBytes > 5 && 0 == MemoryCompare(relativePath, "core:", 5)) {
+			relativeTo = PathToBaseDirectory(PathToAbsolute(PathScriptEngine()));
+			relativeToBytes = StringLength(relativeTo);
+			relativePath += 5;
+			relativePathBytes -= 5;
+		} else if (node->firstChild->token.module) {
+			relativeTo = node->firstChild->token.module->baseDirectory;
+			relativeToBytes = StringLength(relativeTo);
+		}
+
+		size_t parentBaseDirectoryBytes = relativeTo ? (relativeToBytes + 1) : 0;
+		size_t pathBytes = parentBaseDirectoryBytes + relativePathBytes;
 		char *path = (char *) AllocateFixed(pathBytes + 1);
 
-		if (node->firstChild->token.module) {
-			MemoryCopy(path, node->firstChild->token.module->baseDirectory, parentBaseDirectoryBytes - 1);
-			path[parentBaseDirectoryBytes - 1] = '/';
+		if (relativeTo) {
+			MemoryCopy(path, relativeTo, relativeToBytes);
+			path[relativeToBytes] = '/';
 		}
 		
-		MemoryCopy(path + parentBaseDirectoryBytes, node->firstChild->token.text, node->firstChild->token.textBytes);
+		MemoryCopy(path + parentBaseDirectoryBytes, relativePath, relativePathBytes);
 		path[pathBytes] = 0;
 
 		const char *absolutePath = PathToAbsolute(path);
@@ -2601,6 +2616,13 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 				isBaseModule = true;
 			} else {
 				fileData = FileLoad(path, &t.inputBytes);
+
+				if (!fileData) {
+					char *alt = AllocateFixed(pathBytes + 16);
+					MemoryCopy(alt, path, pathBytes);
+					MemoryCopy(alt + pathBytes, "/index.esh", 11);
+					fileData = FileLoad(alt, &t.inputBytes);
+				}
 			}
 
 			if (!fileData) {
@@ -9514,6 +9536,39 @@ const char *PathToBaseDirectory(const char *path) {
 	memcpy(copy, path, stop);
 	copy[stop] = 0;
 	return copy;
+}
+
+const char *PathScriptEngine() {
+#ifdef _WIN32
+	wchar_t *path = (wchar_t *) calloc(1, sizeof(wchar_t) * (MAX_PATH + 1));
+	DWORD result = GetModuleFileNameW(NULL, path, MAX_PATH + 1);
+
+	if (result > 0 && result < MAX_PATH) {
+		char *utf8 = WideStringToUTF8(path);
+		char *fixed = AllocateFixed(strlen(utf8) + 1);
+		memcpy(fixed, utf8);
+		free(utf8);
+		free(path);
+		return fixed;
+	} else {
+		free(path);
+		return NULL;
+	}
+#else
+	char *path = (char *) malloc(10000);
+	ssize_t bytes = readlink("/proc/self/exe", path, 10000);
+
+	if (bytes <= 0 || bytes >= 10000) {
+		free(path);
+		return NULL;
+	} else {
+		char *fixed = AllocateFixed(bytes + 1);
+		memcpy(fixed, path, bytes);
+		fixed[bytes] = 0;
+		free(path);
+		return fixed;
+	}
+#endif
 }
 
 void *FileLoad(const char *path, size_t *length) {

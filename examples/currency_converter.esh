@@ -1,4 +1,4 @@
-#import "../modules/luigi/index.esh" ui;
+#import "core:modules/luigi" ui;
 
 ui.Textbox textboxRate;
 ui.Textbox textboxAmount;
