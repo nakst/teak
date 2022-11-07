@@ -21,10 +21,7 @@
 // 	- Debugging.
 
 // TODO Scripting engine features:
-// 	> Implement logging for:
-//			w     FileReadAll, FileWriteAll, FileAppend, FileCopy, PathMove, PathCreateDirectory
-//			x     SystemShellExecute, SystemShellExecuteWithWorkingDirectory, SystemShellEvaluate
-//		And document the engine flags.
+// 	- Implement logging for ACTION_EXECUTE: SystemShellExecute, SystemShellExecuteWithWorkingDirectory, SystemShellEvaluate.
 // 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
 // 	- Win32: use the Unicode APIs for file system access. 
@@ -8485,6 +8482,7 @@ int ExternalTextWeight(ExecutionContext *context, Value *returnValue) {
 
 int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_WRITE, "create directory", entryText, entryBytes, NULL, 0)) return 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
 	returnValue->i = 1;
@@ -8495,9 +8493,15 @@ int ExternalPathCreateDirectory(ExecutionContext *context, Value *returnValue) {
 #endif
 	free(temporary);
 #ifdef _WIN32
-	if (!returnValue->i) RETURN_ERROR_WIN32(GetLastError());
+	if (!returnValue->i) {
+		if (!ActionFailure(context, ACTION_WRITE, "create directory", ErrorStringFromWin32(GetLastError()), entryText, entryBytes, NULL, 0)) return 0;
+		RETURN_ERROR_WIN32(GetLastError());
+	}
 #else
-	if (!returnValue->i) RETURN_ERROR(errno);
+	if (!returnValue->i) {
+		if (!ActionFailure(context, ACTION_WRITE, "create directory", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
+		RETURN_ERROR(errno);
+	}
 #endif
 	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
@@ -8606,26 +8610,38 @@ int ExternalPathIsLink(ExecutionContext *context, Value *returnValue) {
 
 int ExternalPathMove(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
+	if (!ActionBefore(context, ACTION_WRITE, "move path", entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	char *temporary2 = StringZeroTerminate(entry2Text, entry2Bytes);
 	bool success = temporary && temporary2 && rename(temporary, temporary2) == 0;
 	free(temporary);
 	free(temporary2);
-	if (!temporary || !temporary2) RETURN_ERROR(ENOMEM);
-	if (!success) RETURN_ERROR(errno);
+
+	if (!temporary || !temporary2) {
+		if (!ActionFailure(context, ACTION_WRITE, "move path", ErrorStringFromErrno(ENOMEM), entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
+		RETURN_ERROR(ENOMEM);
+	}
+
+	if (!success) {
+		if (!ActionFailure(context, ACTION_WRITE, "move path", ErrorStringFromErrno(errno), entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
+		RETURN_ERROR(errno);
+	}
+
 	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
 
 int ExternalFileCopy(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
 	returnValue->i = 0;
+	if (!ActionBefore(context, ACTION_WRITE, "copy file", entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	char *temporary2 = StringZeroTerminate(entry2Text, entry2Bytes);
 
 	if (!temporary || !temporary2) {
 		free(temporary);
 		free(temporary2);
+		if (!ActionFailure(context, ACTION_WRITE, "copy file", ErrorStringFromErrno(ENOMEM), entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 		RETURN_ERROR(ENOMEM);
 	}
 
@@ -8633,6 +8649,7 @@ int ExternalFileCopy(ExecutionContext *context, Value *returnValue) {
 		free(temporary);
 		free(temporary2);
 		PrintError4(context, 0, "FileCopy called with the source and destination paths identical. Attempting to copy a file to itself is undefined behaviour!\n");
+		if (!ActionFailure(context, ACTION_WRITE, "copy file", "UNKNOWN", entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 		return 0;
 	}
 
@@ -8676,11 +8693,13 @@ int ExternalFileCopy(ExecutionContext *context, Value *returnValue) {
 	if (f2 && fclose(f2)) okay = false;
 
 	if (modifiedDuringCopy) {
+		if (!ActionFailure(context, ACTION_WRITE, "copy file", "UNKNOWN", entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 		RETURN_ERROR(-1);
 	} else if (okay) {
 		returnValue->i = 0;
 		return EXTCALL_RETURN_ERR_UNMANAGED;
 	} else {
+		if (!ActionFailure(context, ACTION_WRITE, "copy file", ErrorStringFromErrno(errno), entryText, entryBytes, entry2Text, entry2Bytes)) return 0;
 		RETURN_ERROR(errno);
 	}
 }
@@ -8814,6 +8833,7 @@ int ExternalFileGetSize(ExecutionContext *context, Value *returnValue) {
 
 int ExternalFileWriteAll(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
+	if (!ActionBefore(context, ACTION_WRITE, "write file", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
@@ -8822,16 +8842,16 @@ int ExternalFileWriteAll(ExecutionContext *context, Value *returnValue) {
 
 	if (f) {
 		returnValue->i = entry2Bytes == fwrite(entry2Text, 1, entry2Bytes, f);
-		if (fclose(f)) RETURN_ERROR(errno);
-		if (!returnValue->i) RETURN_ERROR(errno);
-		return EXTCALL_RETURN_ERR_UNMANAGED;
-	} else {
-		RETURN_ERROR(errno);
+		if (!fclose(f) && returnValue->i) return EXTCALL_RETURN_ERR_UNMANAGED;
 	}
+
+	if (!ActionFailure(context, ACTION_WRITE, "write file", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
+	RETURN_ERROR(errno);
 }
 
 int ExternalFileAppend(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
+	if (!ActionBefore(context, ACTION_WRITE, "append file", entryText, entryBytes, NULL, 0)) return 0;
 	returnValue->i = 0;
 	char *temporary = StringZeroTerminate(entryText, entryBytes);
 	if (!temporary) RETURN_ERROR(ENOMEM);
@@ -8840,12 +8860,11 @@ int ExternalFileAppend(ExecutionContext *context, Value *returnValue) {
 
 	if (f) {
 		returnValue->i = entry2Bytes == fwrite(entry2Text, 1, entry2Bytes, f);
-		if (fclose(f)) RETURN_ERROR(errno);
-		if (!returnValue->i) RETURN_ERROR(errno);
-		return EXTCALL_RETURN_ERR_UNMANAGED;
-	} else {
-		RETURN_ERROR(errno);
+		if (!fclose(f) && returnValue->i) return EXTCALL_RETURN_ERR_UNMANAGED;
 	}
+
+	if (!ActionFailure(context, ACTION_WRITE, "append file", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
+	RETURN_ERROR(errno);
 }
 
 int ExternalPathGetDefaultPrefix(ExecutionContext *context, Value *returnValue) {
@@ -9641,6 +9660,12 @@ int main(int argc, char **argv) {
 			coloredOutput = false;
 		} else if (0 == strcmp(argv[i], "--colored-output")) {
 			coloredOutput = true;
+		} else if (0 == strcmp(argv[i], "--version")) {
+#ifdef GIT_COMMIT
+			fprintf(stderr, "esh scripting engine\nversion %s\n", GIT_COMMIT);
+#else
+			fprintf(stderr, "esh scripting engine\nversion ??\n");
+#endif
 		} else if (0 == strcmp(argv[i], "--want-completion-confirmation")) {
 			wantCompletionConfirmation = true;
 		} else if ((strlen(argv[i]) > 6 && 0 == memcmp(argv[i], "--log=", 6))

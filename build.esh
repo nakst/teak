@@ -60,19 +60,20 @@ void Start() {
 	bool okay;
 	str executable;
 	str moduleCompilerTemplate;
+	str commit = StringSplitByCharacter(StringSplitByCharacter(SystemShellEvaluate("git log"), "\n", false)[0], " ", false)[1];
 
 	ProcessBaseModule();
 
 	if SystemGetHostName() == "Windows" {
 		str warningFlags = "/Wall /wd4201 /wd4242 /wd4244 /wd4255 /wd4267 /wd4456 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd4996 /wd5045";
 		str optimizeFlags = "" if debug else "/O2";
-		assert SystemShellExecute("cl.exe /Zi esh.c %warningFlags% %optimizeFlags% /link /OUT:new_esh.exe");
+		assert SystemShellExecute("cl.exe /DGIT_COMMIT=\\\"%commit%\\\" /Zi esh.c %warningFlags% %optimizeFlags% /link /OUT:new_esh.exe");
 		okay = SystemShellExecute("new_esh examples\\hello_world.esh");
 		executable = "new_esh";
 		moduleCompilerTemplate = "cl.exe /Zi [SRC] %warningFlags% %optimizeFlags% /link /DLL /OUT:[DST].dll";
 	} else {
 		str optimizeFlags = "-fsanitize=address" if debug else "-O2";
-		assert SystemShellExecute("gcc -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl"); 
+		assert SystemShellExecute("gcc -DGIT_COMMIT=\\\"%commit%\\\" -o new_esh esh.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl"); 
 		okay = SystemShellExecute("./new_esh examples/hello_world.esh");
 		executable = "./esh";
 		moduleCompilerTemplate = "gcc -o l[DST].so -shared [SRC] -fPIC -g -Wall -Wextra %optimizeFlags%";
