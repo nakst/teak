@@ -14,6 +14,10 @@
 
 #include "../native_interface.h"
 
+typedef struct PainterWrapper {
+	UIPainter *painter;
+} PainterWrapper;
+
 typedef struct ElementWrapper {
 	UIElement *element;
 	uintptr_t referenceCount;
@@ -24,12 +28,18 @@ typedef struct ElementWrapper {
 // TODO How should this be done properly?
 struct ExecutionContext *contextForCallback;
 
+intptr_t wrapPainterInAnytype;
+
 bool ReturnRectangle(struct ExecutionContext *context, UIRectangle rect) {
 	return ScriptReturnStructInl(context, 4, rect.l, false, rect.r, false, rect.t, false, rect.b, false);
 }
 
 bool ReturnCString(struct ExecutionContext *context, const char *cString) {
 	return ScriptReturnString(context, cString, strlen(cString));
+}
+
+void PainterWrapperClose(struct ExecutionContext *context, void *wrapper) {
+	free(wrapper);
 }
 
 void WrapperClose(struct ExecutionContext *context, void *_wrapper) {
@@ -61,22 +71,33 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 	int64_t returnValue = 0;
 
 	if (wrapper->messageUser) {
+		// TODO How to handle failures in here?
+		
 		intptr_t elementHandle = -1;
-		bool success = WrapperOpen(contextForCallback, wrapper, &elementHandle);
-		(void) success;
-		// TODO How to handle failure?
+		if (!WrapperOpen(contextForCallback, wrapper, &elementHandle)) exit(1);
 
-		int64_t parameters[4] = {
-			(int64_t) elementHandle,
-			(int64_t) message,
-			(int64_t) di,
-			0, // TODO MessageData.
-		};
+		intptr_t dataHandle = -1;
+		void *dataWrapper = NULL;
 
+		if (message == UI_MSG_PAINT) {
+			PainterWrapper *painterWrapper = (PainterWrapper *) calloc(1, sizeof(PainterWrapper));
+			dataWrapper = painterWrapper;
+			painterWrapper->painter = (UIPainter *) dp;
+			intptr_t painterWrapperHandle;
+			if (!ScriptCreateHandle(contextForCallback, painterWrapper, PainterWrapperClose, &painterWrapperHandle)) exit(1);
+			int64_t parameters[1] = { (int64_t) painterWrapperHandle };
+			bool managedParameters[4] = { true };
+			if (!ScriptRunCallback(contextForCallback, wrapPainterInAnytype, parameters, managedParameters, 1, &dataHandle, true)) exit(1);
+			ScriptHeapRefClose(contextForCallback, painterWrapperHandle);
+		}
+
+		int64_t parameters[4] = { (int64_t) elementHandle, (int64_t) message, (int64_t) di, (int64_t) dataHandle };
 		bool managedParameters[4] = { true, false, false, true };
-		// TODO Modify this so that it actually works!
-		success = ScriptRunCallback(contextForCallback, wrapper->messageUser, parameters, managedParameters, 4, &returnValue, false);
-		// TODO How to handle failure?
+		if (!ScriptRunCallback(contextForCallback, wrapper->messageUser, parameters, managedParameters, 4, &returnValue, false)) exit(1);
+
+		if (message == UI_MSG_PAINT) {
+			((PainterWrapper *) dataWrapper)->painter = NULL;
+		}
 
 		ScriptHeapRefClose(contextForCallback, elementHandle);
 	}
@@ -107,7 +128,8 @@ ElementWrapper *WrapperCreate(UIElement *element) {
 	}
 }
 
-LIBRARY_EXPORT bool ScriptExtInitialise(struct ExecutionContext *context) {
+LIBRARY_EXPORT bool ScriptExt_InternalInitialise(struct ExecutionContext *context) {
+	if (!ScriptParameterHeapRef(context, &wrapPainterInAnytype)) return false;
 	UIInitialise();
 	return true;
 }
@@ -559,4 +581,92 @@ LIBRARY_EXPORT bool ScriptExtKeycodeDigit(struct ExecutionContext *context) {
 LIBRARY_EXPORT bool ScriptExtKeycodeLetter(struct ExecutionContext *context) {
 	const char *s; size_t b;
 	return ScriptParameterString(context, (const void **) &s, &b) && ScriptReturnInt(context, b ? UI_KEYCODE_LETTER(s[0]) : 0); 
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawBlock(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle; uint32_t color;
+	if (!ScriptParameterScan(context, "h(iiii)u", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b, &color)) return false;
+	if (!painter->painter) { return true; } UIDrawBlock(painter->painter, rectangle, color); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawCircle(struct ExecutionContext *context) {
+	PainterWrapper *painter; int32_t centerX, centerY; uint32_t radius, fillColor, outlineColor; bool hollow;
+	if (!ScriptParameterScan(context, "hiiuuub", &painter, &centerX, &centerY, &radius, &fillColor, &outlineColor, &hollow)) return false;
+	if (!painter->painter) { return true; } UIDrawCircle(painter->painter, centerX, centerY, radius, fillColor, outlineColor, hollow); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawInvert(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle;
+	if (!ScriptParameterScan(context, "h(iiii)", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b)) return false;
+	if (!painter->painter) { return true; } UIDrawInvert(painter->painter, rectangle); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawLine(struct ExecutionContext *context) {
+	PainterWrapper *painter; int32_t x0, y0, x1, y1; uint32_t color;
+	if (!ScriptParameterScan(context, "hiiiiu", &painter, &x0, &y0, &x1, &y1, &color)) return false;
+	return ScriptReturnInt(context, painter->painter && UIDrawLine(painter->painter, x0, y0, x1, y1, color));
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawTriangle(struct ExecutionContext *context) {
+	PainterWrapper *painter; int32_t x0, y0, x1, y1, x2, y2; uint32_t color;
+	if (!ScriptParameterScan(context, "hiiiiu", &painter, &x0, &y0, &x1, &y1, &x2, &y2, &color)) return false;
+	if (!painter->painter) { return true; } UIDrawTriangle(painter->painter, x0, y0, x1, y1, x2, y2, color); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawTriangleOutline(struct ExecutionContext *context) {
+	PainterWrapper *painter; int32_t x0, y0, x1, y1, x2, y2; uint32_t color;
+	if (!ScriptParameterScan(context, "hiiiiiiu", &painter, &x0, &y0, &x1, &y1, &x2, &y2, &color)) return false;
+	if (!painter->painter) { return true; } UIDrawTriangleOutline(painter->painter, x0, y0, x1, y1, x2, y2, color); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawGlyph(struct ExecutionContext *context) {
+	PainterWrapper *painter; int32_t x, y, c; uint32_t color;
+	if (!ScriptParameterScan(context, "hiiiu", &painter, &x, &y, &c, &color)) return false;
+	if (!painter->painter) { return true; } UIDrawGlyph(painter->painter, x, y, c, color); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawRectangle(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle, borderSize; uint32_t mainColor, borderColor;
+	if (!ScriptParameterScan(context, "h(iiii)uu(iiii)", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b, &mainColor, &borderColor, &borderSize.l, &borderSize.r, &borderSize.t, &borderSize.b)) return false;
+	if (!painter->painter) { return true; } UIDrawRectangle(painter->painter, rectangle, mainColor, borderColor, borderSize); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawBorder(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle, borderSize; uint32_t borderColor;
+	if (!ScriptParameterScan(context, "h(iiii)u(iiii)", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b, &borderColor, &borderSize.l, &borderSize.r, &borderSize.t, &borderSize.b)) return false;
+	if (!painter->painter) { return true; } UIDrawBorder(painter->painter, rectangle, borderColor, borderSize); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawString(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle; const char *string; size_t stringBytes; 
+	uint32_t color; int32_t align; UIStringSelection selection; bool selectionIsNull;
+	if (!ScriptParameterScan(context, "h(iiii)Sui(niiuu)", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b, 
+				&string, &stringBytes, &color, &align, &selectionIsNull, &selection.carets[0], 
+				&selection.carets[1], &selection.colorText, &selection.colorBackground)) return false;
+	if (!painter->painter) { return true; } 
+	UIDrawString(painter->painter, rectangle, string, stringBytes, color, align, selectionIsNull ? NULL : &selection); return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtDrawStringHighlighted(struct ExecutionContext *context) {
+	PainterWrapper *painter; UIRectangle rectangle; const char *string; size_t stringBytes; int32_t tabSize;
+	if (!ScriptParameterScan(context, "h(iiii)Si", &painter, &rectangle.l, &rectangle.r, &rectangle.t, &rectangle.b, &string, &stringBytes, &tabSize)) return false;
+	if (!painter->painter) { return true; } 
+	int finalX = UIDrawStringHighlighted(painter->painter, rectangle, string, stringBytes, tabSize); 
+	return ScriptReturnInt(context, finalX);
+}
+
+LIBRARY_EXPORT bool ScriptExtPainterGetWidth(struct ExecutionContext *context) {
+	PainterWrapper *painter; if (!ScriptParameterScan(context, "h", &painter)) return false;
+	return ScriptReturnInt(context, painter->painter ? painter->painter->width : -1);
+}
+
+LIBRARY_EXPORT bool ScriptExtPainterGetHeight(struct ExecutionContext *context) {
+	PainterWrapper *painter; if (!ScriptParameterScan(context, "h", &painter)) return false;
+	return ScriptReturnInt(context, painter->painter ? painter->painter->height : -1);
+}
+
+LIBRARY_EXPORT bool ScriptExtPainterGetClip(struct ExecutionContext *context) {
+	UIRectangle invalid = UI_RECT_1(-1);
+	PainterWrapper *painter; if (!ScriptParameterScan(context, "h", &painter)) return false;
+	return ReturnRectangle(context, painter->painter ? painter->painter->clip : invalid);
 }

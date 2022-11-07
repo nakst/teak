@@ -27,7 +27,6 @@
 // 	- Win32: use the Unicode APIs for file system access. 
 
 // TODO Standard library:
-// 	> Progress on Luigi module.
 // 	- Accounting for path separator differences?
 // 	- Versions of copy/move that refuse to overwrite; versions of path create/delete that ignore if the item already (doesn't) exist(s).
 // 	- Floats: 
@@ -566,6 +565,7 @@ bool outputOverview;
 struct RNGState { uint64_t s[4]; } rngState;
 int actionBefore[ACTION_COUNT], actionFailure[ACTION_COUNT];
 bool wantCompletionConfirmation;
+const char *engineDirectory;
 
 // Forward declarations:
 Node *ParseBlock(Tokenizer *tokenizer, bool replMode);
@@ -2551,7 +2551,7 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		size_t relativePathBytes = node->firstChild->token.textBytes;
 
 		if (relativePathBytes > 5 && 0 == MemoryCompare(relativePath, "core:", 5)) {
-			relativeTo = PathToBaseDirectory(PathToAbsolute(PathScriptEngine()));
+			relativeTo = engineDirectory;
 			relativeToBytes = StringLength(relativeTo);
 			relativePath += 5;
 			relativePathBytes -= 5;
@@ -2573,21 +2573,25 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		path[pathBytes] = 0;
 
 		const char *absolutePath = PathToAbsolute(path);
+		const char *prettyName = PathToPrettyName(absolutePath);
 
-		// Check this hasn't already been imported by this file.
 		Assert(node->parent->type == T_ROOT);
 		Node *rootChild = node->parent->firstChild;
+
+		// Check this hasn't already been imported by this file.
 		while (rootChild != node) {
 			if (rootChild->type == T_IMPORT) {
 				Assert(rootChild->importData);
+
 				if (0 == StringCompare(rootChild->importData->path, absolutePath)) {
 					PrintError2(tokenizer, node, "The script at path '%s' has been loaded multiple times in this file.\n",
-							PathToPrettyName(absolutePath));
+							prettyName);
 					return false;
 				}
 			}
 			rootChild = rootChild->sibling;
 		}
+
 		Assert(rootChild == node);
 
 		ImportData *alreadyImportedModule = importedModules;
@@ -2637,7 +2641,7 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 				node->importData->baseDirectory = NULL;
 			} else {
 				node->importData->path = absolutePath;
-				node->importData->prettyName = PathToPrettyName(absolutePath);
+				node->importData->prettyName = prettyName;
 				node->importData->baseDirectory = PathToBaseDirectory(absolutePath);
 			}
 
@@ -7283,6 +7287,13 @@ bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t 
 	}
 }
 
+bool ScriptStructReadUint32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, uint32_t *output) {
+	int32_t x;
+	if (!ScriptStructReadInt32(context, index, fieldIndex, &x)) return false;
+	*output = (uint32_t) x;
+	return true;
+}
+
 void ScriptHeapRefClose(ExecutionContext *context, intptr_t index) {
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
 	Assert(context->heap[index].externalReferenceCount);
@@ -7404,6 +7415,7 @@ bool ScriptParameterScan(struct ExecutionContext *context, const char *cFormat, 
 
 				while (success && *cFormat != ')') {
 					if (*cFormat == 'i') { int32_t *i = va_arg(arguments, int32_t *); *i = 0; }
+					else if (*cFormat == 'u') { uint32_t *i = va_arg(arguments, uint32_t *); *i = 0; }
 					else if (*cFormat == 'n') { bool *b = va_arg(arguments, bool *); if (b) *b = true; }
 					else if (*cFormat == '-') {}
 					else { success = false; }
@@ -7414,6 +7426,7 @@ bool ScriptParameterScan(struct ExecutionContext *context, const char *cFormat, 
 			} else {
 				while (success && *cFormat != ')') {
 					if (*cFormat == 'i') { success = ScriptStructReadInt32(context, structIndex, fieldIndex, va_arg(arguments, int32_t *)); }
+					else if (*cFormat == 'u') { success = ScriptStructReadUint32(context, structIndex, fieldIndex, va_arg(arguments, uint32_t *)); }
 					else if (*cFormat == 'n') { bool *b = va_arg(arguments, bool *); *b = false; }
 					else if (*cFormat == '-') {}
 					else { success = false; }
@@ -7566,6 +7579,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnStructInl = ScriptReturnStructInl,
 	.RunCallback = ScriptRunCallback,
 	.StructReadInt32 = ScriptStructReadInt32,
+	.StructReadUint32 = ScriptStructReadUint32,
 };
 
 void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
@@ -9709,6 +9723,7 @@ int main(int argc, char **argv) {
 	}
 	
 	scriptSourceDirectory = PathToBaseDirectory(PathToAbsolute(scriptPath));
+	engineDirectory = PathToBaseDirectory(PathToAbsolute(PathScriptEngine()));
 
 	size_t dataBytes = evaluateMode ? strlen(evaluateString) : 0;
 	void *data = evaluateMode ? malloc(strlen(evaluateString)) : FileLoad(scriptPath, &dataBytes);

@@ -1,5 +1,8 @@
 #library "module_imaging";
 
+// TODO Use the shape types from the geometry module.
+// TODO Vector graphics.
+
 handletype Bitmap;
 handletype Animation;
 

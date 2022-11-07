@@ -4,7 +4,7 @@ ui.Textbox textboxRate;
 ui.Textbox textboxAmount;
 ui.Label labelResult;
 
-int ConvertButtonMessage(ui.Element element, ui.Message message, int di, ui.MessageData dp) {
+int ConvertButtonMessage(ui.Element element, ui.Message message, int di, anytype dp) {
 	if message == ui.MSG_CLICKED {
 		float rate   = FloatMaximum(0.0, StringParseFloat(ui.TextboxGetContents(textboxRate  )):default(1.0));
 		float amount = FloatMaximum(0.0, StringParseFloat(ui.TextboxGetContents(textboxAmount)):default(0.0));

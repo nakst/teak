@@ -33,6 +33,7 @@ typedef struct ScriptNativeInterface {
 	bool (*ReturnStructInl)(struct ExecutionContext *context, size_t fieldCount, ...);
 	bool (*RunCallback)(struct ExecutionContext *context, intptr_t functionPointer, int64_t *parameters, bool *managedParameters, size_t parameterCount, int64_t *returnValue, bool managedReturnValue);
 	bool (*StructReadInt32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, int32_t *output);
+	bool (*StructReadUint32)(struct ExecutionContext *context, intptr_t structIndex, uintptr_t fieldIndex, uint32_t *output);
 } ScriptNativeInterface;
 
 #ifdef SCRIPT_ENGINE
@@ -66,6 +67,7 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #define ScriptReturnStructInl(...)  (scriptNativeInterface->ReturnStructInl (__VA_ARGS__))
 #define ScriptRunCallback(...)      (scriptNativeInterface->RunCallback     (__VA_ARGS__))
 #define ScriptStructReadInt32(...)  (scriptNativeInterface->StructReadInt32 (__VA_ARGS__))
+#define ScriptStructReadUint32(...) (scriptNativeInterface->StructReadUint32(__VA_ARGS__))
 
 const ScriptNativeInterface *scriptNativeInterface;
 LIBRARY_EXPORT void ScriptSetNativeInterfacePointer(const ScriptNativeInterface *s) { scriptNativeInterface = s; }

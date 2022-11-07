@@ -22,11 +22,10 @@ handletype Textbox      : Element;
 handletype Window       : Element;
 handletype WrapPanel    : Element;
 
-handletype MessageData;
 handletype Painter;
 handletype Font;
 
-functype int MessageCallback(Element element, Message message, int di, MessageData dp);
+functype int MessageCallback(Element element, Message message, int di, anytype dp);
 functype void InvokeCallback(anytype cp);
 
 inttype ElementFlags {
@@ -248,7 +247,6 @@ struct Theme {
 	int codePreprocessor;
 };
 
-void Initialise() #extcall;
 int MessageLoop() #extcall;
 
 Button ButtonCreate(Element parent, ButtonFlags flags, str label) #extcall;
@@ -403,26 +401,26 @@ int ColorGetGreen(int argb) { return ((argb >> 8) & 0xFF); }
 int ColorGetBlue(int argb) { return ((argb >> 0) & 0xFF); }
 int ColorFromFloat01(float a, float r, float g, float b) { return ((a * 255.0):truncate() << 24) | ((r * 255.0):truncate() << 16) | ((g * 255.0):truncate() << 8) | ((b * 255.0):truncate() << 0); }
 
-// int PainterGetWidth(Painter painter) #extcall;
-// int PainterGetHeight(Painter painter) #extcall;
-// Rectange PainterGetClip(Painter painter) #extcall;
+int PainterGetWidth(Painter painter) #extcall;
+int PainterGetHeight(Painter painter) #extcall;
+gm.Rectangle PainterGetClip(Painter painter) #extcall;
 
 // Font FontCreate(str path, int size) #extcall;
 // Font FontActivate(Font font) #extcall; // Returns the previously active font.
 // int FontGetGlyphWidth(Font font) #extcall;
 // int FontGetGlyphHeight(Font font) #extcall;
 
-// void DrawBlock(Painter painter, gm.Rectangle rectangle, int color) #extcall;
-// void DrawCircle(Painter painter, int centerX, int centerY, int radius, int fillColor, int outlineColor, bool hollow) #extcall;
-// void DrawInvert(Painter painter, gm.Rectangle rectangle) #extcall;
-// bool DrawLine(Painter painter, int x0, int y0, int x1, int y1, int color) #extcall; // Returns false if the line was not visible.
-// void DrawTriangle(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
-// void DrawTriangleOutline(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
-// void DrawGlyph(Painter painter, int x, int y, int c, int color) #extcall;
-// void DrawRectangle(Painter painter, gm.Rectangle r, int mainColor, int borderColor, gm.Rectangle borderSize) #extcall;
-// void DrawBorder(Painter painter, gm.Rectangle r, int borderColor, gm.Rectangle borderSize) #extcall;
-// void DrawString(Painter painter, gm.Rectangle r, str string, int color, int align, StringSelection selection) #extcall;
-// int  DrawStringHighlighted(Painter painter, gm.Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
+void DrawBlock(Painter painter, gm.Rectangle rectangle, int color) #extcall;
+void DrawCircle(Painter painter, int centerX, int centerY, int radius, int fillColor, int outlineColor, bool hollow) #extcall;
+void DrawInvert(Painter painter, gm.Rectangle rectangle) #extcall;
+bool DrawLine(Painter painter, int x0, int y0, int x1, int y1, int color) #extcall; // Returns false if the line was not visible.
+void DrawTriangle(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
+void DrawTriangleOutline(Painter painter, int x0, int y0, int x1, int y1, int x2, int y2, int color) #extcall;
+void DrawGlyph(Painter painter, int x, int y, int c, int color) #extcall;
+void DrawRectangle(Painter painter, gm.Rectangle r, int mainColor, int borderColor, gm.Rectangle borderSize) #extcall;
+void DrawBorder(Painter painter, gm.Rectangle r, int borderColor, gm.Rectangle borderSize) #extcall;
+void DrawString(Painter painter, gm.Rectangle r, str string, int color, Align align, StringSelection selection) #extcall;
+int  DrawStringHighlighted(Painter painter, gm.Rectangle r, str string, int tabSize) #extcall; // Returns final x position.
 
 // int MeasureStringWidth(str string) #extcall;
 // int MeasureStringHeight() #extcall;
@@ -436,3 +434,8 @@ int ColorFromFloat01(float a, float r, float g, float b) { return ((a * 255.0):t
 // void MenuAddItem(Menu menu, ButtonFlags flags, str label, InvokeCallback invoke, anytype cp) #extcall;
 // void MenuShow(Menu menu) #extcall;
 // bool MenuIsOpen() #extcall;
+
+functype anytype _InternalWrapPainterInAnytypeFunctype(Painter painter);
+anytype _InternalWrapPainterInAnytype(Painter painter) { anytype a = painter; return a; }
+void _InternalInitialise(_InternalWrapPainterInAnytypeFunctype wrapPainterInAnytype) #extcall;
+void Initialise() { _InternalInitialise(_InternalWrapPainterInAnytype); }
