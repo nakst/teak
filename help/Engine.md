@@ -1,6 +1,6 @@
 # Engine
 
-The engine takes command line arguments of the form: `esh [ >= 0 engine flags ] [ path to main source file ] [ >= 0 #option values ]`. The engine flags are from the following:
+The engine takes command line arguments of the form: `teak [ >= 0 engine flags ] [ path to main source file ] [ >= 0 #option values ]`. The engine flags are from the following:
 
 - `--start=...` Set the function to call on the main source file. By default, this is `Start`.
 - `--evaluate` or `-e` The "path to main source file" is instead interpreted as a expression to evaluate.

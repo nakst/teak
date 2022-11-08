@@ -51,7 +51,7 @@ void Start() {
 	str s1 = s0[5];
 	Log("%s1%"); // Prints g.
 	// You can slice ranges from a string.
-	Log(StringSlice(s0, 1 /* start */, 3 /* end */)); // Prints tr.
+	Log(s0:slice(1 /* start */, 3 /* end */)); // Prints tr.
 	// You can concatenate strings with the add operator.
 	str s2 = s1 + s0;
 	Log("%s2%"); // Prints gString.
@@ -533,7 +533,7 @@ void Part6() {
 	Log("globalInt = %globalInt%");
 
 	// Marking a global variable with #option means its initial value can be specified when the script is launched.
-	// Try launching this script with the command line "./esh examples/basic_usage.esh globalOption=10"
+	// Try launching this script with the command line "./teak examples/basic_usage.teak globalOption=10"
 	Log("globalOption = %globalOption%");
 
 	// Global variables can be saved between executions of the script by marking them with #persist.
@@ -574,7 +574,7 @@ void Part7() {
 // and the prefix (here "img") to use for the imported symbols.
 // If you prefix the path with "core:", it is interpreted relative to the
 // directory containing the scripting engine's executable, rather than the current source file.
-// If the file is not found, the engine will retry with "/index.esh" appended to the path.
+// If the file is not found, the engine will retry with "/index.teak" appended to the path.
 #import "core:modules/imaging" img;
 
 void Part8() {

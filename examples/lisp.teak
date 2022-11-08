@@ -599,7 +599,7 @@ void Start() {
 	AddBuiltin("fun",      DoBuiltinFunction);
 
 	if input == "" {
-		Log("Example usage: ./esh examples/lisp.esh input=\"(do (let factorial (fun (n) (if (is n 0) 1 (* n (factorial (- n 1)))))) (factorial 5))\"");
+		Log("Example usage: ./teak examples/lisp.teak input=\"(do (let factorial (fun (n) (if (is n 0) 1 (* n (factorial (- n 1)))))) (factorial 5))\"");
 		str s = "";
 		for Builtin b in builtins { s += " %b.name%"; }
 		Log("Available builtins:%s%");

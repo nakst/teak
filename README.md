@@ -1,4 +1,4 @@
-# esh
+# teak
 
 A small scripting language to replace Unix shell scripts.
 
@@ -6,21 +6,21 @@ A small scripting language to replace Unix shell scripts.
 
 ## Building
 
-If you haven't built the interpreter before, first run `gcc -o esh esh.c -pthread -ldl` (Linux/macOS) or `cl.exe esh.c` (Windows).
+If you haven't built the interpreter before, first run `gcc -o teak teak.c -pthread -ldl` (Linux/macOS) or `cl.exe teak.c` (Windows).
 
-Then run `./esh build.esh`. For a debug build, run `./esh build.esh debug=true`. (For Windows, don't include the `./` at the start of the commands.)
+Then run `./teak build.teak`. For a debug build, run `./teak build.teak debug=true`. (For Windows, don't include the `./` at the start of the commands.)
 
-Run `./esh build.esh runTests=true` to run all the tests.
+Run `./teak build.teak runTests=true` to run all the tests.
 
 ## Running examples
 
-For example, run `./esh examples/hello_world.esh`.
+For example, run `./teak examples/hello_world.teak`.
 
 ## Documentation
 
 The following files document and explain the language, its tooling and the included modules.
 
-- `examples/basic_usage.esh`: A script containing a whirlwind tour of the language's syntax.
+- `examples/basic_usage.teak`: A script containing a whirlwind tour of the language's syntax.
 - `help/Base Module.md`: Documentation for the base module.
 - `help/Engine.md`: Describes the command line arguments for the scripting engine.
 - `help/Creating Modules.md`: Describes how to make modules.
@@ -32,5 +32,5 @@ Why did I make another programming language? Because I felt like there wasn't a 
 ## Roadmap
 
 - Make more documentation, examples and test cases.
-- Add features listed at the top of esh.c.
+- Add features listed at the top of teak.c.
 - Make a REPL so people can use it as a command line shell?

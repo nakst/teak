@@ -2620,7 +2620,7 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 				if (!fileData) {
 					char *alt = AllocateFixed(pathBytes + 16);
 					MemoryCopy(alt, path, pathBytes);
-					MemoryCopy(alt + pathBytes, "/index.esh", 11);
+					MemoryCopy(alt + pathBytes, "/index.teak", 11);
 					fileData = FileLoad(alt, &t.inputBytes);
 				}
 			}
@@ -9705,9 +9705,9 @@ int main(int argc, char **argv) {
 			coloredOutput = true;
 		} else if (0 == strcmp(argv[i], "--version")) {
 #ifdef GIT_COMMIT
-			fprintf(stderr, "esh scripting engine\nversion %s\n", GIT_COMMIT);
+			fprintf(stderr, "teak scripting engine\nversion %s\n", GIT_COMMIT);
 #else
-			fprintf(stderr, "esh scripting engine\nversion ??\n");
+			fprintf(stderr, "teak scripting engine\nversion ??\n");
 #endif
 		} else if (0 == strcmp(argv[i], "--want-completion-confirmation")) {
 			wantCompletionConfirmation = true;

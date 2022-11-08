@@ -1,4 +1,4 @@
-#import "../modules/imaging/index.esh" im;
+#import "core:modules/imaging" im;
 
 void Start() {
 	im.Bitmap bitmap = im.Create(100, 80);

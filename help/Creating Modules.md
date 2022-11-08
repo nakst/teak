@@ -38,7 +38,7 @@ gcc -o lmy_module.so -shared my_module.c -fPIC
 Finally, let's call into the module with a test script.
 
 ```java
-#import "my_module.esh" mod;
+#import "my_module.teak" mod;
 
 void Start() {
 	mod.Hello();

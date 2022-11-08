@@ -8,14 +8,14 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2          
     - name: build
-      run: gcc -o esh esh.c -pthread -ldl && ./esh build.esh runTests=true
+      run: gcc -o teak teak.c -pthread -ldl && ./teak build.teak runTests=true
   build-macos:
     runs-on: macos-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2          
     - name: build
-      run: gcc -o esh esh.c -pthread -ldl && ./esh build.esh runTests=true
+      run: gcc -o teak teak.c -pthread -ldl && ./teak build.teak runTests=true
   build-win32:
     runs-on: windows-latest
     steps:
@@ -25,5 +25,5 @@ jobs:
       shell: cmd
       run: |
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
-        cl.exe esh.c
-        esh.exe build.esh runTests=true
+        cl.exe teak.c
+        teak.exe build.teak runTests=true
