@@ -330,11 +330,16 @@ err[void] PathCreateLeadingDirectories(str path);
 
 ```c
 // Get the current prefix that is being appended to all non-absolute paths.
+// By default on Unix and Windows, this is the "current directory".
 str PathGetDefaultPrefix();
 
 // Set the prefix to match the directory that contains the main source file.
 // (That is, the one the script engine was passed when it was invoked.)
 err[void] PathSetDefaultPrefixToScriptSourceDirectory();
+
+// Append the default prefix to the path if necessary,
+// and possibly also perform some normalization depending on the system.
+str PathToAbsolute(str x);
 ```
 
 ## File system — other

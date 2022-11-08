@@ -326,6 +326,7 @@
 "err[void] PathMove(str source, str destination) #extcall;\n"
 "str PathGetDefaultPrefix() #extcall;\n"
 "err[void] PathSetDefaultPrefixToScriptSourceDirectory() #extcall;\n"
+"str PathToAbsolute(str x) #extcall;\n"
 "err[str] FileReadAll(str path) #extcall;\n"
 "err[void] FileWriteAll(str path, str x) #extcall;\n"
 "err[void] FileAppend(str path, str x) #extcall;\n"

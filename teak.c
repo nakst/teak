@@ -608,7 +608,7 @@ CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context);
 void ExternalPassREPLResult(ExecutionContext *context, Value value);
 void *LibraryLoad(const char *name);
 void *LibraryGetAddress(void *library, const char *name, const char *libraryName, bool addNamePrefix);
-const char *PathToAbsolute(const char *path);
+char *PathToAbsolute(const char *path, bool fixedCopy);
 const char *PathToPrettyName(const char *path);
 const char *PathToBaseDirectory(const char *path);
 const char *PathScriptEngine();
@@ -628,7 +628,7 @@ char baseModuleSource[] = {
 	REGISTER(SystemShellExecute) REGISTER(SystemShellExecuteWithWorkingDirectory) REGISTER(SystemShellEvaluate) REGISTER(SystemShellEnableLogging) \
 	REGISTER(SystemGetProcessorCount) REGISTER(SystemGetEnvironmentVariable) REGISTER(SystemSetEnvironmentVariable) REGISTER(SystemRunningAsAdministrator) REGISTER(SystemGetHostName) REGISTER(SystemSleepMs) REGISTER(SystemExit) \
 	REGISTER(PathCreateDirectory) REGISTER(PathDelete) REGISTER(PathExists) REGISTER(PathIsFile) REGISTER(PathIsDirectory) REGISTER(PathIsLink) REGISTER(PathMove) \
-	REGISTER(PathGetDefaultPrefix) REGISTER(PathSetDefaultPrefixToScriptSourceDirectory) \
+	REGISTER(PathGetDefaultPrefix) REGISTER(PathSetDefaultPrefixToScriptSourceDirectory) REGISTER(PathToAbsolute) \
 	REGISTER(FileReadAll) REGISTER(FileWriteAll) REGISTER(FileAppend) REGISTER(FileCopy) REGISTER(FileGetSize) \
 	REGISTER(PersistRead) REGISTER(PersistWrite) \
 	REGISTER(RandomInt) \
@@ -2572,7 +2572,7 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		MemoryCopy(path + parentBaseDirectoryBytes, relativePath, relativePathBytes);
 		path[pathBytes] = 0;
 
-		const char *absolutePath = PathToAbsolute(path);
+		const char *absolutePath = PathToAbsolute(path, true);
 		const char *prettyName = PathToPrettyName(absolutePath);
 
 		Assert(node->parent->type == T_ROOT);
@@ -7926,7 +7926,7 @@ void PrintLine(ImportData *importData, uintptr_t line) {
 int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes, bool replMode) {
 	Tokenizer tokenizer = { 0 };
 	ImportData importData = { 0 };
-	importData.path = PathToAbsolute(scriptPath);
+	importData.path = PathToAbsolute(scriptPath, true);
 	importData.prettyName = PathToPrettyName(importData.path);
 	importData.baseDirectory = PathToBaseDirectory(importData.path);
 	importData.fileData = fileData;
@@ -8943,6 +8943,17 @@ int ExternalPathSetDefaultPrefixToScriptSourceDirectory(ExecutionContext *contex
 	return EXTCALL_RETURN_ERR_UNMANAGED;
 }
 
+int ExternalPathToAbsolute(ExecutionContext *context, Value *returnValue) {
+	STACK_POP_STRING(entryText, entryBytes);
+	char *cString = (char *) malloc(entryBytes + 1);
+	memcpy(cString, entryText, entryBytes);
+	cString[entryBytes] = 0;
+	char *data = PathToAbsolute(cString, false);
+	free(cString);
+	RETURN_STRING_NO_COPY(data, strlen(data));
+	return EXTCALL_RETURN_MANAGED;
+}
+
 int ExternalPersistRead(ExecutionContext *context, Value *returnValue) {
 	(void) returnValue;
 	STACK_POP_STRING(entryText, entryBytes);
@@ -9561,8 +9572,13 @@ void *LibraryGetAddress(void *library, const char *name, const char *libraryName
 	return address;
 }
 
-const char *PathToAbsolute(const char *path) {
+char *PathToAbsolute(const char *path, bool fixedCopy) {
 	char *n;
+
+	if (!path) {
+		return NULL;
+	}
+
 #ifdef _WIN32
 	wchar_t *wide = WideStringFromUTF8(path, strlen(path));
 	wchar_t *result = (wchar_t *) calloc(1, sizeof(wchar_t) * (MAX_PATH + 1));
@@ -9573,7 +9589,13 @@ const char *PathToAbsolute(const char *path) {
 #else
 	n = realpath(path, NULL);
 #endif
-	if (!n) return path;
+
+	if (!n) {
+		n = (char *) malloc(strlen(path) + 1);
+		strcpy(n, path);
+	}
+
+	if (!fixedCopy) return n;
 	char *copy = (char *) AllocateFixed(strlen(n) + 1);
 	strcpy(copy, n);
 	free(n);
@@ -9763,8 +9785,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	scriptSourceDirectory = PathToBaseDirectory(PathToAbsolute(scriptPath));
-	engineDirectory = PathToBaseDirectory(PathToAbsolute(PathScriptEngine()));
+	scriptSourceDirectory = PathToBaseDirectory(PathToAbsolute(scriptPath, true));
+	engineDirectory = PathToBaseDirectory(PathToAbsolute(PathScriptEngine(), true));
 
 	size_t dataBytes = evaluateMode ? strlen(evaluateString) : 0;
 	void *data = evaluateMode ? malloc(strlen(evaluateString)) : FileLoad(scriptPath, &dataBytes);
