@@ -74,6 +74,18 @@ LIBRARY_EXPORT bool ScriptExtHeight(struct ExecutionContext *context) {
 	return true;
 }
 
+LIBRARY_EXPORT bool ScriptExtReadPixel(struct ExecutionContext *context) {
+	Bitmap *bitmap;
+	int64_t x, y;
+	if (!ScriptParameterHandle(context, (void **) &bitmap)) return false;
+	if (!bitmap) { fprintf(stderr, "(imaging) ReadPixel: Bitmap was null.\n"); return false; }
+	if (!ScriptParameterInt64(context, &x)) return false;
+	if (!ScriptParameterInt64(context, &y)) return false;
+	if (x < 0 || x > bitmap->width) { fprintf(stderr, "(imaging) ReadPixel: bad x parameter "PRINT_I64"\n", x); return false; }
+	if (y < 0 || y > bitmap->height) { fprintf(stderr, "(imaging) ReadPixel: bad y parameter "PRINT_I64"\n", y); return false; }
+	return ScriptReturnInt(context, bitmap->bits[y * bitmap->width + x]);
+}
+
 LIBRARY_EXPORT bool ScriptExtCrop(struct ExecutionContext *context) {
 	Bitmap *bitmap;
 	int64_t left, right, top, bottom;

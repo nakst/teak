@@ -15,6 +15,8 @@ void Crop(Bitmap bitmap, int left, int right, int top, int bottom) #extcall;
 void Blit(Bitmap destination, int source, int x, int y) #extcall;
 void DrawBlock(Bitmap destination, int left, int right, int top, int bottom, int color) #extcall;
 
+int ReadPixel(Bitmap bitmap, int x, int y) #extcall;
+
 err[Bitmap] Load(str data) #extcall;
 err[Bitmap] LoadFromPath(str path) { err[str] data = FileReadAll(path); reterr data; return Load(data:assert()); }
 err[str] Save(Bitmap bitmap, str format) #extcall; // Currently, only format == "png" is supported.
@@ -22,3 +24,22 @@ err[str] Save(Bitmap bitmap, str format) #extcall; // Currently, only format == 
 Animation AnimationCreate(int width, int height) #extcall;
 void AnimationAddFrame(Animation animation, Bitmap frame, float time) #extcall;
 err[str] AnimationSave(Animation animation, str format) #extcall; // // Currently, only format == "gif" is supported.
+
+str ToASCIIArt(Bitmap bitmap, int scaleW, int scaleH) {
+	int bitmapW = Width(bitmap);
+	int bitmapH = Height(bitmap);
+	str out = "";
+	str lookup = " .,:;ox\%#@";
+
+	for int y = 0; y < bitmapH; y += scaleH {
+		for int x = 0; x < bitmapW; x += scaleW {
+			int pixel = ReadPixel(bitmap, x, y); // TODO Average over the area?
+			int index = ((((pixel & 0xFF0000) >> 16) + ((pixel & 0xFF00) >> 8) + ((pixel & 0xFF) >> 0)) / 3) / 26;
+			out += lookup[index];
+		}
+
+		out += "\n";
+	}
+
+	return out;
+}
