@@ -1,4 +1,4 @@
-#import "core:modules/imaging" im;
+#import "../modules/imaging/index.teak" im;
 
 void Start() {
 	im.Bitmap bitmap = im.Create(100, 80);
