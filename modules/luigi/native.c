@@ -223,7 +223,7 @@ LIBRARY_EXPORT bool ScriptExtElementCreate(struct ExecutionContext *context) {
 		return false;
 	}
 
-	UIElement *element = UIElementCreate(sizeof(UIElement), parent->element, flags, WrapperMessage, "Custom");
+	UIElement *element = UIElementCreate(sizeof(UIElement), parent ? parent->element : NULL, flags, WrapperMessage, "Custom");
 	ElementWrapper *wrapper = WrapperCreate(element);
 	wrapper->messageClass = messageClass;
 	element->messageClass = NULL;
@@ -259,7 +259,7 @@ LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { 
 		&& ScriptParameterUint32(context, &flags) \
 		&& ScriptParameterString(context, (const void **) &string, &stringBytes); \
 	if (success) { \
-		UI##name *element = UI##name##Create(parent->element, flags, string, stringBytes); \
+		UI##name *element = UI##name##Create(parent ? parent->element : NULL, flags, string, stringBytes); \
 		return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose); \
 	} else { \
 		return ScriptReturnHandle(context, NULL, NULL); \
@@ -278,7 +278,7 @@ LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { 
 		&& ScriptParameterUint32(context, &flags) \
 		&& ScriptParameterCString(context, &cString); \
 	if (success) { \
-		UI##name *element = UI##name##Create(parent->element, flags, cString); \
+		UI##name *element = UI##name##Create(parent ? parent->element : NULL, flags, cString); \
 		ElementWrapper *wrapper = WrapperCreate(&element->e); \
 		wrapper->cStringStore = cString; \
 		success = ScriptReturnHandle(context, wrapper, ElementWrapperClose); \
@@ -298,7 +298,7 @@ LIBRARY_EXPORT bool ScriptExt##name##Create(struct ExecutionContext *context) { 
 	bool success = ScriptParameterHandle(context, (void **) &parent) \
 		&& ScriptParameterUint32(context, &flags); \
 	if (success) { \
-		UI##name *element = UI##name##Create(parent->element, flags); \
+		UI##name *element = UI##name##Create(parent ? parent->element : NULL, flags); \
 		return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose); \
 	} else { \
 		return ScriptReturnHandle(context, NULL, NULL); \
@@ -319,7 +319,7 @@ LIBRARY_EXPORT bool ScriptExtSpacerCreate(struct ExecutionContext *context) {
 	uint32_t flags;
 	int32_t width, height;
 	return ScriptParameterScan(context, "huii", &parent, &flags, &width, &height)
-		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent->element, flags, width, height)->e), ElementWrapperClose);
+		&& ScriptReturnHandle(context, WrapperCreate(&UISpacerCreate(parent ? parent->element : NULL, flags, width, height)->e), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
@@ -327,7 +327,7 @@ LIBRARY_EXPORT bool ScriptExtSplitPaneCreate(struct ExecutionContext *context) {
 	uint32_t flags;
 	double weight;
 	return ScriptParameterScan(context, "huF", &parent, &flags, &weight)
-		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent->element, flags, weight)->e), ElementWrapperClose);
+		&& ScriptReturnHandle(context, WrapperCreate(&UISplitPaneCreate(parent ? parent->element : NULL, flags, weight)->e), ElementWrapperClose);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementSetMessageUser(struct ExecutionContext *context) {
@@ -869,7 +869,7 @@ LIBRARY_EXPORT bool ScriptExtScrollBarGetPosition(struct ExecutionContext *conte
 LIBRARY_EXPORT bool ScriptExtMDIChildCreate(struct ExecutionContext *context) {
 	ElementWrapper *parent; uint32_t flags; UIRectangle bounds; const char *title; size_t titleBytes;
 	if (!ScriptParameterScan(context, "hi(iiii)S", &parent, &flags, &bounds.l, &bounds.r, &bounds.t, &bounds.b, &title, &titleBytes)) return false;
-	UIMDIChild *element = UIMDIChildCreate(parent->element, flags, bounds, title, titleBytes);
+	UIMDIChild *element = UIMDIChildCreate(parent ? parent->element : NULL, flags, bounds, title, titleBytes);
 	return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose);
 }
 
@@ -945,5 +945,19 @@ LIBRARY_EXPORT bool ScriptExtSplitPaneSetWeight(struct ExecutionContext *context
 	if (!ScriptParameterScan(context, "hF", &element, &weight)) return false;
 	((UISplitPane *) element->element)->weight = weight;
 	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtImageDisplayCreate(struct ExecutionContext *context) {
+	ElementWrapper *parent; uint32_t flags; UIPainter *bitmap;
+	if (!ScriptParameterScan(context, "hih", &parent, &flags, &bitmap)) return false;
+	UIImageDisplay *element = UIImageDisplayCreate(parent ? parent->element : NULL, flags, bitmap ? bitmap->bits : NULL, bitmap ? bitmap->width : 0, bitmap ? bitmap->height : 0, bitmap ? bitmap->width * 4 : 0);
+	return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose);
+}
+
+LIBRARY_EXPORT bool ScriptExtImageDisplaySetContent(struct ExecutionContext *context) {
+	ElementWrapper *element; UIPainter *bitmap;
+	if (!ScriptParameterScan(context, "hh", &element, &bitmap)) return false;
+	UIImageDisplaySetContent((UIImageDisplay *) element->element, bitmap ? bitmap->bits : NULL, bitmap ? bitmap->width : 0, bitmap ? bitmap->height : 0, bitmap ? bitmap->width * 4 : 0);
 	return true;
 }

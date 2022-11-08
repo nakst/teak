@@ -8,6 +8,7 @@
 
 #library "module_luigi";
 #import "core:modules/geometry" gm;
+#import "core:modules/imaging" im;
 
 handletype Element;
 handletype Button       : Element;
@@ -15,6 +16,7 @@ handletype Checkbox     : Element;
 handletype Code         : Element;
 handletype Gauge        : Element;
 handletype Label        : Element;
+handletype ImageDisplay : Element;
 handletype MDIChild     : Element;
 handletype MDIClient    : Element;
 handletype Menu         : Element;
@@ -106,6 +108,10 @@ inttype SplitPaneFlags : ElementFlags {
 inttype MenuFlags {
 	MENU_PLACE_ABOVE = 1 << 0;
 	MENU_NO_SCROLL = 1 << 1;
+};
+
+inttype ImageDisplayFlags {
+	IMAGE_DISPLAY_INTERACTIVE = 1 << 0;
 };
 
 inttype Message {
@@ -262,6 +268,7 @@ Checkbox CheckboxCreate(Element parent, CheckboxFlags flags, str label) #extcall
 Code CodeCreate(Element parent, CodeFlags flags) #extcall;
 Gauge GaugeCreate(Element parent, GaugeFlags flags) #extcall;
 Label LabelCreate(Element parent, ElementFlags flags, str label) #extcall;
+ImageDisplay ImageDisplayCreate(Element parent, ImageDisplayFlags flags, im.Bitmap bitmap) #extcall;
 MDIChild MDIChildCreate(Element parent, ElementFlags flags, gm.Rectangle initialBounds, str title) #extcall;
 MDIClient MDIClientCreate(Element parent, MDIClientFlags flags) #extcall;
 Panel PanelCreate(Element parent, PanelFlags flags) #extcall;
@@ -329,6 +336,8 @@ void LabelSetContent(Label label, str string) #extcall;
 // void SwitcherSwitchTo(Switcher switcher, Element child) #extcall;
 
 void PanelSetSpacing(Panel panel, gm.Rectangle border, int gap) #extcall;
+
+void ImageDisplaySetContent(ImageDisplay display, im.Bitmap bitmap) #extcall;
 
 inttype CheckState { CHECK_UNCHECKED = 0; CHECK_CHECKED = 1; CHECK_INDETERMINATE = 2; };
 void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;

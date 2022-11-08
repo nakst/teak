@@ -7161,7 +7161,8 @@ bool ScriptParseOptions(ExecutionContext *context) {
 		for (uintptr_t j = 0; j < context->rootNode->scope->entryCount; j++) {
 			if (context->rootNode->scope->entries[j]->token.textBytes == equalsPosition
 					&& 0 == MemoryCompare(context->rootNode->scope->entries[j]->token.text, options[i], equalsPosition)
-					&& context->rootNode->scope->entries[j]->type == T_DECLARE) {
+					&& context->rootNode->scope->entries[j]->type == T_DECLARE
+					&& context->rootNode->scope->entries[j]->isOptionVariable) {
 				node = context->rootNode->scope->entries[j];
 				break;
 			}
@@ -9517,8 +9518,7 @@ void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, con
 }
 
 void *LibraryLoad(const char *name) {
-	Assert(strlen(name) < 256);
-	char name2[256 + 20];
+	char *name2 = (char *) malloc(strlen(name) + strlen(engineDirectory) + 20);
 	void *result = NULL;
 
 #ifdef _WIN32
@@ -9532,7 +9532,8 @@ void *LibraryLoad(const char *name) {
 	result = dlopen(name2, RTLD_LAZY);
 
 	if (!result) {
-		strcpy(name2, "./l");
+		strcpy(name2, engineDirectory);
+		strcat(name2, "/l");
 		strcat(name2, name);
 		strcat(name2, ".so");
 		result = dlopen(name2, RTLD_LAZY);
@@ -9543,6 +9544,7 @@ void *LibraryLoad(const char *name) {
 		PrintError3("The library \"%s\" could not be found or loaded.\n", name2);
 	}
 
+	free(name2);
 	return result;
 }
 

@@ -20,8 +20,10 @@
 #include "../native_interface.h"
 
 typedef struct Bitmap {
-	int width, height;
+	// This structure can be used as a UIPainter from the luigi module.
+	int _unused[4];
 	uint32_t *bits;
+	int width, height;
 } Bitmap;
 
 typedef struct Animation {
@@ -151,6 +153,11 @@ LIBRARY_EXPORT bool ScriptExtLoad(struct ExecutionContext *context) {
 	uint8_t *data = stbi_load_from_memory((const uint8_t *) input, bytes, &width, &height, &components, 4);
 
 	if (data) {
+		for (int i = 0; i < width * height; i++) {
+			uint32_t x = ((uint32_t *) data)[i];
+			((uint32_t *) data)[i] = (x & 0xFF00FF00) | ((x & 0xFF0000) >> 16) | ((x & 0xFF) << 16);
+		}
+
 		Bitmap *bitmap = (Bitmap *) calloc(1, sizeof(Bitmap));
 		bitmap->width = width;
 		bitmap->height = height;
@@ -174,7 +181,19 @@ LIBRARY_EXPORT bool ScriptExtSave(struct ExecutionContext *context) {
 	free(format);
 	if (!png) return ScriptReturnError(context, "UNSUPPORTED_IMAGE_FORMAT");
 	int bytes;
+
+	for (int i = 0; i < bitmap->width * bitmap->height; i++) {
+		uint32_t x = bitmap->bits[i];
+		bitmap->bits[i] = (x & 0xFF00FF00) | ((x & 0xFF0000) >> 16) | ((x & 0xFF) << 16);
+	}
+
 	uint8_t *data = stbi_write_png_to_mem((uint8_t *) bitmap->bits, 4 * bitmap->width, bitmap->width, bitmap->height, 4, &bytes);
+
+	for (int i = 0; i < bitmap->width * bitmap->height; i++) {
+		uint32_t x = bitmap->bits[i];
+		bitmap->bits[i] = (x & 0xFF00FF00) | ((x & 0xFF0000) >> 16) | ((x & 0xFF) << 16);
+	}
+
 	if (!data) return ScriptReturnError(context, "INSUFFICIENT_RESOURCES");
 	if (!ScriptReturnString(context, data, bytes)) { free(data); return false; }
 	free(data);
