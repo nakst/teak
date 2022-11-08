@@ -10,6 +10,7 @@ jobs:
     - name: build
       run: gcc -o teak teak.c -pthread -ldl && ./teak build.teak runTests=true
     - uses: actions/upload-artifact@v3
+      if: always()
       with:
         name: linux_tests_log.txt
         path: tests_log.txt
@@ -21,6 +22,7 @@ jobs:
     - name: build
       run: gcc -o teak teak.c -pthread -ldl && ./teak build.teak runTests=true
     - uses: actions/upload-artifact@v3
+      if: always()
       with:
         name: macos_tests_log.txt
         path: tests_log.txt
@@ -36,6 +38,7 @@ jobs:
         cl.exe teak.c
         teak.exe build.teak runTests=true
     - uses: actions/upload-artifact@v3
+      if: always()
       with:
         name: win32_tests_log.txt
         path: tests_log.txt
