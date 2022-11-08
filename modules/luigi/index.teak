@@ -1,3 +1,11 @@
+// TODO:
+// - Element specific: MDIClientGetActiveChild MDIClientSetActiveChild MenuCreate MenuIsOpen MenuShow SwitcherSwitchTo
+// - Fonts: FontActivate FontCreate FontGetGlyphHeight FontGetGlyphWidth CodeSetFont
+// - Invoke callbacks: ButtonSetInvoke CheckboxSetInvoke MenuAddItem WindowRegisterShortcut
+// - Returning elements: ParentPop ParentPush WindowGetFocusedElement WindowGetHoveredElement WindowGetPressedElement
+// - Complicated: ElementMessage
+// - Message data: MSG_CODE_DECORATE_LINE MSG_GET_CHILD_STABILITY MSG_PRESSED_DESCENDENT MSG_WINDOW_DROP_FILES
+
 #library "module_luigi";
 #import "core:modules/geometry" gm;
 
@@ -254,7 +262,7 @@ Checkbox CheckboxCreate(Element parent, CheckboxFlags flags, str label) #extcall
 Code CodeCreate(Element parent, CodeFlags flags) #extcall;
 Gauge GaugeCreate(Element parent, GaugeFlags flags) #extcall;
 Label LabelCreate(Element parent, ElementFlags flags, str label) #extcall;
-// MDIChild MDIChildCreate(Element parent, ElementFlags flags, gm.Rectangle initialBounds, str title) #extcall;
+MDIChild MDIChildCreate(Element parent, ElementFlags flags, gm.Rectangle initialBounds, str title) #extcall;
 MDIClient MDIClientCreate(Element parent, MDIClientFlags flags) #extcall;
 Panel PanelCreate(Element parent, PanelFlags flags) #extcall;
 ScrollBar ScrollBarCreate(Element parent, ScrollBarFlags flags) #extcall;
@@ -327,11 +335,11 @@ void CheckboxSetCheck(Checkbox checkbox, CheckState check) #extcall;
 CheckState CheckboxGetCheck(Checkbox checkbox) #extcall;
 // void CheckboxSetInvoke(Checkbox checkbox, InvokeCallback invoke) #extcall;
 
-// void SplitPaneSetWeight(SplitPane pane, float weight) #extcall;
-// float SplitPaneGetWeight(SplitPane pane) #extcall;
+void SplitPaneSetWeight(SplitPane pane, float weight) #extcall;
+float SplitPaneGetWeight(SplitPane pane) #extcall;
 
-// void TabPaneSetActive(TabPane pane, int index) #extcall;
-// int TabPaneGetActive(TabPane pane) #extcall;
+void TabPaneSetActive(TabPane pane, int index) #extcall;
+int TabPaneGetActive(TabPane pane) #extcall;
 
 void TableSetHighlightedColumn(Table table, int index) #extcall;
 void TableSetItemCount(Table table, int count) #extcall;
@@ -355,24 +363,23 @@ void TextboxSetSelectionFrom(Textbox textbox, int index) #extcall;
 void TextboxSetSelectionTo(Textbox textbox, int index) #extcall;
 void TextboxSetCaretPosition(Textbox textbox, int index) #extcall;
 
-// void CodeFocusLine(Code code, int index) #extcall; // Line numbers are 1-indexed!!
-// int CodeHitTest(Code code, int x, int y) #extcall; // Returns line number; negates if in margin. Returns 0 if not on a line.
-// void CodeInsertContent(Code code, str content, bool #extcall replace);
-// void CodeSetTabSize(Code code, int tabSize) #extcall;
-// int CodeGetLineCount(Code code) #extcall;
-// str CodeGetLineContent(Code code, int index) #extcall; // Line numbers are 1-indexed!!
+void CodeFocusLine(Code code, int index) #extcall; // Line numbers are 1-indexed!!
+int CodeHitTest(Code code, int x, int y) #extcall; // Returns line number; negates if in margin. Returns 0 if not on a line.
+void CodeInsertContent(Code code, str content, bool replace) #extcall;
+void CodeSetTabSize(Code code, int tabSize) #extcall;
+int CodeGetLineCount(Code code) #extcall;
+str CodeGetLineContent(Code code, int index) #extcall; // Line numbers are 1-indexed!!
 // void CodeSetFont(Code code, Font font) #extcall;
 
-// MDIChild MDIClientGetActiveChild(MDIClient cli #extcallent);
-// void MDIClientSetActiveChild(MDIClient client, MDIChil #extcalld child);
-// gm.Rectangle MDIChildGetBounds(MDIChild child) #extcall;
-// void MDIChildSetBounds(MDIChild child, gm.Rectangle bo #extcallunds);
-// void MDIChildSetTitle(MDIChild child, str title) #extcall;
+// MDIChild MDIClientGetActiveChild(MDIClient client) #extcall;
+// void MDIClientSetActiveChild(MDIClient client, MDIChild child) #extcall;
+gm.Rectangle MDIChildGetBounds(MDIChild child) #extcall;
+void MDIChildSetBounds(MDIChild child, gm.Rectangle bounds) #extcall;
 
-// void ScrollBarSetMaximumPosition(ScrollBar bar, int maximum) #extcall;
-// void ScrollBarSetPageSize(ScrollBar bar, int page) #extcall;
-// void ScrollBarSetPosition(ScrollBar bar, float position) #extcall;
-// float ScrollBarGetPosition(ScrollBar bar) #extcall;
+void ScrollBarSetMaximumPosition(ScrollBar bar, int maximum) #extcall;
+void ScrollBarSetPageSize(ScrollBar bar, int page) #extcall;
+void ScrollBarSetPosition(ScrollBar bar, float position) #extcall;
+float ScrollBarGetPosition(ScrollBar bar) #extcall;
 
 int KeycodeBackspace() #extcall;
 int KeycodeDelete() #extcall;
@@ -441,5 +448,7 @@ functype anytype _InternalWrapPainterInAnytypeFunctype(Painter object);
 anytype _InternalWrapPainterInAnytype(Painter object) { anytype a = object; return a; }
 functype anytype _InternalWrapTableGetItemInAnytypeFunctype(TableGetItem object);
 anytype _InternalWrapTableGetItemInAnytype(TableGetItem object) { anytype a = object; return a; }
-void _InternalInitialise(_InternalWrapPainterInAnytypeFunctype wrap0, _InternalWrapTableGetItemInAnytypeFunctype wrap1) #extcall;
-void Initialise() { _InternalInitialise(_InternalWrapPainterInAnytype, _InternalWrapTableGetItemInAnytype); }
+functype anytype _InternalWrapKeyTypedInAnytypeFunctype(KeyTyped object);
+anytype _InternalWrapKeyTypedInAnytype(KeyTyped object) { anytype a = object; return a; }
+void _InternalInitialise(_InternalWrapPainterInAnytypeFunctype wrap0, _InternalWrapTableGetItemInAnytypeFunctype wrap1, _InternalWrapKeyTypedInAnytypeFunctype wrap2) #extcall;
+void Initialise() { _InternalInitialise(_InternalWrapPainterInAnytype, _InternalWrapTableGetItemInAnytype, _InternalWrapKeyTypedInAnytype); }

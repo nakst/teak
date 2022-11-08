@@ -7379,6 +7379,17 @@ bool ScriptReturnString(ExecutionContext *context, const void *data, size_t byte
 	return true;
 }
 
+bool ScriptCreateString(ExecutionContext *context, const void *_text, size_t _bytes, intptr_t *_index) {
+	uintptr_t index = HeapAllocate(context); // TODO Handle memory allocation failures here.
+	context->heap[index].type = T_STR;
+	context->heap[index].bytes = _bytes;
+	context->heap[index].text = (char *) AllocateResize(NULL, _bytes);
+	MemoryCopy(context->heap[index].text, _text, _bytes);
+	context->heap[index].externalReferenceCount = 1;
+	*_index = index;
+	return true;
+}
+
 bool ScriptCreateStruct(ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount, intptr_t *_index) {
 	uintptr_t index = HeapAllocate(context); // TODO Handle memory allocation failures here.
 	context->heap[index].type = T_STRUCT;
@@ -7583,6 +7594,7 @@ bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer,
 
 const ScriptNativeInterface _scriptNativeInterface = {
 	.CreateHandle = ScriptCreateHandle,
+	.CreateString = ScriptCreateString,
 	.CreateStruct = ScriptCreateStruct,
 	.HeapRefClose = ScriptHeapRefClose,
 	.ParameterBool = ScriptParameterBool,

@@ -10,6 +10,7 @@ typedef void (*ScriptCloseHandleFunction)(struct ExecutionContext *context, void
 
 typedef struct ScriptNativeInterface {
 	bool (*CreateHandle)(struct ExecutionContext *context, void *handleData, ScriptCloseHandleFunction close, intptr_t *handle);
+	bool (*CreateString)(struct ExecutionContext *context, const void *input, size_t inputBytes, intptr_t *handle);
 	bool (*CreateStruct)(struct ExecutionContext *context, int64_t *fields, bool *managedFields, size_t fieldCount, intptr_t *index);
 	void (*HeapRefClose)(struct ExecutionContext *context, intptr_t index);
 	bool (*ParameterBool)(struct ExecutionContext *context, bool *output);
@@ -46,6 +47,7 @@ extern const ScriptNativeInterface _scriptNativeInterface;
 #else
 
 #define ScriptCreateHandle(...)     (scriptNativeInterface->CreateHandle    (__VA_ARGS__))
+#define ScriptCreateString(...)     (scriptNativeInterface->CreateString    (__VA_ARGS__))
 #define ScriptCreateStruct(...)     (scriptNativeInterface->CreateStruct    (__VA_ARGS__))
 #define ScriptHeapRefClose(...)     (scriptNativeInterface->HeapRefClose    (__VA_ARGS__))
 #define ScriptParameterBool(...)    (scriptNativeInterface->ParameterBool   (__VA_ARGS__))

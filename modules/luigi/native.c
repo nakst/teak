@@ -33,6 +33,7 @@ struct ExecutionContext *contextForCallback;
 
 intptr_t wrapPainterInAnytype;
 intptr_t wrapTableGetItemInAnytype;
+intptr_t wrapKeyTypedInAnytype;
 
 bool ReturnRectangle(struct ExecutionContext *context, UIRectangle rect) {
 	return ScriptReturnStructInl(context, 4, rect.l, false, rect.r, false, rect.t, false, rect.b, false);
@@ -107,6 +108,18 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 			int64_t parameters[1] = { (int64_t) rawHandle };
 			bool managedParameters[4] = { true };
 			if (!ScriptRunCallback(contextForCallback, wrapTableGetItemInAnytype, parameters, managedParameters, 1, &dataHandle, true)) exit(1);
+		} else if (message == UI_MSG_KEY_TYPED || message == UI_MSG_KEY_RELEASED) {
+			UIKeyTyped *m = (UIKeyTyped *) dp;
+			intptr_t stringHandle = 0;
+			if (m->textBytes && !ScriptCreateString(contextForCallback, m->text, m->textBytes, &stringHandle)) exit(1);
+			int64_t fields[2] = { (int64_t) stringHandle, (int64_t) m->code };
+			bool managedFields[2] = { true, false };
+			if (!ScriptCreateStruct(contextForCallback, fields, managedFields, 2, &rawHandle)) exit(1);
+			int64_t parameters[1] = { (int64_t) rawHandle };
+			bool managedParameters[4] = { true };
+			if (!ScriptRunCallback(contextForCallback, wrapKeyTypedInAnytype, parameters, managedParameters, 1, &dataHandle, true)) exit(1);
+			ScriptHeapRefClose(contextForCallback, rawHandle);
+			if (stringHandle) ScriptHeapRefClose(contextForCallback, stringHandle);
 		}
 
 		int64_t parameters[4] = { (int64_t) elementHandle, (int64_t) message, (int64_t) di, (int64_t) dataHandle };
@@ -159,6 +172,7 @@ ElementWrapper *WrapperCreate(UIElement *element) {
 LIBRARY_EXPORT bool ScriptExt_InternalInitialise(struct ExecutionContext *context) {
 	if (!ScriptParameterHeapRef(context, &wrapPainterInAnytype)) return false;
 	if (!ScriptParameterHeapRef(context, &wrapTableGetItemInAnytype)) return false;
+	if (!ScriptParameterHeapRef(context, &wrapKeyTypedInAnytype)) return false;
 	UIInitialise();
 	return true;
 }
@@ -212,6 +226,7 @@ LIBRARY_EXPORT bool ScriptExtElementCreate(struct ExecutionContext *context) {
 	UIElement *element = UIElementCreate(sizeof(UIElement), parent->element, flags, WrapperMessage, "Custom");
 	ElementWrapper *wrapper = WrapperCreate(element);
 	wrapper->messageClass = messageClass;
+	element->messageClass = NULL;
 	return ScriptReturnHandle(context, wrapper, ElementWrapperClose);
 }
 
@@ -804,5 +819,131 @@ LIBRARY_EXPORT bool ScriptExtTableResizeColumns(struct ExecutionContext *context
 	if (!ScriptParameterScan(context, "h", &element)) return false;
 	UITableResizeColumns((UITable *) element->element);
 	if (!alreadyHasContext) contextForCallback = NULL;
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtTabPaneSetActive(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	((UITabPane *) element->element)->active = index;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtTabPaneGetActive(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	return ScriptReturnInt(context, ((UITabPane *) element->element)->active);
+}
+
+LIBRARY_EXPORT bool ScriptExtScrollBarSetMaximumPosition(struct ExecutionContext *context) {
+	ElementWrapper *element; int64_t value;
+	if (!ScriptParameterScan(context, "hI", &element, &value)) return false;
+	((UIScrollBar *) element->element)->maximum = value;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtScrollBarSetPageSize(struct ExecutionContext *context) {
+	ElementWrapper *element; int64_t value;
+	if (!ScriptParameterScan(context, "hI", &element, &value)) return false;
+	((UIScrollBar *) element->element)->page = value;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtScrollBarSetPosition(struct ExecutionContext *context) {
+	ElementWrapper *element; double value;
+	if (!ScriptParameterScan(context, "hF", &element, &value)) return false;
+	((UIScrollBar *) element->element)->position = value;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtScrollBarGetPosition(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	return ScriptReturnDouble(context, ((UIScrollBar *) element->element)->position);
+}
+
+LIBRARY_EXPORT bool ScriptExtMDIChildCreate(struct ExecutionContext *context) {
+	ElementWrapper *parent; uint32_t flags; UIRectangle bounds; const char *title; size_t titleBytes;
+	if (!ScriptParameterScan(context, "hi(iiii)S", &parent, &flags, &bounds.l, &bounds.r, &bounds.t, &bounds.b, &title, &titleBytes)) return false;
+	UIMDIChild *element = UIMDIChildCreate(parent->element, flags, bounds, title, titleBytes);
+	return ScriptReturnHandle(context, WrapperCreate(&element->e), ElementWrapperClose);
+}
+
+LIBRARY_EXPORT bool ScriptExtMDIChildGetBounds(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	return ReturnRectangle(context, ((UIMDIChild *) element->element)->bounds);
+}
+
+LIBRARY_EXPORT bool ScriptExtMDIChildSetBounds(struct ExecutionContext *context) {
+	ElementWrapper *element; UIRectangle bounds;
+	if (!ScriptParameterScan(context, "h(iiii)", &element, &bounds.l, &bounds.r, &bounds.t, &bounds.b)) return false;
+	((UIMDIChild *) element->element)->bounds = bounds;
+	UIElementRefresh(element->element);
+	UIElementRefresh(element->element->parent);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeFocusLine(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	UICodeFocusLine((UICode *) element->element, index);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeHitTest(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t x, y;
+	if (!ScriptParameterScan(context, "hii", &element, &x, &y)) return false;
+	return ScriptReturnInt(context, UICodeHitTest((UICode *) element->element, x, y));
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeInsertContent(struct ExecutionContext *context) {
+	ElementWrapper *element; const char *content; size_t contentBytes; bool replace;
+	if (!ScriptParameterScan(context, "hSb", &element, &content, &contentBytes, &replace)) return false;
+	UICodeInsertContent((UICode *) element->element, content, contentBytes, replace);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeSetTabSize(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t tabSize;
+	if (!ScriptParameterScan(context, "hi", &element, &tabSize)) return false;
+	((UICode *) element->element)->tabSize = tabSize;
+	UIElementRefresh(element->element);
+	return true;
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeGetLineCount(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	return ScriptReturnInt(context, ((UICode *) element->element)->lineCount);
+}
+
+LIBRARY_EXPORT bool ScriptExtCodeGetLineContent(struct ExecutionContext *context) {
+	ElementWrapper *element; int32_t index;
+	if (!ScriptParameterScan(context, "hi", &element, &index)) return false;
+	UICode *code = (UICode *) element->element;
+
+	if (index >= 1 && index <= code->lineCount) {
+		return ScriptReturnString(context, code->lines[index].offset + code->content, code->lines[index].bytes);
+	} else {
+		return ScriptReturnString(context, NULL, 0);
+	}
+}
+
+LIBRARY_EXPORT bool ScriptExtSplitPaneGetWeight(struct ExecutionContext *context) {
+	ElementWrapper *element;
+	if (!ScriptParameterScan(context, "h", &element)) return false;
+	return ScriptReturnDouble(context, ((UISplitPane *) element->element)->weight);
+}
+
+LIBRARY_EXPORT bool ScriptExtSplitPaneSetWeight(struct ExecutionContext *context) {
+	ElementWrapper *element; double weight;
+	if (!ScriptParameterScan(context, "hF", &element, &weight)) return false;
+	((UISplitPane *) element->element)->weight = weight;
+	UIElementRefresh(element->element);
 	return true;
 }
