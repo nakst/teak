@@ -1,3 +1,5 @@
+#import "core:modules/math" ma;
+
 void Start() {
 	assert IntegerAbsolute(-5) == 5;
 	assert IntegerAbsolute(5) == 5;
@@ -73,9 +75,9 @@ void Start() {
 	assert  CharacterIsAlnum("5");
 	assert  CharacterIsAlnum("9");
 
-	int[] p = PermutationFirst(4);
+	int[] p = ma.PermutationFirst(4);
 	int count = 1;
-	while PermutationIterate(p) { count += 1; }
+	while ma.PermutationIterate(p) { count += 1; }
 	assert count == 24;
 
 	assert StringRemoveOptionalPrefix("test", "te") == "st";

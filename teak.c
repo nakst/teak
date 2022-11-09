@@ -625,7 +625,7 @@ char baseModuleSource[] = {
 	REGISTER(Log) REGISTER(LogOpenGroup) REGISTER(LogClose) \
 	REGISTER(TextColorError) REGISTER(TextColorHighlight) REGISTER(TextWeight) REGISTER(TextMonospaced) REGISTER(TextPlain) \
 	REGISTER(ConsoleGetLine) REGISTER(ConsoleWriteStdout) REGISTER(ConsoleWriteStderr) \
-	REGISTER(SystemShellExecute) REGISTER(SystemShellExecuteWithWorkingDirectory) REGISTER(SystemShellEvaluate) REGISTER(SystemShellEnableLogging) \
+	REGISTER(SystemShellExecute) REGISTER(SystemShellExecuteWithWorkingDirectory) REGISTER(_SystemShellEvaluateInternal) REGISTER(SystemShellEnableLogging) \
 	REGISTER(SystemGetProcessorCount) REGISTER(SystemGetEnvironmentVariable) REGISTER(SystemSetEnvironmentVariable) REGISTER(SystemRunningAsAdministrator) REGISTER(SystemGetHostName) REGISTER(SystemSleepMs) REGISTER(SystemExit) \
 	REGISTER(PathCreateDirectory) REGISTER(PathDelete) REGISTER(PathExists) REGISTER(PathIsFile) REGISTER(PathIsDirectory) REGISTER(PathIsLink) REGISTER(PathMove) \
 	REGISTER(PathGetDefaultPrefix) REGISTER(PathSetDefaultPrefixToScriptSourceDirectory) REGISTER(PathToAbsolute) \
@@ -6801,10 +6801,11 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			} else if (command == T_OP_GET_##keyType) { \
 				/* TODO handle memory allocation failures here */ \
 				/* TODO allocate a message string; be careful with GC */ \
+				bool internalValuesAreManaged = entry->internalValuesAreManaged; \
 				uintptr_t index = HeapAllocate(context); \
 				context->heap[index].type = T_ERR; \
 				context->heap[index].success = found; \
-				context->heap[index].internalValuesAreManaged = entry->internalValuesAreManaged || !found; \
+				context->heap[index].internalValuesAreManaged = internalValuesAreManaged || !found; \
 				if (found) context->heap[index].errorValue = value; \
 				else context->heap[index].errorValue.i = 0; \
 				context->c->stackIsManaged[context->c->stackPointer - 2] = true; \
@@ -8422,7 +8423,7 @@ int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Va
 	return EXTCALL_RETURN_UNMANAGED;
 }
 
-int ExternalSystemShellEvaluate(ExecutionContext *context, Value *returnValue) {
+int External_SystemShellEvaluateInternal(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING(text, bytes);
 	char *temporary = StringZeroTerminate(text, bytes);
 
@@ -8451,17 +8452,17 @@ int ExternalSystemShellEvaluate(ExecutionContext *context, Value *returnValue) {
 				position += bytesRead;
 			}
 
-			buffer = (char *) realloc(buffer, position); // Shrink to match the size exactly.
-			pclose(f);
+			buffer = (char *) realloc(buffer, position + 1);
+			buffer[position] = WEXITSTATUS(pclose(f)) == 0 ? 't' : 'f';
 
-			RETURN_STRING_NO_COPY(buffer, position);
+			RETURN_STRING_NO_COPY(buffer, position + 1);
 		} else {
 			returnValue->i = 0;
 		}
 
 		free(temporary);
 	} else {
-		fprintf(stderr, "Error in ExternalSystemShellEvaluate: Out of memory.\n");
+		fprintf(stderr, "Error in ExternalSystemShellEvaluate2: Out of memory.\n");
 		returnValue->i = 0;
 	}
 

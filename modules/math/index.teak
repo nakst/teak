@@ -1,0 +1,122 @@
+struct Rational {
+	int p; // Either 0, or it has no divisors in common with q.
+	int q; // >= 1. If p = 0, q = 1.
+};
+
+Rational RationalCreate(int p, int q) {
+	if p == 0 { return [ p = 0, q = 1 ]; }
+	int r = IntegerGCD(p, q);
+	if q < 0 { r = -r; }
+	return [ p = p / r, q = q / r ];
+}
+
+Rational RationalAdd(Rational a, Rational b) {
+	return RationalCreate(a.p * b.q + a.q * b.p, a.q * b.q);
+}
+
+Rational RationalMultiply(Rational a, Rational b) {
+	return RationalCreate(a.p * b.p, a.q * b.q);
+}
+
+Rational RationalScale(Rational a, int b) {
+	return [ p = a.p * b, q = a.q ];
+}
+
+int[] PermutationFirst(int n) { int[] p = new int[]; for int i = 0; i < n; i += 1 { p:add(i); } return p; }
+
+bool PermutationIterate(int[] p) {
+	int lvi = -1;
+	int xiForLvi;
+	int yiForLvi;
+	for int xi = 0; xi < p:len(); xi += 1 {
+		int i = p[xi];
+		bool odd = false;
+		for int j = 0; j < p:len(); j += 1 {
+			for int k = 0; k < j; k += 1 {
+				if p[j] < i && p[k] < i && p[j] < p[k] {
+					odd = !odd;
+				}
+			}
+		}
+		int yi = xi - 1;
+		if odd yi += 2;
+		bool valid = yi >= 0 && yi < p:len() && p[yi] < i;
+		if valid && i > lvi {
+			lvi = i;
+			xiForLvi = xi;
+			yiForLvi = yi;
+		}
+	}
+	if lvi == -1 {
+		return false;
+	} else {
+		int swap = p[xiForLvi];
+		p[xiForLvi] = p[yiForLvi];
+		p[yiForLvi] = swap;
+		return true;
+	}
+}
+
+int IntegerGCD(int _a, int _b) {
+	int a = _a;
+	int b = _b;
+	assert a != 0 || b != 0;
+	if a < 0 a = -a;
+	if b < 0 b = -b;
+	while true {
+		if a < b { int t = a; a = b; b = t; }
+		if b == 0 { return a; }
+		if b == 1 { return 1; }
+		a = IntegerModulo(a, b);
+	}
+}
+
+int IntegerLCM(int a, int b) { return IntegerAbsolute(a * b / IntegerGCD(a, b)); }
+
+tuple[int, int, int] IntegerExtendedEuclidean(int _a, int _b) {
+	assert _a != 0 || _b != 0;
+	int ma = 1; int a = _a; int mb = 1; int b = _b;
+	if a < 0 { a = -a; ma = -ma; }
+	if b < 0 { b = -b; mb = -mb; }
+	bool swap = false;
+	if a < b { int t = a; a = b; b = t; t = ma; ma = mb; mb = t; swap = true; }
+	int gcd; int ca; int cb;
+	if b == 0 { gcd = a; ca = 1; cb = 0; } 
+	else if b == 1 { gcd = 1; ca = 0; cb = 1; } 
+	else { int q = a / b; int r = a - q * b; gcd, ca, cb = IntegerExtendedEuclidean(r, b); cb -= ca * q; }
+	if swap { return gcd, cb * mb, ca * ma; } 
+	else { return gcd, ca * ma, cb * mb; }
+}
+
+tuple[int, int] IntegerCRT(int[] r, int[] m) {
+	assert r:len() == m:len() && r:len() != 0;
+	int M = 1;
+	int x = 0;
+	for int mi in m { assert mi >= 1; M *= mi; }
+
+	for int i = 0; i < r:len(); i += 1 {
+		int mi = m[i];
+		int gcd, int ca, int cb = IntegerExtendedEuclidean(IntegerModulo(M / mi, mi), mi);
+		assert gcd == 1;
+		x += r[i] * ca * M / mi;
+	}
+
+	return x, M;
+}
+
+int[] IntegerPrimeFactorization(int _x) {
+	int x = _x;
+	assert x != 0;
+	int[] r = [];
+	if x < 0 { x = -x; r:add(-1); }
+	int p = 2;
+	while x != 1 {
+		if IntegerModulo(x, p) == 0 {
+			x /= p;
+			r:add(p);
+		} else {
+			p += 1;
+		}
+	}
+	return r;
+}
