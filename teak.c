@@ -8379,7 +8379,7 @@ int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Va
 	char *temporary2 = StringZeroTerminate(entry2Text, entry2Bytes);
 	if (!temporary2) return EXTCALL_RETURN_MANAGED;
 
-	if (systemShellLoggingEnabled) PrintDebug("%s(%s) %s\n", coloredOutput ? "\033[0;32m" : "", temporary, temporary2, coloredOutput ? "\033[0m" : "");
+	if (systemShellLoggingEnabled) PrintDebug("%s(%s) %s%s\n", coloredOutput ? "\033[0;32m" : "", temporary, temporary2, coloredOutput ? "\033[0m" : "");
 	
 #ifdef __linux__
 	pid_t pid = fork();
