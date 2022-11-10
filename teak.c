@@ -6947,31 +6947,51 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				
 				context->c->waitingOn = (CoroutineState ***) AllocateResize(context->c->waitingOn, sizeof(CoroutineState **) * entry->length);
 				Assert(context->c->waitingOnCount == 0);
-				CoroutineState *c = context->allCoroutines;
 
-				while (c) {
-					for (uintptr_t i = 0; i < entry->length; i++) {
-						if (c->id == (uint64_t) entry->list[i].i) {
-							if (c->waiterCount == c->waitersAllocated) {
-								c->waitersAllocated = c->waitersAllocated ? c->waitersAllocated * 2 : 4;
-								c->waiters = (CoroutineState **) AllocateResize(c->waiters, sizeof(CoroutineState *) * c->waitersAllocated);
-							}
+				intptr_t alreadyFinished = -1;
 
-							c->waiters[c->waiterCount] = context->c;
-							context->c->waitingOn[context->c->waitingOnCount++] = &c->waiters[c->waiterCount];
-							c->waiterCount++;
-						}
+				for (uintptr_t i = 0; i < entry->length; i++) {
+					CoroutineState *c = context->allCoroutines;
+					bool found = false;
+
+					while (c) {
+						if (c->id == (uint64_t) entry->list[i].i) { found = true; break; }
+						c = c->nextCoroutine;
 					}
 
-					c = c->nextCoroutine;
+					if (!found) {
+						alreadyFinished = c->id;
+						break;
+					}
 				}
 
-				// PrintDebug("== waiting on %d...\n", context->c->waitingOnCount);
-
-				if (!context->c->waitingOnCount) {
+				if (alreadyFinished != -1 || !entry->length) {
 					// PrintDebug("== immediately unblocking\n");
-					context->c->unblockedBy = entry->length ? entry->list[0].i : -1;
+					context->c->unblockedBy = alreadyFinished;
 					unblockImmediately = true;
+				} else {
+					CoroutineState *c = context->allCoroutines;
+
+					while (c) {
+						for (uintptr_t i = 0; i < entry->length; i++) {
+							if (c->id == (uint64_t) entry->list[i].i) {
+								if (c->waiterCount == c->waitersAllocated) {
+									c->waitersAllocated = c->waitersAllocated ? c->waitersAllocated * 2 : 4;
+									c->waiters = (CoroutineState **) AllocateResize(c->waiters, sizeof(CoroutineState *) * c->waitersAllocated);
+								}
+
+								c->waiters[c->waiterCount] = context->c;
+								context->c->waitingOn[context->c->waitingOnCount++] = &c->waiters[c->waiterCount];
+								c->waiterCount++;
+								break;
+							}
+						}
+
+						c = c->nextCoroutine;
+					}
+
+					// PrintDebug("== waiting on %d...\n", context->c->waitingOnCount);
+					Assert(context->c->waitingOnCount);
 				}
 			}
 
@@ -8090,6 +8110,7 @@ int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t leng
 #define popen _popen
 #define pclose _pclose
 #define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
+#define WEXITSTATUS(x) (((x) >> 8) & 0xFF) // TODO Is this correct?
 #define setenv(x, y, z) !SetEnvironmentVariable(x, y)
 #else
 #include <dlfcn.h>
@@ -8453,7 +8474,8 @@ int External_SystemShellEvaluateInternal(ExecutionContext *context, Value *retur
 			}
 
 			buffer = (char *) realloc(buffer, position + 1);
-			buffer[position] = WEXITSTATUS(pclose(f)) == 0 ? 't' : 'f';
+			int pcloseResult = pclose(f);
+			buffer[position] = WEXITSTATUS(pcloseResult) == 0 ? 't' : 'f';
 
 			RETURN_STRING_NO_COPY(buffer, position + 1);
 		} else {

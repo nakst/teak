@@ -515,12 +515,18 @@ void Part6() {
 
 	// You can wait for coroutines to make progress using the await statement.
 	// This takes a list of coroutines IDs and returns the ID of the first one that finishes.
-	int finished = await [id1, id2];
-	Log("finished coroutine %finished%");
-	finished = await [id1, id2]; // Tasks previously returned from await will be ignored.
-	// If all the tasks in the list have finished, the first ID in the list is returned.
+	// If one has already finished, its ID is returned without blocking.
 	// If the list is empty, -1 is returned.
+	int[] tasks = [id1, id2];
+	int finished = await tasks;
 	Log("finished coroutine %finished%");
+	tasks:find_and_delete(finished);
+	Log("remaining tasks %tasks%");
+	finished = await tasks;
+	Log("finished coroutine %finished%");
+	tasks:find_and_delete(finished);
+	// To wait for all the tasks in a list to finish, use:
+	// while tasks:find_and_delete(await tasks);
 
 	// The coroutine that is currently executing can only change at an await statement.
 	// All coroutines must complete before the Start() function returns!

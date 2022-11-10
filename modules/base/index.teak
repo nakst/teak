@@ -567,7 +567,7 @@ str SystemShellEvaluate(str x) { str s, bool b = SystemShellEvaluate2(x); return
 str _SystemShellEvaluateInternal(str x) #extcall;
 void SystemShellEnableLogging(bool x) #extcall;
 
-tuple[str, bool] SystemShellEvaluate2(str x) { 
+tuple[str, bool] SystemShellEvaluate2(str x) {
 	str y = _SystemShellEvaluateInternal(x); 
 	if y:len() == 0 { 
 		return y, false; 

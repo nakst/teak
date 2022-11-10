@@ -386,6 +386,10 @@ bool SystemShellExecuteWithWorkingDirectory(str wd, str x);
 // Execute the specified command, returning its output as a string.
 str SystemShellEvaluate(str x);
 
+// Execute the specified command, returning its output as a string.
+// If the command fails (the command returns a non-zero exit status), the boolean returned is false.
+tuple[str, bool] SystemShellEvaluate2(str x);
+
 // Enable or disable logging of each command that is run.
 void SystemShellEnableLogging(bool x);
 ```
