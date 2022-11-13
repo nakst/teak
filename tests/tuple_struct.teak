@@ -1,0 +1,15 @@
+struct A { int i; };
+struct B { int j; };
+
+tuple[A, int, B] F() {
+	A a = [ i = 1 ];
+	B b = [ j = 2 ];
+	return a, 3, b;
+}
+
+void Start() {
+	A a, int k, B b = F();
+	assert a.i == 1;
+	assert b.j == 2;
+	assert k == 3;
+}

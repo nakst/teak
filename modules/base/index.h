@@ -568,7 +568,7 @@
 "str _SystemShellEvaluateInternal(str x) #extcall;\n"
 "void SystemShellEnableLogging(bool x) #extcall;\n"
 "\n"
-"tuple[str, bool] SystemShellEvaluate2(str x) { \n"
+"tuple[str, bool] SystemShellEvaluate2(str x) {\n"
 "\tstr y = _SystemShellEvaluateInternal(x); \n"
 "\tif y:len() == 0 { \n"
 "\t\treturn y, false; \n"

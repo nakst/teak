@@ -1,0 +1,208 @@
+inttype Type {
+	ERROR = 0;
+	NUMBER = 1;
+	ARRAY = 2;
+	OBJECT = 3;
+	STRING = 4;
+	TRUE = 5;
+	FALSE = 6;
+	NULL = 7;
+};
+
+struct Value {
+	Type type;
+	float      n; // number
+	Value[]    a; // array
+	Value[str] o; // object
+	str        s; // string
+};
+
+tuple[Value, int] _Parse(str s, int _p) {
+	int p = _p;
+	int len = s:len();
+	while p < len && CharacterIsSpace(s[p]) { p += 1; }
+	Value v = [];
+
+	if p + 4 <= len && s:slice(p, p + 4) == "true" {
+		v = [ type = TRUE ];
+		p += 4;
+	} else if p + 5 <= len && s:slice(p, p + 5) == "false" {
+		v = [ type = FALSE ];
+		p += 5;
+	} else if p + 4 <= len && s:slice(p, p + 4) == "null" {
+		v = [ type = NULL ];
+		p += 4;
+	} else if p < len && s[p] == "\"" {
+		v = [ type = STRING, s = "" ];
+		p += 1;
+
+		while p < len {
+			if s[p] == "\"" { break; }
+
+			if s[p] == "\\" {
+				p += 1;
+				if p == len { return new Value, p; }
+				if s[p] == "\"" { p += 1; v.s += "\""; }
+				else if s[p] == "\\" { p += 1; v.s += "\\"; }
+				else if s[p] == "/" { p += 1; v.s += "/"; }
+				else if s[p] == "b" { p += 1; v.s += 8:str(); }
+				else if s[p] == "f" { p += 1; v.s += 12:str(); }
+				else if s[p] == "n" { p += 1; v.s += "\n"; }
+				else if s[p] == "r" { p += 1; v.s += "\r"; }
+				else if s[p] == "t" { p += 1; v.s += "\t"; }
+				else if s[p] == "u" && p + 5 <= len { 
+					int h = 0;
+
+					for int i = p + 1; i < p + 5; i += 1 {
+						h *= 16;
+
+						if s:byte(i) >= "A":byte(0) && s:byte(i) <= "F":byte(0) {
+							h += s:byte(i) - "A":byte(0) + 10;
+						} else if s:byte(i) >= "a":byte(0) && s:byte(i) <= "f":byte(0) {
+							h += s:byte(i) - "a":byte(0) + 10;
+						} else if s:byte(i) >= "0":byte(0) && s:byte(i) <= "9":byte(0) {
+							h += s:byte(i) - "0":byte(0);
+						} else {
+							return new Value, p;
+						}
+					}
+
+					p += 5;
+					v.s += StringUTF8Encode(h);
+				} else { return new Value, p; }
+			} else {
+				v.s += s[p];
+				p += 1;
+			}
+		}
+
+		if p < len { p += 1; } 
+		else { return new Value, p; }
+	} else if p < len && (s[p] == "-" || CharacterIsDigit(s[p])) {
+		// TODO Disallow leading zeroes.
+		// TODO Exponent form.
+
+		int start = p;
+		while s[p] == "-" || s[p] == "." || CharacterIsDigit(s[p]) { p += 1; }
+		err[float] f = StringParseFloat(s:slice(start, p));
+
+		if float n in f { v = [ type = NUMBER, n = n ]; } 
+		else { return new Value, p; }
+	} else if p < len && s[p] == "[" {
+		Value u;
+		v = [ type = ARRAY, a = new Value[] ];
+		bool needComma = false;
+		p += 1;
+
+		while p < len {
+			while p < len && CharacterIsSpace(s[p]) { p += 1; }
+			if p < len && s[p] == "]" { break; }
+			if needComma && p < len && s[p] == "," { p += 1; }
+			else if needComma { return new Value, p; }
+			u, p = _Parse(s, p);
+			if u.type == ERROR { return u, p; }
+			v.a:add(u);
+			needComma = true;
+		}
+
+		if p < len { p += 1; } 
+		else { return new Value, p; }
+	} else if p < len && s[p] == "{" {
+		Value u;
+		Value k;
+		v = [ type = OBJECT, o = new Value[str], a = new Value[] ];
+		bool needComma = false;
+		p += 1;
+
+		while p < len {
+			while p < len && CharacterIsSpace(s[p]) { p += 1; }
+			if p < len && s[p] == "}" { break; }
+			if needComma && p < len && s[p] == "," { p += 1; }
+			else if needComma { return new Value, p; }
+			k, p = _Parse(s, p);
+			if k.type != STRING { return k, p; }
+			while p < len && CharacterIsSpace(s[p]) { p += 1; }
+			if p >= len || s[p] != ":" { return new Value, p; }
+			u, p = _Parse(s, p + 1);
+			if u.type == ERROR { return u, p; }
+			v.o[k.s] = u;
+			v.a:add(k);
+			needComma = true;
+		}
+
+		if p < len { p += 1; } 
+		else { return new Value, p; }
+	}
+
+	return v, p;
+}
+
+Value Parse(str s) {
+	int p = 0;
+	Value v, int i = _Parse(s, 0);
+	return v;
+}
+
+void _DebugPrint(Value v, str prefix) {
+	if v.type == ERROR {
+		Log("%prefix%error");
+	} else if v.type == NUMBER {
+		Log("%prefix%number %v.n%");
+	} else if v.type == ARRAY {
+		Log("%prefix%array");
+		for Value u in v.a { _DebugPrint(u, prefix + "   "); }
+	} else if v.type == OBJECT {
+		Log("%prefix%object");
+		for Value u in v.a { Log("%prefix%  .%u.s%"); _DebugPrint(v.o[u.s], prefix + "     "); }
+	} else if v.type == STRING {
+		Log("%prefix%string %v.s%");
+	} else if v.type == TRUE {
+		Log("%prefix%true");
+	} else if v.type == FALSE {
+		Log("%prefix%false");
+	} else if v.type == NULL {
+		Log("%prefix%null");
+	}
+}
+
+err[Value] Read(Value _v, str[] path, Type type) {
+	Value v = _v;
+
+	for str component in path {
+		if v.type == ARRAY {
+			err[int] i = StringParseInteger(component);
+			reterr i;
+			int j = i:assert();
+
+			if j >= 0 && j < v.a:len() {
+				v = v.a[j];
+			} else {
+				return new err[Value] "ARRAY_INDEX_OUT_OF_BOUNDS";
+			}
+		} else if v.type == OBJECT {
+			err[Value] u = v.o:get(component);
+
+			if Value w in u {
+				v = w;
+			} else {
+				return new err[Value] "KEY_NOT_IN_OBJECT";
+			}
+		} else {
+			return null;
+		}
+	}
+
+	return null if (v.type == ERROR || (v.type != type && type != ERROR)) else v;
+}
+
+err[str] ReadString(Value v, str[] path) {
+	err[Value] u = Read(v, path, STRING);
+	reterr u;
+	return u:assert().s;
+}
+
+err[float] ReadNumber(Value v, str[] path) {
+	err[Value] u = Read(v, path, NUMBER);
+	reterr u;
+	return u:assert().n;
+}

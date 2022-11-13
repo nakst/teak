@@ -2869,6 +2869,34 @@ bool ASTLookupTypeIdentifiers(Tokenizer *tokenizer, Node *node) {
 
 			node->expressionType->sibling = previousSibling;
 		}
+	} else if (node->type == T_TUPLE) {
+		Node *child = node->firstChild;
+		Node **link = &node->firstChild;
+
+		while (child) {
+			Node *lookup = child;
+
+			if (lookup->type == T_IDENTIFIER) {
+				lookup = ScopeLookup(tokenizer, child, false);
+
+				if (!lookup) {
+					return false;
+				} else if (lookup->type == T_FUNCTYPE) {
+					lookup = lookup->firstChild;
+				} else if (lookup->type == T_STRUCT || lookup->type == T_INTTYPE || lookup->type == T_HANDLETYPE) {
+				} else {
+					PrintError2(tokenizer, node, "The identifier did not resolve to a type.\n");
+					return false;
+				}
+			}
+
+			Node *copy = (Node *) AllocateFixed(sizeof(Node));
+			MemoryCopy(copy, lookup, sizeof(Node));
+			copy->sibling = NULL;
+			*link = copy;
+			link = &copy->sibling;
+			child = child->sibling;
+		}
 	}
 
 	return true;
@@ -3350,7 +3378,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 			Node *keyType = isMapStr ? &globalExpressionTypeStr : &globalExpressionTypeInt;
 
-			if (node->firstChild->sibling->firstChild->expressionType != keyType) {
+			if (!ASTMatching(node->firstChild->sibling->firstChild->expressionType, keyType)) {
 				PrintError5(tokenizer, node, node->firstChild->sibling->firstChild->expressionType, keyType, 
 						"Invalid key type for the map.\n");
 				return false;
