@@ -8149,6 +8149,9 @@ int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t leng
 #include <pthread.h>
 #include <semaphore.h>
 #endif
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9710,6 +9713,12 @@ const char *PathScriptEngine() {
 		free(path);
 		return NULL;
 	}
+#elif defined(__APPLE__)
+	char buffer[PROC_PIDPATHINFO_MAXSIZE];
+	proc_pidpath(getpid(), buffer, sizeof(buffer));
+	char *fixed = AllocateFixed(strlen(buffer));
+	strcpy(fixed, buffer);
+	return fixed;
 #else
 	char *path = (char *) malloc(10000);
 	ssize_t bytes = readlink("/proc/self/exe", path, 10000);
