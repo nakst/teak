@@ -61,3 +61,19 @@ Entry[] Parse(str input, Options _options) {
 
 	return entries;
 }
+
+str[str][str] ToMap(Entry[] entries) {
+	str[str][str] result = new str[str][str];
+
+	for Entry entry in entries {
+		if entry.type == VALUE {
+			if !result:has(entry.section) {
+				result[entry.section] = new str[str];
+			}
+
+			result[entry.section][entry.key] = entry.value;
+		}
+	}
+
+	return result;
+}
