@@ -47,7 +47,6 @@
 // 	- Time and date.
 // 	- Data compression.
 // 	- Cryptography.
-// 	- INI file format.
 // 	- Networking.
 // 	- Audio.
 

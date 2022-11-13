@@ -1,0 +1,63 @@
+inttype Type {
+	COMMENT = 1;
+	SECTION = 2;
+	VALUE   = 3;
+};
+
+struct Entry {
+	Type type;
+	str section;
+	str key;
+	str value;
+};
+
+struct Options {
+	str commentCharacter;
+	bool trimKeys;
+	bool trimValues;
+};
+
+Options DefaultOptions() {
+	return [ commentCharacter = ";", trimKeys = false, trimValues = false ];
+}
+
+str _Slice(int p, int x, str y, bool trim) {
+	str z = y:slice(p, x);
+	return StringTrim(z) if trim else z;
+}
+
+int _Find(str haystack, str needle, int startAt) {
+	int i = StringFind(haystack, needle, startAt, false);
+	return haystack:len() if i == -1 else i;
+}
+
+Entry[] Parse(str input, Options _options) {
+	int position = 0;
+	Entry[] entries = [];
+	Options options = DefaultOptions() if _options == null else _options;
+	str currentSection = "";
+
+	while position < input:len() {
+		if CharacterIsSpace(input[position]) {
+			position += 1;
+		} else if input[position] == options.commentCharacter {
+			int end = _Find(input, "\n", position);
+			entries:add([ type = COMMENT, section = currentSection, value = _Slice(position + 1, end, input, false) ]);
+			position = end + 1;
+		} else if input[position] == "[" {
+			int end = _Find(input, "]", position);
+			currentSection = _Slice(position + 1, end, input, false);
+			entries:add([ type = SECTION, section = currentSection ]);
+			position = end + 1;
+		} else {
+			int end1 = _Find(input, "=", position);
+			int end2 = _Find(input, "\n", position);
+			entries:add([ type = VALUE, section = currentSection, 
+						key = _Slice(position, IntegerMinimum(end1, end2), input, options.trimKeys), 
+						value = _Slice(end1 + 1 if end1 < end2 else end2, end2, input, options.trimValues) ]);
+			position = end2 + 1;
+		}
+	}
+
+	return entries;
+}
