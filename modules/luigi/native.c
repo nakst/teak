@@ -144,10 +144,10 @@ int WrapperMessage(UIElement *element, UIMessage message, int di, void *dp) {
 	}
 
 	if (message == UI_MSG_DESTROY) {
-		ElementWrapperClose(contextForCallback, wrapper);
 		element->cp = NULL;
 		wrapper->element = NULL;
 		returnValue = 0;
+		ElementWrapperClose(contextForCallback, wrapper);
 	}
 
 	return returnValue;

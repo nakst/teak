@@ -7937,7 +7937,8 @@ void PrintBackTrace(ExecutionContext *context, uint32_t instructionPointer, Coro
 	while (btp > minimum) {
 		BackTraceItem *link = &c->backTrace[--btp];
 		LineNumberLookup(context, link->instructionPointer - 1, &lineNumber);
-		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, lineNumber.importData->prettyName ? lineNumber.importData->prettyName : "??", 
+		PrintDebug("%s\t%s:%d %s %.*s\n", prefix, 
+				lineNumber.importData && lineNumber.importData->prettyName ? lineNumber.importData->prettyName : "??", 
 				lineNumber.lineNumber, lineNumber.function ? "in" : "",
 				lineNumber.function ? (int) lineNumber.function->textBytes : 0, lineNumber.function ? lineNumber.function->text : "");
 	}
