@@ -5415,6 +5415,12 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 			context->heap[i].gcMark = false;
 		}
 
+		for (uintptr_t i = 0; i < context->heapEntriesAllocated; i++) {
+			if (context->heap[i].externalReferenceCount) {
+				HeapGarbageCollectMark(context, i);
+			}
+		}
+
 		for (uintptr_t i = 0; i < context->globalVariableCount; i++) {
 			if (context->globalVariableIsManaged[i]) {
 				HeapGarbageCollectMark(context, context->globalVariables[i].i);
@@ -5443,8 +5449,9 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 		uintptr_t reclaimed = 0;
 
 		for (uintptr_t i = 1; i < context->heapEntriesAllocated; i++) {
-			if (!context->heap[i].gcMark && !context->heap[i].externalReferenceCount) {
+			if (!context->heap[i].gcMark) {
 				// PrintDebug("\033[0;32mFreeing index %d...\033[0m\n", i);
+				Assert(!context->heap[i].externalReferenceCount);
 				HeapFreeEntry(context, i);
 				*link = i;
 				link = &context->heap[i].nextUnusedEntry;
@@ -7335,7 +7342,7 @@ bool ScriptStructReadString(ExecutionContext *context, intptr_t index, uintptr_t
 		PrintError4(context, 0, "Structure is null.");
 		return false;
 	} else {
-		PrintError3("The script was malformed.\n");
+		PrintError4(context, 0, "The script was malformed.\n");
 		return false;
 	}
 }
@@ -7352,7 +7359,7 @@ bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t 
 		PrintError4(context, 0, "Structure is null.");
 		return false;
 	} else {
-		PrintError3("The script was malformed.\n");
+		PrintError4(context, 0, "The script was malformed.\n");
 		return false;
 	}
 }
@@ -7631,7 +7638,7 @@ bool ScriptRunCallback(ExecutionContext *context, intptr_t functionPointer,
 
 	if (result == -1 || (returnValue && (context->c->stackPointer == 0 
 					|| context->c->stackIsManaged[context->c->stackPointer - 1] != managedReturnValue))) {
-		PrintError3("The script was malformed.\n");
+		PrintError4(context, 0, "The script was malformed.\n");
 		wantCompletionConfirmation = false;
 	}
 
@@ -7841,7 +7848,7 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 				// A runtime error occurred.
 				return 1;
 			} else if (result == -1 || context->c->stackPointer != 0) {
-				PrintError3("The script was malformed.\n");
+				PrintError4(context, 0, "The script was malformed.\n");
 				wantCompletionConfirmation = false;
 				return 1;
 			}
@@ -7856,7 +7863,7 @@ int ScriptExecute(ExecutionContext *context, ImportData *mainModule) {
 		// A runtime error occurred.
 		return 1;
 	} else if (result == -1 || context->c->stackPointer != 0) {
-		PrintError3("The script was malformed.\n");
+		PrintError4(context, 0, "The script was malformed.\n");
 		wantCompletionConfirmation = false;
 		return 1;
 	}
