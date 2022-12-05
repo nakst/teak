@@ -6573,7 +6573,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				return 0;
 			}
 
-			for (int64_t i = oldLength - 1; i >= insertIndex; i--) {
+			for (int64_t i = (int64_t) oldLength - (int64_t) 1; i >= insertIndex; i--) {
 				entry->list[i + 1] = entry->list[i];
 			}
 

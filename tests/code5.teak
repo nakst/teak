@@ -1,0 +1,32 @@
+void Start() {
+	str[] lines = StringSplitByCharacter(FileReadAll("tests/in5.txt"):assert(), "\n", true);
+	int i;
+	str[][] stacks = [[], [], [], [], [], [], [], [], [], []];
+
+	for i = 0; StringContains(lines[i], "["); i += 1 {
+		for int j = 1; j < lines[i]:len(); j += 4 {
+			if lines[i][j] != " " {
+				stacks[(j - 1) / 4 + 1]:add(lines[i][j]);
+				// Log("add %lines[i][j]% to stack %(j - 1) / 4 + 1%");
+			}
+		}
+	}
+
+	for i = i + 2; i < lines:len(); i += 1 {
+		if lines[i] != "" {
+			Log(lines[i]);
+			str[] parts = StringSplitByCharacter(lines[i], " ", false);
+			int count = StringParseInteger(parts[1]):assert();
+			int from = StringParseInteger(parts[3]):assert();
+			int to = StringParseInteger(parts[5]):assert();
+
+			for int j = 0; j < count; j += 1 {
+				str item = stacks[from]:first();
+				Log(item);
+				stacks[from]:delete(0);
+				stacks[to]:insert(item, 0);
+				Log("...");
+			}
+		}
+	}
+}
