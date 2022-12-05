@@ -1,5 +1,5 @@
 void Start() {
-	str[] lines = StringSplitByCharacter(FileReadAll("tests/in5.txt"):assert(), "\n", true);
+	str[] lines = StringSplitByCharacter(StringReplaceAll(FileReadAll("tests/in5.txt"):assert(), "\r", ""), "\n", true);
 	int i;
 	str[][] stacks = [[], [], [], [], [], [], [], [], [], []];
 
