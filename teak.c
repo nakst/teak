@@ -745,6 +745,12 @@ Token TokenNext(Tokenizer *tokenizer) {
 			}
 
 			continue;
+		} else if (tokenizer->line == 1 && c == '#' && c1 == '!') {
+			while (tokenizer->position != tokenizer->inputBytes && tokenizer->input[tokenizer->position] != '\n') {
+				tokenizer->position++;
+			}
+
+			continue;
 		}
 
 		else if (c == '<' && c1 == '=' && (tokenizer->position += 2)) token.type = T_LT_OR_EQUAL;
