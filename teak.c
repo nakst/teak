@@ -8971,7 +8971,7 @@ int ExternalFileGetLastModificationTimeStamp(ExecutionContext *context, Value *r
 		fclose(file);
 
 		if (okay) {
-			returnValue->i = s.st_mtim.tv_sec;
+			returnValue->i = s.st_mtime;
 			return EXTCALL_RETURN_ERR_UNMANAGED;
 		} else {
 			if (!ActionFailure(context, ACTION_PROPERTIES, "get file last modification time stamp", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
