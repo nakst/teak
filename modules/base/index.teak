@@ -331,6 +331,7 @@ err[void] FileWriteAll(str path, str x) #extcall;
 err[void] FileAppend(str path, str x) #extcall;
 err[void] FileCopy(str source, str destination) #extcall;
 err[int] FileGetSize(str path) #extcall;
+err[int] FileGetLastModificationTimeStamp(str path) #extcall;
 err[void] FileTouch(str path) { return FileAppend(path, ""); }
 				      
 err[void] _DirectoryInternalStartIteration(str path) #extcall;

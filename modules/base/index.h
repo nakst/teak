@@ -332,6 +332,7 @@
 "err[void] FileAppend(str path, str x) #extcall;\n"
 "err[void] FileCopy(str source, str destination) #extcall;\n"
 "err[int] FileGetSize(str path) #extcall;\n"
+"err[int] FileGetLastModificationTimeStamp(str path) #extcall;\n"
 "err[void] FileTouch(str path) { return FileAppend(path, \"\"); }\n"
 "\t\t\t\t      \n"
 "err[void] _DirectoryInternalStartIteration(str path) #extcall;\n"

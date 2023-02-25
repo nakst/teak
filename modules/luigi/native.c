@@ -379,8 +379,13 @@ LIBRARY_EXPORT bool ScriptExtElementAnimate(struct ExecutionContext *context) {
 	ElementWrapper *element;
 	bool stop;
 	if (!ScriptParameterScan(context, "hb", (void **) &element, &stop)) return false;
-	UIElementAnimate(element->element, stop);
-	return true;
+	return ScriptReturnInt(context, UIElementAnimate(element->element, stop));
+}
+
+LIBRARY_EXPORT bool ScriptExtElementIsEqualTo(struct ExecutionContext *context) {
+	ElementWrapper *element, *otherElement;
+	if (!ScriptParameterScan(context, "hh", (void **) &element, (void **) &otherElement)) return false;
+	return ScriptReturnInt(context, element->element == otherElement->element);
 }
 
 LIBRARY_EXPORT bool ScriptExtElementChangeParent(struct ExecutionContext *context) {

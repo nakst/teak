@@ -285,6 +285,8 @@ WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
 Element ElementCreate(Element parent, ElementFlags flags, MessageCallback messageClass) #extcall;
 
+bool ElementIsEqualTo(Element element, Element otherElement) #extcall; // HACK handletypes cannot be compared...
+
 gm.Rectangle ElementScreenBounds(Element element) #extcall;
 // int ElementMessage(Element element, Message message, int di, MessageData dp) #extcall;
 void ElementMove(Element element, gm.Rectangle bounds, bool alwaysLayout) #extcall;

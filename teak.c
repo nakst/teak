@@ -629,7 +629,7 @@ char baseModuleSource[] = {
 	REGISTER(SystemGetProcessorCount) REGISTER(SystemGetEnvironmentVariable) REGISTER(SystemSetEnvironmentVariable) REGISTER(SystemRunningAsAdministrator) REGISTER(SystemGetHostName) REGISTER(SystemSleepMs) REGISTER(SystemExit) \
 	REGISTER(PathCreateDirectory) REGISTER(PathDelete) REGISTER(PathExists) REGISTER(PathIsFile) REGISTER(PathIsDirectory) REGISTER(PathIsLink) REGISTER(PathMove) \
 	REGISTER(PathGetDefaultPrefix) REGISTER(PathSetDefaultPrefixToScriptSourceDirectory) REGISTER(PathToAbsolute) \
-	REGISTER(FileReadAll) REGISTER(FileWriteAll) REGISTER(FileAppend) REGISTER(FileCopy) REGISTER(FileGetSize) \
+	REGISTER(FileReadAll) REGISTER(FileWriteAll) REGISTER(FileAppend) REGISTER(FileCopy) REGISTER(FileGetSize) REGISTER(FileGetLastModificationTimeStamp) \
 	REGISTER(PersistRead) REGISTER(PersistWrite) \
 	REGISTER(RandomInt) \
 	REGISTER(_DirectoryInternalStartIteration) REGISTER(_DirectoryInternalNextIteration) REGISTER(_DirectoryInternalEndIteration) \
@@ -7705,9 +7705,9 @@ void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 
 			while (argument) {
 				PrintOutput("arg%d_type=", index);
-				index++;
 				PrintOutputType(argument->firstChild);
 				PrintOutput("\narg%d_name=%.*s\n", index, (int) argument->token.textBytes, argument->token.text);
+				index++;
 				argument = argument->sibling;
 			}
 		} else if (node->type == T_STRUCT) {
@@ -8955,6 +8955,34 @@ int ExternalFileGetSize(ExecutionContext *context, Value *returnValue) {
 	}
 }
 
+int ExternalFileGetLastModificationTimeStamp(ExecutionContext *context, Value *returnValue) {
+	STACK_POP_STRING(entryText, entryBytes);
+	if (!ActionBefore(context, ACTION_PROPERTIES, "get file last modification time stamp", entryText, entryBytes, NULL, 0)) return 0;
+	returnValue->i = 0;
+	char *temporary = StringZeroTerminate(entryText, entryBytes);
+	if (!temporary) RETURN_ERROR(ENOMEM);
+
+	FILE *file = fopen(temporary, "rb");
+	free(temporary);
+
+	if (file) {
+		struct stat s;
+		bool okay = 0 == fstat(fileno(file), &s);
+		fclose(file);
+
+		if (okay) {
+			returnValue->i = s.st_mtim.tv_sec;
+			return EXTCALL_RETURN_ERR_UNMANAGED;
+		} else {
+			if (!ActionFailure(context, ACTION_PROPERTIES, "get file last modification time stamp", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
+			RETURN_ERROR(errno);
+		}
+	} else {
+		if (!ActionFailure(context, ACTION_PROPERTIES, "get file last modification time stamp", ErrorStringFromErrno(errno), entryText, entryBytes, NULL, 0)) return 0;
+		RETURN_ERROR(errno);
+	}
+}
+
 int ExternalFileWriteAll(ExecutionContext *context, Value *returnValue) {
 	STACK_POP_STRING_2(entryText, entryBytes, entry2Text, entry2Bytes);
 	if (!ActionBefore(context, ACTION_WRITE, "write file", entryText, entryBytes, NULL, 0)) return 0;
@@ -9785,10 +9813,19 @@ int main(int argc, char **argv) {
 	char *scriptPath = NULL;
 	char *evaluateString = NULL;
 	bool evaluateMode = false;
+	bool doMode = false;
+	bool stdoutOnly = false;
 
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
-			if (evaluateMode) {
+			if (doMode) {
+				if (!scriptPath) {
+					scriptPath = argv[i];
+					continue;
+				} else {
+					evaluateString = argv[i];
+				}
+			} else if (evaluateMode) {
 				evaluateString = argv[i];
 			} else {
 				scriptPath = argv[i];
@@ -9805,6 +9842,8 @@ int main(int argc, char **argv) {
 			debugBytecodeLevel = atoi(argv[i] + 17);
 		} else if (0 == strcmp(argv[i], "--evaluate") || 0 == strcmp(argv[i], "-e")) {
 			evaluateMode = true;
+		} else if (0 == strcmp(argv[i], "--do") || 0 == strcmp(argv[i], "-d")) {
+			doMode = true;
 		} else if (0 == strcmp(argv[i], "--no-base-module")) {
 			noBaseModule = true;
 		} else if (0 == strcmp(argv[i], "--output-overview")) {
@@ -9813,6 +9852,13 @@ int main(int argc, char **argv) {
 			coloredOutput = false;
 		} else if (0 == strcmp(argv[i], "--colored-output")) {
 			coloredOutput = true;
+		} else if (0 == strcmp(argv[i], "--stdout-only")) {
+#if defined(__linux__) || defined(__APPLE__)
+			if (!stdoutOnly) {
+				stdoutOnly = true;
+				dup2(1, 2);
+			}
+#endif
 		} else if (0 == strcmp(argv[i], "--version")) {
 #ifdef GIT_COMMIT
 			fprintf(stderr, "teak scripting engine\nversion %s\n", GIT_COMMIT);
@@ -9856,24 +9902,59 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (!scriptPath && !evaluateString) {
-		fprintf(stderr, "Error: %s\n", evaluateMode ? "String to evaluate not specified." : "Path to script not specified.");
+	if (doMode && evaluateMode) {
+		fprintf(stderr, "Error: You cannot have both flags --evaluate (or -e) and --do (or -d) specified.\n");
 		return 1;
+	}
+
+	if (doMode) {
+		if (!scriptPath) {
+			fprintf(stderr, "Error: Path to script not specified.\n");
+			return 1;
+		} else if (!evaluateString) {
+			fprintf(stderr, "Error: String to evaluate not specified.\n"
+					"Because --do (or -d) was specified, you need both a script path and evaluation string.\n");
+			return 1;
+		}
+	} else {
+		if (!scriptPath && !evaluateString) {
+			fprintf(stderr, "Error: %s\n", evaluateMode ? "String to evaluate not specified." : "Path to script not specified.");
+			return 1;
+		}
 	}
 	
 	scriptSourceDirectory = PathToBaseDirectory(PathToAbsolute(scriptPath, true));
 	engineDirectory = PathToBaseDirectory(PathToAbsolute(PathScriptEngine(), true));
 
-	size_t dataBytes = evaluateMode ? strlen(evaluateString) : 0;
-	void *data = evaluateMode ? malloc(strlen(evaluateString)) : FileLoad(scriptPath, &dataBytes);
-	if (evaluateMode) memcpy(data, evaluateString, dataBytes);
+	size_t dataBytes = 0;
+	void *data = NULL;
+
+	if (doMode) {
+		data = FileLoad(scriptPath, &dataBytes);
+		const char *extraBefore = "\nvoid __EngineEvaluateInput() {\n\t";
+		const char *extraAfter = ";\n}\n";
+		size_t extraBytes = strlen(extraBefore) + strlen(evaluateString) + strlen(extraAfter);
+		data = realloc(data, dataBytes + extraBytes);
+		memcpy(&((uint8_t *) data)[dataBytes], extraBefore, strlen(extraBefore));
+		memcpy(&((uint8_t *) data)[dataBytes + strlen(extraBefore)], evaluateString, strlen(evaluateString));
+		memcpy(&((uint8_t *) data)[dataBytes + strlen(extraBefore) + strlen(evaluateString)], extraAfter, strlen(extraAfter));
+		dataBytes += extraBytes;
+		startFunction = "__EngineEvaluateInput";
+		startFunctionBytes = strlen(startFunction);
+	} else if (evaluateMode) {
+		dataBytes = strlen(evaluateString);
+		data = malloc(dataBytes);
+		memcpy(data, evaluateString, dataBytes);
+		scriptPath = "[input]";
+	} else {
+		data = FileLoad(scriptPath, &dataBytes);
+	}
 
 	if (!data) {
 		PrintDebug("Error: Could not load the input file '%s'.\n", scriptPath);
 		return 1;
 	}
 
-	if (evaluateMode) scriptPath = "[input]";
 	int result = ScriptExecuteFromFile(scriptPath, data, dataBytes, evaluateMode);
 
 	while (fixedAllocationBlocks) {

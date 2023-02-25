@@ -4,6 +4,7 @@ The engine takes command line arguments of the form: `teak [ >= 0 engine flags ]
 
 - `--start=...` Set the function to call on the main source file. By default, this is `Start`.
 - `--evaluate` or `-e` The "path to main source file" is instead interpreted as a expression to evaluate.
+- `--do` or `-d` After the "path to main source file", an expression to evaluate is given. It may call into functions from the main source file. The `--start` argument is ignored in this case and `Start` is not called.
 - `--output-overview` Don't execute the script. Instead, output an overview of the types and functions in it.
 - `--no-colored-output`, `--colored-output` Override the default for whether the output using ANSI terminal color escape sequences.
 - `--log=...` Log the specified actions. See below for a list of action categories.
@@ -11,6 +12,7 @@ The engine takes command line arguments of the form: `teak [ >= 0 engine flags ]
 - `--ask=...` Ask before processing any of the specified actions. See below for a list of action categories.
 - `--error-ask=...` Ask the user what to do if one of the specified actions produces an error. See below for a list of action categories.
 - `--error-stop=...` Stop the script immediately if one of the specified actions produces an error. See below for a list of action categories.
+- `--stdout-only` Any output sent to `stderr` will instead be written to `stdout` (Linux/macOS only).
 
 The action categories available for the `--log`, `--trace`, `--ask`, `--error-ask` and `--error-stop` categories are:
 
