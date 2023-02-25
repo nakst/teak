@@ -105,6 +105,10 @@ inttype SplitPaneFlags : ElementFlags {
 	SPLIT_PANE_VERTICAL = 1 << 0;
 };
 
+inttype TextboxFlags : ElementFlags {
+	TEXTBOX_HIDE_CHARACTERS = 1 << 0;
+};
+
 inttype MenuFlags {
 	MENU_PLACE_ABOVE = 1 << 0;
 	MENU_NO_SCROLL = 1 << 1;
@@ -279,7 +283,7 @@ SplitPane SplitPaneCreate(Element parent, SplitPaneFlags flags, float weight) #e
 Switcher SwitcherCreate(Element parent, ElementFlags flags) #extcall;
 TabPane TabPaneCreate(Element parent, ElementFlags flags, str tabs) #extcall;
 Table TableCreate(Element parent, ElementFlags flags, str columns) #extcall;
-Textbox TextboxCreate(Element parent, ElementFlags flags) #extcall;
+Textbox TextboxCreate(Element parent, TextboxFlags flags) #extcall;
 WrapPanel WrapPanelCreate(Element parent, ElementFlags flags) #extcall;
 
 Window WindowCreate(Window owner, WindowFlags flags, str title, int width, int height) #extcall;
