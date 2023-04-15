@@ -2544,10 +2544,12 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		Node *placeholder;
 		placeholder = (Node *) AllocateFixed(sizeof(Node));
 		placeholder->type = T_PLACEHOLDER;
-		Assert(ScopeAddEntry(tokenizer, scope, placeholder));
+		bool success = ScopeAddEntry(tokenizer, scope, placeholder);
+		Assert(success);
 		placeholder = (Node *) AllocateFixed(sizeof(Node));
 		placeholder->type = T_PLACEHOLDER;
-		Assert(ScopeAddEntry(tokenizer, scope, placeholder));
+		bool success = ScopeAddEntry(tokenizer, scope, placeholder);
+		Assert(success);
 	}
 
 	if (node->type == T_IMPORT) {
