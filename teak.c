@@ -5477,6 +5477,7 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 
 			for (uintptr_t i = oldSize; i < context->heapEntriesAllocated; i++) {
 				context->heap[i].type = T_ERROR;
+				context->heap[i].externalReferenceCount = 0;
 				*link = i;
 				link = &context->heap[i].nextUnusedEntry;
 			}
