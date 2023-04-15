@@ -5478,6 +5478,7 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 			for (uintptr_t i = oldSize; i < context->heapEntriesAllocated; i++) {
 				context->heap[i].type = T_ERROR;
 				context->heap[i].externalReferenceCount = 0;
+				context->heap[i].nextUnusedEntry = 0;
 				*link = i;
 				link = &context->heap[i].nextUnusedEntry;
 			}
@@ -8008,9 +8009,10 @@ int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes
 
 	context.heapEntriesAllocated = 2;
 	context.heap = (HeapEntry *) AllocateResize(NULL, sizeof(HeapEntry) * context.heapEntriesAllocated);
+	HeapEntry emptyHeapEntry = { 0 };
+	context.heap[0] = emptyHeapEntry;
 	context.heap[0].type = T_EOF;
-	context.heap[1].type = T_ERROR;
-	context.heap[1].nextUnusedEntry = 0;
+	context.heap[1] = emptyHeapEntry;
 	context.heapFirstUnusedEntry = 1;
 	context.c = (CoroutineState *) AllocateResize(0, sizeof(CoroutineState));
 	CoroutineState empty = { 0 };
