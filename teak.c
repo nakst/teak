@@ -2548,7 +2548,7 @@ bool ASTSetScopes(Tokenizer *tokenizer, ExecutionContext *context, Node *node, S
 		Assert(success);
 		placeholder = (Node *) AllocateFixed(sizeof(Node));
 		placeholder->type = T_PLACEHOLDER;
-		bool success = ScopeAddEntry(tokenizer, scope, placeholder);
+		success = ScopeAddEntry(tokenizer, scope, placeholder);
 		Assert(success);
 	}
 
