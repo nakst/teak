@@ -22,6 +22,22 @@ Rational RationalScale(Rational a, int b) {
 	return [ p = a.p * b, q = a.q ];
 }
 
+int[] PermutationComposeFS(int[] a /* first */, int[] b /* second */) {
+	int[] p = new int[];
+	assert a:len() == b:len();
+	p:resize(a:len());
+
+	for int i = 0; i < a:len(); i += 1 {
+		p[i] = b[a[i]];
+	}
+
+	return p;
+}
+
+int[] PermutationComposeSF(int[] a /* second */, int[] b /* first */) {
+	return PermutationComposeFS(b, a);
+}
+
 int[] PermutationFirst(int n) { int[] p = new int[]; for int i = 0; i < n; i += 1 { p:add(i); } return p; }
 
 bool PermutationIterate(int[] p) {

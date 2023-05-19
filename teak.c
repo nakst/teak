@@ -612,6 +612,7 @@ char *PathToAbsolute(const char *path, bool fixedCopy);
 const char *PathToPrettyName(const char *path);
 const char *PathToBaseDirectory(const char *path);
 const char *PathScriptEngine();
+bool IsColoredOutputEnabled();
 
 // --------------------------------- Base module.
 
@@ -7988,7 +7989,8 @@ void PrintLine(ImportData *importData, uintptr_t line) {
 		}
 	}
 
-	PrintDebug(">> %.*s\n", (int) length, &((char *) importData->fileData)[position]);
+	PrintDebug("%s>> %.*s%s\n", IsColoredOutputEnabled() ? "\033[0;36m" : "", (int) length, 
+			&((char *) importData->fileData)[position], IsColoredOutputEnabled() ? "\033[0m" : "");
 }
 
 int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes, bool replMode) {
@@ -9616,6 +9618,10 @@ void PrintError5(Tokenizer *tokenizer, Node *node, Node *type1, Node *type2, con
 	}
 
 	PrintLine(tokenizer->module, node->token.line);
+}
+
+bool IsColoredOutputEnabled() {
+	return coloredOutput;
 }
 
 void *LibraryLoad(const char *name) {
