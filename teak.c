@@ -7005,7 +7005,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 						c = c->nextCoroutine;
 					}
 
-					if (!found) {
+					if (found) {
 						alreadyFinished = c->id;
 						break;
 					}
