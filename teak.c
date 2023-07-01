@@ -57,7 +57,8 @@
 // 	- Cleanup the ImportData/ExecutionContext/FunctionBuilder structures and their relationships.
 // 	- Cleanup the variables/stack arrays.
 // 	- Cleanup the platform layer.
-// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte).
+// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte). 
+// 		- This will be difficult -- see ScriptParameterString/ScriptStructReadString.
 // 	- Better handling of memory allocation failures.
 // 	- Shrink lists during garbage collection.
 // 	- Safety against extremely large scripts?
@@ -5746,6 +5747,10 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 		} else if (command == T_INTERPOLATE_STR || command == T_INTERPOLATE_BOOL 
 				|| command == T_INTERPOLATE_INT || command == T_INTERPOLATE_FLOAT
 				|| command == T_INTERPOLATE_ILIST) {
+			// TODO Handle memory allocation failures here.
+			uintptr_t index = HeapAllocate(context);
+			// NOTE Call HeapAllocate before STACK_READ_STRING!!
+
 			STACK_READ_STRING(text1, bytes1, 3);
 			STACK_READ_STRING(text3, bytes3, 1);
 
@@ -5805,8 +5810,6 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 				}
 			}
 
-			// TODO Handle memory allocation failures here.
-			uintptr_t index = HeapAllocate(context);
 			context->heap[index].type = T_STR;
 			context->heap[index].bytes = bytes1 + bytes2 + bytes3;
 			context->heap[index].text = (char *) AllocateResize(NULL, context->heap[index].bytes);
@@ -8049,7 +8052,7 @@ int ExternalOpStringSlice(ExecutionContext *context, Value *returnValue) {
 	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
 	uint64_t end = context->c->stack[--context->c->stackPointer].i;
 	if (context->c->stackIsManaged[context->c->stackPointer]) return -1;
-	STACK_POP_STRING(string, bytes);
+	STACK_READ_STRING(string, bytes, 1);
 
 	if (start > bytes || end > bytes || end < start) {
 		PrintError4(context, 0, "The slice range (%ld..%ld) is invalid for the string of length %ld.\n",
@@ -8058,6 +8061,7 @@ int ExternalOpStringSlice(ExecutionContext *context, Value *returnValue) {
 	}
 
 	RETURN_STRING_COPY(string + start, end - start);
+	context->c->stackPointer--; // Don't pop the string until it's been read by RETURN_STRING_COPY!
 	return EXTCALL_RETURN_MANAGED;
 }
 
