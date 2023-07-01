@@ -57,7 +57,6 @@
 // 	- Cleanup the ImportData/ExecutionContext/FunctionBuilder structures and their relationships.
 // 	- Cleanup the variables/stack arrays.
 // 	- Cleanup the platform layer.
-// 	- Inlining small strings; fixed objects for single byte strings (T_INDEX, StringFromByte).
 // 	- Better handling of memory allocation failures.
 // 	- Shrink lists during garbage collection.
 // 	- Safety against extremely large scripts?
@@ -102,11 +101,15 @@
 #define FAILURE_ASK       (1)
 #define FAILURE_STOP      (2)
 
+// Heap entries 1-256 contain single character strings, so that we don't have to keep allocating them!
+#define HEAP_SINGLE_CHARACTER_STRINGS (1)
+
 #define T_ERROR               (0)
 #define T_EOF                 (1)
 #define T_IDENTIFIER          (2)
 #define T_STRING_LITERAL      (3)
 #define T_NUMERIC_LITERAL     (4)
+#define T_STR_SMALL           (5)
 
 // Operators.
 #define T_ADD                 (20)
@@ -299,7 +302,7 @@
 	uint64_t _index ## stackIndex = context->c->stack[context->c->stackPointer - stackIndex].i; \
 	if (context->heapEntriesAllocated <= _index ## stackIndex) return -1; \
 	HeapEntry *_entry ## stackIndex = &context->heap[_index ## stackIndex]; \
-	if (_entry ## stackIndex->type != T_EOF && _entry ## stackIndex->type != T_STR && _entry ## stackIndex->type != T_CONCAT) return -1; \
+	if (_entry ## stackIndex->type != T_EOF && _entry ## stackIndex->type != T_STR && _entry ## stackIndex->type != T_STR_SMALL && _entry ## stackIndex->type != T_CONCAT) return -1; \
 	const char *textVariable; \
 	size_t bytesVariable; \
 	ScriptHeapEntryToString(context, _entry ## stackIndex, &textVariable, &bytesVariable);
@@ -311,11 +314,7 @@
 	STACK_READ_STRING(textVariable2, bytesVariable2, 2); \
 	context->c->stackPointer -= 2;
 #define RETURN_STRING_COPY(_text, _bytes) \
-	returnValue->i = HeapAllocate(context); \
-	context->heap[returnValue->i].type = T_STR; \
-	context->heap[returnValue->i].bytes = _bytes; \
-	context->heap[returnValue->i].text = (char *) AllocateResize(NULL, context->heap[returnValue->i].bytes); \
-	MemoryCopy(context->heap[returnValue->i].text, _text, context->heap[returnValue->i].bytes);
+	returnValue->i = HeapMakeString(context, _text, _bytes)
 #define RETURN_STRING_NO_COPY(_text, _bytes) \
 	returnValue->i = HeapAllocate(context); \
 	context->heap[returnValue->i].type = T_STR; \
@@ -448,6 +447,11 @@ typedef struct HeapEntry {
 			size_t concatBytes;
 		};
 
+		struct { // T_STR_SMALL
+			char smallBytes;
+			char smallText[15];
+		};
+
 		struct { // T_ERR
 			bool success;
 			Value errorValue;
@@ -510,6 +514,7 @@ typedef struct ExecutionContext {
 	HeapEntry *heap;
 	uintptr_t heapFirstUnusedEntry;
 	size_t heapEntriesAllocated;
+	bool heapSingleCharacterStringsReady;
 
 	FunctionBuilder *functionData; // Cleanup the relations between ExecutionContext, FunctionBuilder, Tokenizer and ImportData.
 	Node *rootNode; // Only valid during script loading.
@@ -5335,7 +5340,7 @@ void HeapGarbageCollectMark(ExecutionContext *context, uintptr_t index) {
 	if (context->heap[index].gcMark) return;
 	context->heap[index].gcMark = true;
 
-	if (context->heap[index].type == T_EOF || context->heap[index].type == T_STR 
+	if (context->heap[index].type == T_EOF || context->heap[index].type == T_STR || context->heap[index].type == T_STR_SMALL
 			|| context->heap[index].type == T_FUNCPTR || context->heap[index].type == T_HANDLETYPE) {
 		// Nothing else to mark.
 	} else if (context->heap[index].type == T_STRUCT) {
@@ -5408,7 +5413,7 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 	} else if (context->heap[i].type == T_OP_DISCARD || context->heap[i].type == T_OP_ASSERT 
 			|| context->heap[i].type == T_FUNCPTR || context->heap[i].type == T_OP_CURRY
 			|| context->heap[i].type == T_CONCAT || context->heap[i].type == T_ERR
-			|| context->heap[i].type == T_ANYTYPE) {
+			|| context->heap[i].type == T_ANYTYPE || context->heap[i].type == T_STR_SMALL) {
 	} else {
 		Assert(false);
 	}
@@ -5499,6 +5504,29 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 	return index;
 }
 
+uintptr_t HeapMakeString(ExecutionContext *context, const char *text, size_t bytes) {
+	// TODO Use this function in more places.
+
+	if (bytes == 1 && context->heapSingleCharacterStringsReady) {
+		uintptr_t i = HEAP_SINGLE_CHARACTER_STRINGS + (uint8_t) text[0];
+		Assert(context->heapEntriesAllocated > i && context->heap[i].type == T_STR_SMALL && context->heap[i].smallText[0] == text[0]);
+		return i;
+	} else if (bytes <= 15) {
+		uintptr_t i = HeapAllocate(context);
+		context->heap[i].type = T_STR_SMALL;
+		context->heap[i].smallBytes = bytes;
+		MemoryCopy(&context->heap[i].smallText[0], text, bytes);
+		return i;
+	} else {
+		uintptr_t i = HeapAllocate(context);
+		context->heap[i].type = T_STR;
+		context->heap[i].bytes = bytes;
+		context->heap[i].text = (char *) AllocateResize(NULL, bytes);
+		MemoryCopy(context->heap[i].text, text, bytes);
+		return i;
+	}
+}
+
 void ScriptPrintNode(Node *node, int indent) {
 	for (int i = 0; i < indent; i++) {
 		PrintDebug("\t");
@@ -5521,6 +5549,8 @@ size_t ScriptHeapEntryGetStringBytes(HeapEntry *entry) {
 		return 0;
 	} else if (entry->type == T_CONCAT) {
 		return entry->concatBytes;
+	} else if (entry->type == T_STR_SMALL) {
+		return entry->smallBytes;
 	} else {
 		Assert(false);
 		return 0;
@@ -5531,6 +5561,8 @@ void ScriptHeapEntryConcatConvertToStringWrite(ExecutionContext *context, HeapEn
 	while (true) {
 		if (entry->type == T_STR) {
 			MemoryCopy(buffer, entry->text, entry->bytes);
+		} else if (entry->type == T_STR_SMALL) {
+			MemoryCopy(buffer, entry->smallText, entry->smallBytes);
 		} else if (entry->type == T_EOF) {
 		} else if (entry->type == T_CONCAT) {
 			HeapEntry *part1 = &context->heap[entry->concat1], *part2 = &context->heap[entry->concat2];
@@ -5577,6 +5609,9 @@ void ScriptHeapEntryToString(ExecutionContext *context, HeapEntry *entry, const 
 	if (entry->type == T_STR) {
 		*text = entry->text;
 		*bytes = entry->bytes;
+	} else if (entry->type == T_STR_SMALL) {
+		*text = entry->smallText;
+		*bytes = entry->smallBytes;
 	} else if (entry->type == T_EOF) {
 		*text = "";
 		*bytes = 0;
@@ -5708,11 +5743,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			instructionPointer += sizeof(textBytes);
 
 			// TODO Handle memory allocation failures here.
-			uintptr_t index = HeapAllocate(context);
-			context->heap[index].type = T_STR;
-			context->heap[index].text = (char *) AllocateResize(NULL, textBytes);
-			context->heap[index].bytes = textBytes;
-			MemoryCopy(context->heap[index].text, &functionData[instructionPointer], textBytes);
+			uintptr_t index = HeapMakeString(context, (const char *) &functionData[instructionPointer], textBytes);
 			instructionPointer += textBytes;
 
 			Value v;
@@ -6138,11 +6169,7 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 			}
 
 			char c = text[index];
-			index = HeapAllocate(context);
-			context->heap[index].type = T_STR;
-			context->heap[index].bytes = 1;
-			context->heap[index].text = (char *) AllocateResize(NULL, 1); // TODO Handling allocation failure.
-			context->heap[index].text[0] = c;
+			index = HeapMakeString(context, &c, 1); // TODO Handling allocation failure.
 			context->c->stack[context->c->stackPointer - 2].i = index;
 			context->c->stackIsManaged[context->c->stackPointer - 2] = true;
 			context->c->stackPointer--;
@@ -7448,13 +7475,10 @@ bool ScriptReturnString(ExecutionContext *context, const void *data, size_t byte
 }
 
 bool ScriptCreateString(ExecutionContext *context, const void *_text, size_t _bytes, intptr_t *_index) {
-	uintptr_t index = HeapAllocate(context); // TODO Handle memory allocation failures here.
-	context->heap[index].type = T_STR;
-	context->heap[index].bytes = _bytes;
-	context->heap[index].text = (char *) AllocateResize(NULL, _bytes);
-	MemoryCopy(context->heap[index].text, _text, _bytes);
-	context->heap[index].externalReferenceCount = 1;
-	*_index = index;
+	// TODO Handle memory allocation failures here.
+	*_index = HeapMakeString(context, _text, _bytes);
+	if (context->heap[*_index].externalReferenceCount == 0xFFFFFFFF) return false;
+	context->heap[*_index].externalReferenceCount++;
 	return true;
 }
 
@@ -8025,6 +8049,15 @@ int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes
 	context.c->previousCoroutineLink = &context.allCoroutines;
 	context.allCoroutines = context.c;
 
+	for (uintptr_t i = 0; i < 256; i++) {
+		intptr_t index;
+		char character = i;
+		bool success = ScriptCreateString(&context, &character, 1, &index);
+		Assert(success && (uintptr_t) index == HEAP_SINGLE_CHARACTER_STRINGS + i);
+	}
+
+	context.heapSingleCharacterStringsReady = true;
+
 	int result = 1;
 
 	if (ScriptLoad(tokenizer, &context, &importData, replMode)) {
@@ -8033,6 +8066,13 @@ int ScriptExecuteFromFile(char *scriptPath, char *fileData, size_t fileDataBytes
 		} else {
 			result = ScriptExecute(&context, &importData);
 		}
+	}
+
+	for (uintptr_t i = 0; i < 256; i++) {
+		uintptr_t index = HEAP_SINGLE_CHARACTER_STRINGS + i;
+		Assert(context.heapEntriesAllocated > index && context.heap[index].type == T_STR_SMALL 
+				&& context.heap[index].smallBytes == 1 && context.heap[index].smallText[0] == (char) i
+				&& context.heap[index].externalReferenceCount == 1);
 	}
 
 	ScriptFree(&context);
@@ -8083,7 +8123,7 @@ int ExternalOpStringFromByte(ExecutionContext *context, Value *returnValue) {
 	}
 
 	uint8_t single = byte;
-	RETURN_STRING_COPY(&single, 1);
+	RETURN_STRING_COPY((const char *) &single, 1);
 	return EXTCALL_RETURN_MANAGED;
 }
 
