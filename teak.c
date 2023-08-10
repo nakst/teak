@@ -7760,6 +7760,8 @@ void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 			if (node->firstChild) {
 				PrintOutput("parent=%.*s\n", (int) node->firstChild->token.textBytes, node->firstChild->token.text);
 			}
+		} else if (node->type == T_DECLARE && node->isOptionVariable) {
+			PrintOutput("[%.*s]\ntype=option\n", (int) node->token.textBytes, node->token.text);
 		}
 
 		node = node->sibling;
