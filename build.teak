@@ -4,6 +4,10 @@ bool debug #option;
 bool runTests #option;
 bool skipLibraries #option;
 
+void GetOptions() {
+	ConsoleWriteStdout("[debug]\nexe=teak\n");
+}
+
 void RunTests(str executable) {
 	// TODO Timeout.
 		

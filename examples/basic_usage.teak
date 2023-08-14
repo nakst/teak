@@ -553,6 +553,7 @@ void Part6() {
 
 int globalInt;
 int globalOption #option;
+int globalOption2 #option(50, "It's an option.", "externalName"); // You can optionally specify a default value, description, and the external name to use on the command line.
 int globalPersist #persist;
 
 void Part7() {

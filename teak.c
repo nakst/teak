@@ -1,29 +1,18 @@
 // TODO New language features:
 // 	- Maps: T_FOR_EACH support. :prior_key, :next_key, :first_key, :last_key. 
-// 	- Setting the initial values of global variables (including options).
+// 	- Lists: :sort, :clone, :clone_all, :insert_from
 // 	- Named optional arguments with default values.
 // 	- Multiline string literals.
 // 	- Exponent notation in numeric literals.
 // 	- struct inheritance.
-// 	- for x in y #reverse
-
-// TODO Possible language changes?
-// 	- Variant of lists where the variable is constant but initialized to an empty list?
-// 	- Remove implicitely casting to anytype and instead use ":any()"?
-// 	- :ignore(string, valueToUse) for error types.
-// 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode.
-// 	- Pipe operator? e.g. <e := expression> | <f := function pointer> (...) ==> f(e, ...)
-// 	- Dot operator for functions? e.g. <f := function pointer> . ==> f()
-// 	- Reterr operator? e.g. return FileWriteAll(FileReadAll(source)?, destination);
-// 	- :default() for nullable types? Syntax sugar? :default(new ...) syntax?
 
 // TODO Tooling and infrastructure:
 // 	- Serialization.
 // 	- Debugging.
 
 // TODO Scripting engine features:
+// 	- Storage hints for lists/maps. E.g. setting a list to doubly-linked-list mode, or a map to unordered mode.
 // 	- Implement logging for ACTION_EXECUTE: SystemShellExecute, SystemShellExecuteWithWorkingDirectory, SystemShellEvaluate.
-// 	- Set expectedType for T_RETURN_TUPLE.
 // 	- Saving and showing the stack trace of where T_ERR values were created in assertion failure messages.
 // 	- Win32: use the Unicode APIs for file system access. 
 
@@ -38,7 +27,6 @@
 // 		- MathSinh, MathCosh, MathTanh, MathArcSinh, MathArcCosh, MathArcTanh
 // 		- MathNorm, MathArcTan2
 // 		- MathIsInfinite, MathIsNaN
-// 	- Lists: :sort, :clone, :clone_all
 // 	- Strings:
 // 		- StringHashCRC32, StringHashCRC64, StringHashFNV1a
 // 		- StringCompareRaw, StringCompareLocale, StringToLowerLocale, StringToUpperLocale
@@ -181,6 +169,7 @@
 #define T_IMPORTED_TYPE       (91)
 #define T_MAP_INT             (92)
 #define T_MAP_STR             (93)
+#define T_OPTION_VAR_ARGS     (94)
 
 // Instructions only.
 #define T_EXIT_SCOPE          (100)
@@ -2016,6 +2005,16 @@ Node *ParseGlobalVariableOrFunctionDefinition(Tokenizer *tokenizer, bool allowGl
 
 		if (semicolon.type == T_OPTION) {
 			node->isOptionVariable = true;
+
+			if (TokenPeek(tokenizer).type == T_LEFT_ROUND) {
+				Node *fakeFunction = (Node *) AllocateFixed(sizeof(Node));
+				Node *call = ParseCall(tokenizer, fakeFunction);
+				if (!call) return NULL;
+				call->type = T_OPTION_VAR_ARGS;
+				Assert(!type->sibling);
+				type->sibling = call;
+			}
+
 			semicolon = TokenNext(tokenizer);
 		}
 
@@ -3466,6 +3465,8 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 
 		node->operationType = op;
 		return true;
+	} else if (node->type == T_OPTION_VAR_ARGS) {
+		return true;
 	} else {
 		Node *child = node->firstChild;
 
@@ -3630,7 +3631,7 @@ bool ASTSetTypes(Tokenizer *tokenizer, Node *node) {
 			Node *cast = ASTImplicitCastApply(tokenizer, node, node->firstChild, node->firstChild->sibling);
 			if (!cast) return false;
 			node->firstChild->sibling = cast;
-		} else if (node->firstChild->sibling && !ASTMatching(node->firstChild, node->firstChild->sibling->expressionType)) {
+		} else if (node->firstChild->sibling && !node->isOptionVariable && !ASTMatching(node->firstChild, node->firstChild->sibling->expressionType)) {
 			PrintError5(tokenizer, node, node->firstChild, node->firstChild->sibling->expressionType,
 					"The type of the variable being assigned does not match the expression.\n");
 			return false;
@@ -7204,7 +7205,102 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 #endif
 }
 
+bool ScriptSetOption(ExecutionContext *context, Node *node, uintptr_t index, const char *value, size_t valueBytes) {
+	if (node->expressionType->type == T_STR) {
+		uintptr_t heapIndex = HeapAllocate(context);
+		context->heap[heapIndex].type = T_STR;
+		context->heap[heapIndex].bytes = valueBytes;
+		context->heap[heapIndex].text = (char *) AllocateResize(NULL, context->heap[heapIndex].bytes);
+		context->globalVariables[index].i = heapIndex;
+		MemoryCopy(context->heap[heapIndex].text, value, context->heap[heapIndex].bytes);
+	} else if (node->expressionType->type == T_INT) {
+		// TODO Overflow checking.
+
+		Value v;
+		v.i = 0;
+
+		for (uintptr_t j = 0; j < valueBytes; j++) {
+			char c = value[j];
+
+			if (c >= '0' && c <= '9') {
+				v.i *= 10;
+				v.i += c - '0';
+			} else {
+				PrintError3("#option variable '%.*s' should be an integer.\n", node->token.textBytes, node->token.text);
+				return false;
+			}
+		}
+
+		context->globalVariables[index] = v;
+	} else if (node->expressionType->type == T_BOOL) {
+		char c = valueBytes ? value[0] : 0;
+		bool truthy = c == 't' || c == 'y' || c == '1';
+		bool falsey = c == 'f' || c == 'n' || c == '0';
+
+		if (!truthy && !falsey) {
+			PrintError3("#option variable '%.*s' should be a boolean value 'true' or 'false'.\n", node->token.textBytes, node->token.text);
+			return false;
+		}
+
+		context->globalVariables[index].i = truthy ? 1 : 0;
+	}
+
+	return true;
+}
+
 bool ScriptParseOptions(ExecutionContext *context) {
+	for (uintptr_t j = 0, index = 0; j < context->rootNode->scope->entryCount; j++) {
+		Node *node = context->rootNode->scope->entries[j];
+		if (ScopeIsVariableType(node)) index++;
+
+		if (node->type == T_DECLARE && node->isOptionVariable) {
+			if (node->expressionType->type != T_STR && node->expressionType->type != T_INT && node->expressionType->type != T_BOOL) {
+				PrintError3("#option variable '%.*s' is not of string, boolean or integer type.\n", node->token.textBytes, node->token.text);
+				return false;
+			}
+
+			Node *args = node->firstChild->sibling ? node->firstChild->sibling->firstChild->sibling->firstChild : NULL;
+			if (!args) continue;
+
+			if ((node->expressionType->type == T_INT && args->type != T_NUMERIC_LITERAL)
+					|| (node->expressionType->type == T_STR && args->type != T_STRING_LITERAL)
+					|| (node->expressionType->type == T_BOOL && args->type != T_TRUE && args->type != T_FALSE)) {
+				PrintError3("#option variable '%.*s' has an invalid default value. It must be a literal of the correct type.\n", 
+						node->token.textBytes, node->token.text);
+				return false;
+			}
+
+			if (!ScriptSetOption(context, node, index - 1 + context->functionData->globalVariableOffset, 
+						args->token.text, args->token.textBytes)) return false;
+
+			args = args->sibling;
+			if (!args) continue;
+
+			if (args->type != T_STRING_LITERAL) {
+				PrintError3("#option variable '%.*s' has an invalid description. It must be a string literal.\n", 
+						node->token.textBytes, node->token.text);
+				return false;
+			}
+
+			args = args->sibling;
+			if (!args) continue;
+
+			if (args->type != T_STRING_LITERAL) {
+				PrintError3("#option variable '%.*s' has an invalid alternate name. It must be a string literal.\n", 
+						node->token.textBytes, node->token.text);
+				return false;
+			}
+
+			args = args->sibling;
+
+			if (args) {
+				PrintError3("#option variable '%.*s' has too many arguments. Expected: #option(defaultValue, description, alternateName)\n",
+						node->token.textBytes, node->token.text);
+				return false;
+			}
+		}
+	}
+
 	for (uintptr_t i = 0; i < optionCount; i++) {
 		uintptr_t equalsPosition = 0;
 		uintptr_t optionLength = 0;
@@ -7229,12 +7325,20 @@ bool ScriptParseOptions(ExecutionContext *context) {
 		Node *node = NULL;
 
 		for (uintptr_t j = 0; j < context->rootNode->scope->entryCount; j++) {
-			if (context->rootNode->scope->entries[j]->token.textBytes == equalsPosition
-					&& 0 == MemoryCompare(context->rootNode->scope->entries[j]->token.text, options[i], equalsPosition)
-					&& context->rootNode->scope->entries[j]->type == T_DECLARE
-					&& context->rootNode->scope->entries[j]->isOptionVariable) {
-				node = context->rootNode->scope->entries[j];
-				break;
+			Node *n = context->rootNode->scope->entries[j];
+
+			if (n->type == T_DECLARE && n->isOptionVariable) {
+				Token token = n->token;
+
+				if (n->firstChild->sibling && n->firstChild->sibling->firstChild->sibling->firstChild->sibling
+						&& n->firstChild->sibling->firstChild->sibling->firstChild->sibling->sibling) {
+					token = n->firstChild->sibling->firstChild->sibling->firstChild->sibling->sibling->token;
+				}
+
+				if (token.textBytes == equalsPosition && 0 == MemoryCompare(token.text, options[i], equalsPosition)) {
+					node = n;
+					break;
+				}
 			}
 
 			if (ScopeIsVariableType(context->rootNode->scope->entries[j])) {
@@ -7246,49 +7350,8 @@ bool ScriptParseOptions(ExecutionContext *context) {
 			continue;
 		}
 
-		index += context->functionData->globalVariableOffset;
-
-		if (node->expressionType->type == T_STR) {
-			uintptr_t heapIndex = HeapAllocate(context);
-			context->heap[heapIndex].type = T_STR;
-			context->heap[heapIndex].bytes = optionLength - equalsPosition - 1;
-			context->heap[heapIndex].text = (char *) AllocateResize(NULL, context->heap[heapIndex].bytes);
-			context->globalVariables[index].i = heapIndex;
-			MemoryCopy(context->heap[heapIndex].text, options[i] + equalsPosition + 1, context->heap[heapIndex].bytes);
-		} else if (node->expressionType->type == T_INT) {
-			// TODO Overflow checking.
-
-			Value v;
-			v.i = 0;
-
-			for (uintptr_t j = 0; options[i][j + equalsPosition + 1]; j++) {
-				char c = options[i][j + equalsPosition + 1];
-
-				if (c >= '0' && c <= '9') {
-					v.i *= 10;
-					v.i += c - '0';
-				} else {
-					PrintError3("Option '%s' should be an integer.\n", options[i]);
-					return false;
-				}
-			}
-
-			context->globalVariables[index] = v;
-		} else if (node->expressionType->type == T_BOOL) {
-			char c = options[i][equalsPosition + 1];
-			bool truthy = c == 't' || c == 'y' || c == '1';
-			bool falsey = c == 'f' || c == 'n' || c == '0';
-
-			if (!truthy && !falsey) {
-				PrintError3("#option variable '%.*s' should be a boolean value 'true' or 'false'.\n", node->token.textBytes, node->token.text);
-				return false;
-			}
-
-			context->globalVariables[index].i = truthy ? 1 : 0;
-		} else {
-			PrintError3("#option variable '%.*s' is not of string, boolean or integer type.\n", node->token.textBytes, node->token.text);
-			return false;
-		}
+		if (!ScriptSetOption(context, node, index + context->functionData->globalVariableOffset, 
+					options[i] + equalsPosition + 1, optionLength - equalsPosition - 1)) return false;
 
 		if (optionsMatched[i]) {
 			PrintError3("Script option passed on command line '%s' matches multiple #option variables in different modules.\n", options[i]);
@@ -7762,6 +7825,13 @@ void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
 			}
 		} else if (node->type == T_DECLARE && node->isOptionVariable) {
 			PrintOutput("[%.*s]\ntype=option\n", (int) node->token.textBytes, node->token.text);
+
+			if (node->firstChild->sibling && node->firstChild->sibling->firstChild->sibling->firstChild->sibling) {
+				Node *arg = node->firstChild->sibling->firstChild->sibling->firstChild->sibling;
+				PrintOutput("description=");
+				for (uintptr_t i = 0; i < arg->token.textBytes; i++) PrintOutput("%c", arg->token.text[i] == '\n' ? ' ' : arg->token.text[i]);
+				PrintOutput("\n");
+			}
 		}
 
 		node = node->sibling;
