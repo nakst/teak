@@ -1,0 +1,11 @@
+int myOption #option(5 /* default value; must be a literal */, 
+		"An integer to be printed." /* brief description */, 
+		"altName" /* the name to expose the option as externally */);
+str b #option("hey");
+bool c #option(true);
+
+void Start() {
+	assert myOption == 5;
+	assert b == "hey";
+	assert c;
+}

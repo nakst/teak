@@ -6073,10 +6073,12 @@ int ScriptExecuteFunction(uintptr_t instructionPointer, ExecutionContext *contex
 		} else if (command == T_DOUBLE_EQUALS) {
 			if (context->c->stackPointer < 2) return -1;
 			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].i == context->c->stack[context->c->stackPointer - 1].i;
+			context->c->stackIsManaged[context->c->stackPointer - 2] = false; // Necessary since pointers can be compared.
 			context->c->stackPointer--;
 		} else if (command == T_NOT_EQUALS) {
 			if (context->c->stackPointer < 2) return -1;
 			context->c->stack[context->c->stackPointer - 2].i = context->c->stack[context->c->stackPointer - 2].i != context->c->stack[context->c->stackPointer - 1].i;
+			context->c->stackIsManaged[context->c->stackPointer - 2] = false; // Necessary since pointers can be compared.
 			context->c->stackPointer--;
 		} else if (command == T_LOGICAL_NOT) {
 			if (context->c->stackPointer < 1) return -1;
@@ -7404,49 +7406,138 @@ bool ScriptParameterHandle(ExecutionContext *context, void **output) {
 	return true;
 }
 
+bool ScriptListCount(ExecutionContext *context, intptr_t index, size_t *output) {
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+
+	if (context->heap[index].type == T_LIST) {
+		*output = context->heap[index].length;
+		return true;
+	} else if (context->heap[index].type == T_EOF) {
+		PrintError4(context, 0, "List is null.");
+		return false;
+	} else {
+		PrintError4(context, 0, "The script was malformed.\n");
+		return false;
+	}
+}
+
+#define _ScriptStructAccess(managed) \
+	Value *v; \
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated); \
+	if (context->heap[index].type == T_STRUCT) { \
+		Assert(fieldIndex < context->heap[index].fieldCount); \
+		v = &context->heap[index].fields[fieldIndex]; \
+		if (v->i || !managed /* NULL may not be marked as managed */) Assert(managed == ((uint8_t *) context->heap[index].fields)[-1 - fieldIndex]); \
+		else ((uint8_t *) context->heap[index].fields)[-1 - fieldIndex] = managed; \
+	} else if (context->heap[index].type == T_LIST) { \
+		Assert(fieldIndex < context->heap[index].length); \
+		v = &context->heap[index].list[fieldIndex]; \
+		Assert(managed == context->heap[index].internalValuesAreManaged); \
+	} else if (context->heap[index].type == T_EOF) { \
+		PrintError4(context, 0, "Structure or list is null."); \
+		return false; \
+	} else { \
+		PrintError4(context, 0, "The script was malformed.\n"); \
+		return false; \
+	}
+#define _ScriptStructReadInteger(which, name) \
+bool name(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, which *output) { \
+	int64_t x; \
+	if (!ScriptStructReadInt64(context, index, fieldIndex, &x)) return false; \
+	*output = (which) x; \
+	return true; \
+}
+
 bool ScriptStructReadString(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, const void **output, size_t *outputBytes) {
+	_ScriptStructAccess(true);
+	index = v->i;
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
-
-	if (context->heap[index].type == T_STRUCT) {
-		Assert(fieldIndex < context->heap[index].fieldCount);
-		Assert(((uint8_t *) context->heap[index].fields)[-1 - fieldIndex]);
-		index = context->heap[index].fields[fieldIndex].i;
-		Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
-		HeapEntry *entry = &context->heap[index];
-		ScriptHeapEntryToString(context, entry, (const char **) output, outputBytes);
-		return true;
-	} else if (context->heap[index].type == T_EOF) {
-		PrintError4(context, 0, "Structure is null.");
-		return false;
-	} else {
-		PrintError4(context, 0, "The script was malformed.\n");
-		return false;
-	}
-}
-
-bool ScriptStructReadInt32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int32_t *output) {
-	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
-
-	if (context->heap[index].type == T_STRUCT) {
-		Assert(fieldIndex < context->heap[index].fieldCount);
-		Assert(!((uint8_t *) context->heap[index].fields)[-1 - fieldIndex]);
-		*output = context->heap[index].fields[fieldIndex].i;
-		return true;
-	} else if (context->heap[index].type == T_EOF) {
-		PrintError4(context, 0, "Structure is null.");
-		return false;
-	} else {
-		PrintError4(context, 0, "The script was malformed.\n");
-		return false;
-	}
-}
-
-bool ScriptStructReadUint32(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, uint32_t *output) {
-	int32_t x;
-	if (!ScriptStructReadInt32(context, index, fieldIndex, &x)) return false;
-	*output = (uint32_t) x;
+	HeapEntry *entry = &context->heap[index];
+	ScriptHeapEntryToString(context, entry, (const char **) output, outputBytes);
 	return true;
 }
+
+bool ScriptStructReadInt64(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int64_t *output) {
+	_ScriptStructAccess(false);
+	*output = v->i;
+	return true;
+}
+
+bool ScriptStructReadDouble(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, double *output) {
+	_ScriptStructAccess(false);
+	*output = v->f;
+	return true;
+}
+
+bool ScriptStructReadHandle(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, void **output) {
+	_ScriptStructAccess(true);
+	index = v->i;
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+	HeapEntry *entry = &context->heap[index];
+	if (entry->type == T_HANDLETYPE) *output = entry->handleData;
+	else if (entry->type == T_EOF) *output = NULL;
+	else return false;
+	return true;
+}
+
+bool ScriptStructReadHeapRef(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, intptr_t *output) {
+	_ScriptStructAccess(true);
+	index = v->i;
+	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
+	if (context->heap[index].externalReferenceCount == 0xFFFFFFFF) return false;
+	context->heap[index].externalReferenceCount++;
+	*output = index;
+	return true;
+}
+
+bool ScriptStructWriteString(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, const void *input, size_t inputBytes) {
+	_ScriptStructAccess(true);
+	index = HeapAllocate(context); // TODO Handle memory allocation failures here.
+	context->heap[index].type = T_STR;
+	context->heap[index].bytes = inputBytes;
+	context->heap[index].text = (char *) AllocateResize(NULL, inputBytes);
+	MemoryCopy(context->heap[index].text, input, inputBytes);
+	return true;
+}
+
+bool ScriptStructWriteHandle(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, void *input, ScriptCloseHandleFunction close) {
+	_ScriptStructAccess(true);
+	
+	if (input) {
+		v->i = HeapAllocate(context); // TODO Handle memory allocation failures here.
+		context->heap[v->i].type = T_HANDLETYPE;
+		context->heap[v->i].close = close;
+		context->heap[v->i].handleData = input;
+		return true;
+	} else {
+		v->i = 0;
+	}
+
+	return true;
+}
+
+bool ScriptStructWriteInt(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, int64_t input) {
+	_ScriptStructAccess(false);
+	v->i = input;
+	return true;
+}
+
+bool ScriptStructWriteDouble(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, double input) {
+	_ScriptStructAccess(false);
+	v->f = input;
+	return true;
+}
+
+bool ScriptStructWriteHeapRef(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, intptr_t input) {
+	_ScriptStructAccess(true);
+	v->i = input;
+	return true;
+}
+
+_ScriptStructReadInteger(bool, ScriptStructReadBool);
+_ScriptStructReadInteger(int32_t, ScriptStructReadInt32);
+_ScriptStructReadInteger(uint64_t, ScriptStructReadUint64);
+_ScriptStructReadInteger(uint32_t, ScriptStructReadUint32);
 
 void ScriptHeapRefClose(ExecutionContext *context, intptr_t index) {
 	Assert(index >= 0 || index < (intptr_t) context->heapEntriesAllocated);
@@ -7533,8 +7624,8 @@ bool ScriptCreateStruct(ExecutionContext *context, int64_t *fields, bool *manage
 	context->heap[index].externalReferenceCount = 1;
 
 	for (uintptr_t i = 0; i < fieldCount; i++) {
-		context->heap[index].fields[i].i = fields[i];
-		((uint8_t *) context->heap[index].fields)[-1 - i] = managedFields[i];
+		context->heap[index].fields[i].i = fields ? fields[i] : 0;
+		((uint8_t *) context->heap[index].fields)[-1 - i] = managedFields ? managedFields[i] : false;
 	}
 
 	*_index = index;
@@ -7731,6 +7822,7 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.CreateString = ScriptCreateString,
 	.CreateStruct = ScriptCreateStruct,
 	.HeapRefClose = ScriptHeapRefClose,
+	.ListCount = ScriptListCount,
 	.ParameterBool = ScriptParameterBool,
 	.ParameterCString = ScriptParameterCString,
 	.ParameterDouble = ScriptParameterDouble,
@@ -7752,9 +7844,20 @@ const ScriptNativeInterface _scriptNativeInterface = {
 	.ReturnStruct = ScriptReturnStruct,
 	.ReturnStructInl = ScriptReturnStructInl,
 	.RunCallback = ScriptRunCallback,
+	.StructReadBool = ScriptStructReadBool,
+	.StructReadDouble = ScriptStructReadDouble,
+	.StructReadHandle = ScriptStructReadHandle,
+	.StructReadHeapRef = ScriptStructReadHeapRef,
 	.StructReadInt32 = ScriptStructReadInt32,
+	.StructReadInt64 = ScriptStructReadInt64,
 	.StructReadString = ScriptStructReadString,
 	.StructReadUint32 = ScriptStructReadUint32,
+	.StructReadUint64 = ScriptStructReadUint64,
+	.StructWriteDouble = ScriptStructWriteDouble,
+	.StructWriteHandle = ScriptStructWriteHandle,
+	.StructWriteHeapRef = ScriptStructWriteHeapRef,
+	.StructWriteInt = ScriptStructWriteInt,
+	.StructWriteString = ScriptStructWriteString,
 };
 
 void ScriptOutputOverview(ExecutionContext *context, ImportData *mainModule) {
