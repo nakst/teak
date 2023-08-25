@@ -5419,7 +5419,11 @@ void HeapFreeEntry(ExecutionContext *context, uintptr_t i) {
 }
 
 uintptr_t HeapAllocate(ExecutionContext *context) {
+#ifdef STRESS_HEAP
+	{
+#else
 	if (!context->heapFirstUnusedEntry) {
+#endif
 		// All heapEntriesAllocated entries are in use.
 
 		for (uintptr_t i = 0; i < context->heapEntriesAllocated; i++) {
@@ -5457,9 +5461,17 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 		}
 		
 		uintptr_t *link = &context->heapFirstUnusedEntry;
+		uintptr_t lastUnusedEntry = *link; // This can only be non-zero if STRESS_HEAP is defined.
 		uintptr_t reclaimed = 0;
 
 		for (uintptr_t i = 1; i < context->heapEntriesAllocated; i++) {
+#ifdef STRESS_HEAP
+			if (context->heap[i].type == T_ERROR) {
+				reclaimed++;
+				continue;
+			}
+#endif
+
 			if (!context->heap[i].gcMark) {
 				// PrintDebug("\033[0;32mFreeing index %d...\033[0m\n", i);
 				Assert(!context->heap[i].externalReferenceCount);
@@ -5476,7 +5488,11 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 			intptr_t linkIndex = link == &context->heapFirstUnusedEntry ? -1 
 				: ((intptr_t) link - (intptr_t) context->heap) / (intptr_t) sizeof(HeapEntry);
 			uintptr_t oldSize = context->heapEntriesAllocated;
+#ifdef STRESS_HEAP
+			context->heapEntriesAllocated += 1;
+#else
 			context->heapEntriesAllocated *= 2;
+#endif
 			context->heap = (HeapEntry *) AllocateResize(context->heap, context->heapEntriesAllocated * sizeof(HeapEntry));
 			link = linkIndex == -1 ? &context->heapFirstUnusedEntry : &context->heap[linkIndex].nextUnusedEntry;
 
@@ -5491,7 +5507,7 @@ uintptr_t HeapAllocate(ExecutionContext *context) {
 			// PrintDebug("\033[0;32mFreed %d/%d entries.\033[0m\n", reclaimed, context->heapEntriesAllocated);
 		}
 
-		*link = 0;
+		*link = lastUnusedEntry;
 	}
 
 	uintptr_t index = context->heapFirstUnusedEntry;
@@ -7529,6 +7545,7 @@ bool ScriptStructWriteDouble(ExecutionContext *context, intptr_t index, uintptr_
 }
 
 bool ScriptStructWriteHeapRef(ExecutionContext *context, intptr_t index, uintptr_t fieldIndex, intptr_t input) {
+	Assert(input >= 0 || input < (intptr_t) context->heapEntriesAllocated);
 	_ScriptStructAccess(true);
 	v->i = input;
 	return true;

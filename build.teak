@@ -3,6 +3,7 @@
 bool debug #option;
 bool runTests #option;
 bool skipLibraries #option;
+bool stressHeap #option;
 
 void GetOptions() {
 	ConsoleWriteStdout("[debug]\nexe=teak\n");
@@ -79,6 +80,7 @@ void Start() {
 		moduleCompilerTemplate = "cl.exe /Zi [SRC] %warningFlags% %optimizeFlags% /link /DLL /OUT:[DST].dll";
 	} else {
 		str optimizeFlags = "-fsanitize=address" if debug else "-O2";
+		if stressHeap { optimizeFlags += " -DSTRESS_HEAP "; }
 		assert SystemShellExecute("gcc -DGIT_COMMIT=\\\"%commit%\\\" -o new_teak teak.c -g -Wall -Wextra %optimizeFlags% -pthread -ldl"); 
 		okay = SystemShellExecute("./new_teak examples/hello_world.teak");
 		executable = "./teak";
