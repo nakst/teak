@@ -12,7 +12,7 @@ int Width(Bitmap bitmap) #extcall;
 int Height(Bitmap bitmap) #extcall;
 void Crop(Bitmap bitmap, int left, int right, int top, int bottom) #extcall;
 
-void Blit(Bitmap destination, int source, int x, int y) #extcall;
+void Blit(Bitmap destination, Bitmap source, int x, int y) #extcall;
 void DrawBlock(Bitmap destination, int left, int right, int top, int bottom, int color) #extcall;
 
 int ReadPixel(Bitmap bitmap, int x, int y) #extcall;

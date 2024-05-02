@@ -571,7 +571,7 @@ int ExternalOpStringFromByte(ExecutionContext *context, Value *returnValue);
 
 // --------------------------------- Platform layer definitions.
 
-#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <assert.h>
 #define Assert assert
 #endif
@@ -8346,7 +8346,7 @@ int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t leng
 
 // --------------------------------- Platform layer.
 
-#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 
 #ifdef _WIN32
 #include <direct.h>
@@ -8369,6 +8369,9 @@ int StringCompareRaw(const char *s1, size_t length1, const char *s2, size_t leng
 #ifdef __APPLE__
 #include <libproc.h>
 #endif
+#ifdef __FreeBSD__
+#include <sys/sysctl.h>
+#endif
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8381,7 +8384,7 @@ uint8_t *fixedAllocationCurrentBlock;
 uintptr_t fixedAllocationCurrentPosition;
 size_t fixedAllocationCurrentSize;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 sem_t externalCoroutineSemaphore;
 pthread_mutex_t externalCoroutineMutex;
 #endif
@@ -8569,7 +8572,7 @@ bool ActionFailure(ExecutionContext *context, int category, const char *name, co
 
 
 void ExternalCoroutineDone(CoroutineState *coroutine) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 	pthread_mutex_lock(&externalCoroutineMutex);
 	coroutine->nextExternalCoroutine = externalCoroutineUnblockedList;
 	externalCoroutineUnblockedList = coroutine;
@@ -8600,7 +8603,7 @@ int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue) {
 	if (temporary) {
 		if (systemShellLoggingEnabled) PrintDebug("%s%s%s\n", coloredOutput ? "\033[0;32m" : "", temporary, coloredOutput ? "\033[0m" : "");
 		context->c->externalCoroutineData2 = temporary;
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 		pthread_t thread;
 		pthread_create(&thread, NULL, SystemShellExecuteThread, context->c);
 		pthread_detach(thread);
@@ -8617,7 +8620,7 @@ int ExternalSystemShellExecute(ExecutionContext *context, Value *returnValue) {
 	}
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 void *SystemShellExecuteWithWorkingDirectoryThread(void *_coroutine) {
 	CoroutineState *coroutine = (CoroutineState *) _coroutine;
 	int status;
@@ -8651,7 +8654,7 @@ int ExternalSystemShellExecuteWithWorkingDirectory(ExecutionContext *context, Va
 
 	if (systemShellLoggingEnabled) PrintDebug("%s(%s) %s%s\n", coloredOutput ? "\033[0;32m" : "", temporary, temporary2, coloredOutput ? "\033[0m" : "");
 	
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 	pid_t pid = fork();
 
 	if (pid == 0) {
@@ -9470,7 +9473,7 @@ int ExternalSystemSleepMs(ExecutionContext *context, Value *returnValue) {
 	if (context->c->externalCoroutine) return EXTCALL_NO_RETURN;
 	if (context->c->stackPointer < 1) return -1;
 	context->c->externalCoroutineData = context->c->stack[--context->c->stackPointer];
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 	pthread_t thread;
 	pthread_create(&thread, NULL, SystemSleepThread, context->c);
 	pthread_detach(thread);
@@ -9491,7 +9494,7 @@ int ExternalSystemExit(ExecutionContext *context, Value *returnValue) {
 
 CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
 	(void) context;
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 	while (sem_wait(&externalCoroutineSemaphore) == -1);
 	pthread_mutex_lock(&externalCoroutineMutex);
 	CoroutineState *unblocked = externalCoroutineUnblockedList;
@@ -9968,6 +9971,14 @@ const char *PathScriptEngine() {
 	char *fixed = AllocateFixed(strlen(buffer));
 	strcpy(fixed, buffer);
 	return fixed;
+#elif defined(__FreeBSD__)
+	char buffer[4096];
+	int data[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+	size_t bytes = sizeof(buffer);
+	sysctl(&data[0], 4, &buffer[0], &bytes, NULL, 0);
+	char *fixed = AllocateFixed(strlen(buffer));
+	strcpy(fixed, buffer);
+	return fixed;
 #else
 	char *path = (char *) malloc(10000);
 	ssize_t bytes = readlink("/proc/self/exe", path, 10000);
@@ -10013,7 +10024,7 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
 	coloredOutput = isatty(STDERR_FILENO);
 #endif
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 	sem_init(&externalCoroutineSemaphore, 0, 0);
 #endif
 
@@ -10060,7 +10071,7 @@ int main(int argc, char **argv) {
 		} else if (0 == strcmp(argv[i], "--colored-output")) {
 			coloredOutput = true;
 		} else if (0 == strcmp(argv[i], "--stdout-only")) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 			if (!stdoutOnly) {
 				stdoutOnly = true;
 				dup2(1, 2);
