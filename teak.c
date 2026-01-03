@@ -9509,7 +9509,7 @@ CoroutineState *ExternalCoroutineWaitAny(ExecutionContext *context) {
 }
 
 void PrintREPLResult(ExecutionContext *context, Node *type, Value value) {
-	if (type->type == T_INT) {
+	if (type->type == T_INT || type->type == T_ZERO) {
 #if defined(__APPLE__) || defined(_WIN32)
 		printf("%lld", value.i);
 #else
@@ -10035,7 +10035,7 @@ int main(int argc, char **argv) {
 	bool stdoutOnly = false;
 
 	for (int i = 1; i < argc; i++) {
-		if (argv[i][0] != '-') {
+		if (argv[i][0] != '-' || (i == argc - 1 && evaluateMode)) {
 			if (doMode) {
 				if (!scriptPath) {
 					scriptPath = argv[i];
